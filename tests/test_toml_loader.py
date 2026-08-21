@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import pytest
 
@@ -14,6 +14,7 @@ from cadenza.adapters.toml_catalog.loader import (
 from cadenza.application.compose import compose_catalog
 from cadenza.domain.errors import CatalogError
 from cadenza.ports.catalog_source import LayerDocument
+from support import CATALOG_DIR
 
 TRACKED_TOML = """
 schema_version = 1
@@ -139,3 +140,15 @@ def test_the_shipped_tracked_catalog_composes() -> None:
         assert project_id not in project.aliases, (
             f"{project_id!r} lists its own project_id as an alias, which collides"
         )
+
+
+def test_a_drive_less_path_is_not_absolute_on_windows() -> None:
+    # Why tests/support.py builds absolute paths instead of writing "/srv/...":
+    # on Windows a path with no drive letter is drive-RELATIVE, so the
+    # LayerDocument invariant refuses it and every test using such a literal
+    # fails there and only there. Pinned with the pure flavours so the reasoning
+    # is checkable from any platform.
+    assert PureWindowsPath("/srv/catalog").is_absolute() is False
+    assert PureWindowsPath("C:/srv/catalog").is_absolute() is True
+    assert PurePosixPath("/srv/catalog").is_absolute() is True
+    assert CATALOG_DIR.is_absolute(), "the shared test anchor must be absolute here"

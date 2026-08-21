@@ -19,13 +19,14 @@ from cadenza.domain.errors import (
     MissingFieldError,
     UnknownFieldError,
 )
+from support import CATALOG_DIR, ELSEWHERE
 
 LOCATION = "config/projects.toml: project.web.source"
 
 
 def parse(table: dict[str, object], **kwargs: object) -> object:
     defaults: dict[str, object] = {
-        "base_dir": Path("/srv/catalog"),
+        "base_dir": CATALOG_DIR,
         "allowed_local_roots": (),
         "location": LOCATION,
     }
@@ -175,7 +176,7 @@ def test_absolute_path_is_kept_as_is(tmp_path: Path) -> None:
     target = tmp_path / "web"
     source = parse(
         {"kind": "local_path", "path": str(target)},
-        base_dir=Path("/somewhere/else"),
+        base_dir=ELSEWHERE,
         allowed_local_roots=(str(tmp_path),),
     )
     assert source == LocalPathSource(path=str(target))
@@ -184,10 +185,13 @@ def test_absolute_path_is_kept_as_is(tmp_path: Path) -> None:
 def test_tilde_is_expanded_against_the_home_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # ntpath.expanduser ignores HOME entirely and reads USERPROFILE, so setting
+    # only HOME makes this test assert nothing on Windows.
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     source = parse(
         {"kind": "local_path", "path": "~/work/web"},
-        base_dir=Path("/srv/catalog"),
+        base_dir=CATALOG_DIR,
         allowed_local_roots=("~/work",),
     )
     assert source == LocalPathSource(path=str(tmp_path / "work" / "web"))
