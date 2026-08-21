@@ -356,3 +356,26 @@ def test_a_relative_base_dir_cannot_anchor_a_local_path() -> None:
             base_dir=Path("config"),
             allowed_local_roots=(".",),
         )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://example.invalid:abc/o/r.git",
+        "https://example.invalid:99999/o/r.git",
+    ],
+)
+def test_a_malformed_port_is_refused_at_composition(url: str) -> None:
+    # urlsplit carries a nonsense port until something reads it, so an unvalidated
+    # port would let the catalog compose and the clone fail later -- the ordering
+    # this validator exists to fix (Codex review round 2).
+    with pytest.raises(InvalidCloneSourceError, match="is not parseable"):
+        parse({"kind": "git_url", "url": url})
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["https://example.invalid:443/o/r.git", "ssh://git@example.invalid:22/o/r.git"],
+)
+def test_a_well_formed_port_is_accepted(url: str) -> None:
+    assert parse({"kind": "git_url", "url": url}) == GitUrlSource(url=url)
