@@ -37,3 +37,33 @@ jobs:
       # rather than passing silently as one line among many in "pytest -x -q".
       - name: import boundary check (no interlock edge)
         run: python -m pytest tests/test_import_boundaries.py
+
+  # Repo hygiene jobs below are deliberately not listed in
+  # .github/branch-protection.json required checks; adding them there is a
+  # separate, explicit decision (that file records intent and is not touched
+  # by hygiene changes).
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # shellcheck is preinstalled on the ubuntu runner image.
+      - name: shellcheck all tracked *.sh files
+        run: git ls-files '*.sh' | xargs --no-run-if-empty shellcheck
+
+  pip-audit:
+    name: pip-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e .[dev] pip-audit
+      # Audit the installed environment (project runtime + dev deps).
+      # --skip-editable excludes the local editable cadenza install itself.
+      # This job fails on known vulnerabilities; an unfixable CVE would be
+      # ignored explicitly via --ignore-vuln with a reason comment here.
+      - name: pip-audit installed environment
+        run: python -m pip_audit --skip-editable
