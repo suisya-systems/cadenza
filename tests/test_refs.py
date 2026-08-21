@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
+
 import pytest
 
 from cadenza.domain.errors import InvalidBaseBranchError
@@ -68,3 +71,66 @@ def test_error_carries_the_location_it_was_given() -> None:
         parse_base_branch("main..dev", location=location)
     assert caught.value.location == location
     assert str(caught.value).endswith(f"(at {location})")
+
+
+# --- parity with git itself -----------------------------------------------
+
+GIT = shutil.which("git")
+
+# Every shape the validator makes a decision about, plus the two Codex found.
+# The point of the corpus is that git, not this file, says what the answer is.
+PARITY_CORPUS = [
+    "main",
+    "feat/cadenza-bootstrap",
+    "release-1.2",
+    "a.b",
+    "release.",
+    "a.",
+    "feat/x.",
+    "x.lock",
+    "feat/x.lock",
+    ".hidden",
+    "feat/.hidden",
+    "a..b",
+    "a b",
+    "a~b",
+    "a^b",
+    "a:b",
+    "a?b",
+    "a*b",
+    "a[b",
+    "a\\b",
+    "a@{b",
+    "a//b",
+    "/leading",
+    "trailing/",
+]
+
+
+@pytest.mark.skipif(GIT is None, reason="git is not installed")
+@pytest.mark.parametrize("name", PARITY_CORPUS)
+def test_the_validator_refuses_everything_git_refuses(name: str) -> None:
+    # The validator's whole job is to move a git-level refusal earlier, so being
+    # *more* permissive than git is the one direction that is a defect: the
+    # catalog would compose and the clone would fail. Being stricter is allowed
+    # and is checked case by case above, not here.
+    git_accepts = (
+        subprocess.run(
+            [str(GIT), "check-ref-format", f"refs/heads/{name}"],
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
+    )
+    if git_accepts:
+        return
+    with pytest.raises(InvalidBaseBranchError):
+        parse_base_branch(name)
+
+
+@pytest.mark.parametrize("name", ["release.", "a.", "feat/x.", "@"])
+def test_the_shapes_codex_review_found(name: str) -> None:
+    # Regression pins for the round-1 review finding: a trailing dot is refused
+    # by git, and a bare '@' collides with git's shorthand for HEAD.
+    with pytest.raises(InvalidBaseBranchError):
+        parse_base_branch(name)
