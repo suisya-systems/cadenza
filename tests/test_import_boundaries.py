@@ -152,3 +152,46 @@ def test_the_domain_performs_no_io(path: Path) -> None:
     forbidden = {"socket", "urllib.request", "subprocess", "shutil", "sqlite3", "http.client"}
     imported = imported_modules(path)
     assert not (imported & forbidden)
+
+
+def test_no_test_anchors_a_layer_on_a_posix_only_literal() -> None:
+    # A drive-less literal like "/srv/catalog" is absolute on POSIX and
+    # drive-RELATIVE on Windows, so a test using one passes everywhere except
+    # the windows-latest rows -- which is a slow and expensive way to find out.
+    # Anchors come from tests/support.absolute() instead. This check exists
+    # because reviewing for it by eye missed one twice.
+    offenders: list[str] = []
+    for path in sorted(Path(__file__).parent.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            for keyword in node.keywords:
+                if keyword.arg != "base_dir":
+                    continue
+                literal = _posix_only_literal(keyword.value)
+                if literal is not None:
+                    offenders.append(f"{path.name}:{keyword.value.lineno}: {literal!r}")
+    assert not offenders, (
+        "these anchors are absolute on POSIX only; build them with "
+        f"support.absolute() instead: {offenders}"
+    )
+
+
+def _posix_only_literal(node: ast.expr) -> str | None:
+    """The string of a `base_dir="/x"` or `base_dir=Path("/x")` literal, if any."""
+    if isinstance(node, ast.Call) and _callee_name(node.func) == "Path" and node.args:
+        node = node.args[0]
+    if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
+        return None
+    # A relative literal is fine: one test asserts a relative anchor is refused,
+    # and that assertion means the same thing on every platform.
+    return node.value if node.value.startswith("/") else None
+
+
+def _callee_name(func: ast.expr) -> str | None:
+    if isinstance(func, ast.Name):
+        return func.id
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    return None
