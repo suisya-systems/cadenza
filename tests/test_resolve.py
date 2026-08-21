@@ -96,3 +96,34 @@ def test_not_found_is_not_a_catalog_error() -> None:
     # catalog is broken" from "no such project" needs these apart.
     assert issubclass(ProjectNotFoundError, CadenzaError)
     assert not issubclass(ProjectNotFoundError, CatalogError)
+
+
+def test_provenance_is_total_over_every_field_of_the_snapshot() -> None:
+    # Section 5.7 promises provenance per field, not per stated field. A project
+    # that omits the optional aliases still got () from some layer, and a caller
+    # indexing provenance["aliases"] must not hit a KeyError for it
+    # (Codex review round 3).
+    catalog = compose_catalog(
+        [make_layer({"schema_version": 1, "project": {"web": git_url_project()}})]
+    )
+    resolved = resolve_project(catalog, "web")
+
+    assert resolved.aliases == ()
+    assert set(resolved.provenance) == {"project_id", "aliases", "source", "base_branch"}
+    assert resolved.provenance["aliases"].layer == "tracked"
+
+
+def test_a_later_layer_stating_aliases_owns_their_provenance() -> None:
+    catalog = compose_catalog(
+        [
+            make_layer({"schema_version": 1, "project": {"web": git_url_project()}}),
+            make_layer(
+                {"schema_version": 1, "project": {"web": {"aliases": ["www"]}}},
+                layer="local",
+            ),
+        ]
+    )
+    resolved = resolve_project(catalog, "www")
+
+    assert resolved.provenance["aliases"].layer == "local"
+    assert resolved.provenance["source"].layer == "tracked"
