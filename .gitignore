@@ -1,0 +1,35 @@
+# --- claude-org delegation artifacts (Issue #725) — not part of the deliverable ---
+/CLAUDE.md
+/send_plan.json
+/.claude/
+
+# --- worker-environment overlays (character devices injected by the sandbox) ---
+/.bash_profile
+/.bashrc
+/.gitconfig
+/.gitmodules
+/.idea
+/.mcp.json
+/.profile
+/.ripgreprc
+/.vscode
+/.zprofile
+/.zshrc
+
+# --- operator-local catalog layer (design doc section 5.1) ---
+# This file names directories on one operator's machine. The .example beside it
+# stays tracked; the real one never does.
+/config/projects.local.toml
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv*/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/

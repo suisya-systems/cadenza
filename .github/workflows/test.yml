@@ -1,0 +1,39 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pytest:
+    # The name is load-bearing, not cosmetic: it is the check-run context
+    # .github/branch-protection.json requires by exact string. Changing it
+    # without changing that file leaves main waiting forever for a check
+    # that no longer reports under the old name.
+    name: pytest (${{ matrix.os }} / py${{ matrix.python-version }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e .[dev]
+      - run: python -m ruff check .
+      - run: python -m ruff format --check .
+      - run: python -m mypy src
+      - run: python -m pytest -x -q
+      # Named separately from the main pytest run above because this file is
+      # what the build exists to defend (no import of interlock's internals
+      # from anywhere under cadenza). It has to show up as its own line in
+      # the log and fail loudly if the test file is ever emptied or moved,
+      # rather than passing silently as one line among many in "pytest -x -q".
+      - name: import boundary check (no interlock edge)
+        run: python -m pytest tests/test_import_boundaries.py

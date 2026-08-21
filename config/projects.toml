@@ -1,0 +1,25 @@
+# Tracked project catalog: committed, shared by everyone who clones cadenza.
+# Table keys are immutable project_ids. A project_id is never renamed and never
+# reused, because runs persist it; a new name means a new project plus an alias.
+#
+# There is deliberately no [catalog] table here. allowed_local_roots authorises
+# a directory on a particular operator's machine, and a file shared by everyone
+# has no business doing that. Local paths and their roots belong in
+# projects.local.toml (see projects.local.toml.example).
+
+schema_version = 1
+
+[project.interlock]
+aliases = ["claude-org-runtime"]
+base_branch = "main"
+
+[project.interlock.source]
+kind = "git_url"
+url = "https://github.com/suisya-systems/claude-org-runtime.git"
+
+[project.cadenza]
+base_branch = "main"
+
+[project.cadenza.source]
+kind = "git_url"
+url = "https://github.com/suisya-systems/cadenza.git"

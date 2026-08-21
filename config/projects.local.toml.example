@@ -1,0 +1,48 @@
+# Example operator-local layer. Copy to config/projects.local.toml, which is
+# gitignored and belongs to you alone.
+#
+# This layer is applied after the tracked one. A field you state replaces the
+# tracked value; a field you omit is inherited, so the file below only has to
+# say what differs.
+
+schema_version = 1
+
+# allowed_local_roots is layer-local and never merges with the tracked file's:
+# a shared file cannot authorise a directory on your machine, and your file does
+# not need its permission. Declaring a local_path with no root here is refused
+# rather than treated as "anything goes". Relative paths and ~ are resolved
+# against this file's own directory, not the shell's working directory.
+[catalog]
+allowed_local_roots = ["~/work"]
+
+# Override a single field of a tracked project. base_branch merges field by
+# field, so interlock keeps the URL and aliases the tracked file gave it.
+# [project.interlock]
+# base_branch = "develop"
+
+# Replacing a source means restating the whole [.source] table, kind included.
+# A partial override could leave a "path" sitting on top of a tracked
+# kind = "git_url" and produce a shape nobody wrote, so the whole table wins or
+# none of it does.
+# [project.interlock.source]
+# kind = "local_path"
+# path = "~/work/claude-org-runtime"
+
+# Remove a tracked project. tombstone = true has to stand alone: a table that
+# both deletes and configures can only mean one of those things. The
+# project_id must be one an earlier layer actually defines, so a typo or a
+# stale entry is a refusal rather than a no-op.
+# [project.some_retired_project]
+# tombstone = true
+
+# A project only you have. Introducing a project_id the tracked layer lacks is
+# normal. kind = "local_path" is checked lexically against allowed_local_roots
+# above; whether the path exists, is readable, or is a symlink pointing
+# elsewhere is a run-side precondition, not something this file can promise.
+# [project.scratch]
+# aliases = ["s"]
+# base_branch = "main"
+#
+# [project.scratch.source]
+# kind = "local_path"
+# path = "~/work/scratch"

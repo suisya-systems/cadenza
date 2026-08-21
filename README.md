@@ -1,0 +1,165 @@
+# cadenza
+
+Cadenza is the business operations layer that sits on top of interlock, a
+durable control plane for long-running work. Interlock answers "did this run
+survive a crash"; cadenza answers the operational questions around it:
+
+- **project registry** - which project is the name an operator typed, and what
+  concrete facts (clone source, base branch, immutable identity) does a run need
+  to act on it?
+- **delegation contract** - what a run is allowed to do on that project, and on
+  whose authority.
+- **gate management** - which checks a run must pass before it is considered
+  done.
+
+Cadenza is **provider-agnostic**. Its domain, application and ports layers name
+no executor: not Claude, not GitHub, not interlock. Anything specific to one of
+those lives behind a port, in an adapter.
+
+## Status
+
+Early. This repository currently contains:
+
+- **bootstrap** - package layout, licence, security policy, CI, release policy.
+- **G1 project registry** - implemented and tested. Name resolution to an
+  immutable `project_id`, a tagged-union clone source, a validated base branch,
+  a two-layer catalog (tracked plus operator-local) with field-level merge,
+  tombstones, collision refusal, provenance and a config digest. The contract is
+  `docs/design/g1-project-registry.md`; where the code and that document
+  disagree, the document is the defect report.
+
+Explicitly **not** here yet:
+
+- **G2 delegation contract** - blocked on interlock settling its own contract.
+  Designing against a moving target would bake in a shape both sides would then
+  have to unpick.
+- **any dependency on interlock** - not in `pyproject.toml`, not as an extra.
+  Interlock's control-plane API and SQLite schema are marked throwaway on its
+  own side, so importing them now would turn a deliberate spike into a
+  dependency by inertia. `src/cadenza/adapters/interlock/` reserves the seam and
+  stays empty; `tests/test_import_boundaries.py` fails the build the day
+  anything under `cadenza` imports `claude_org_runtime`.
+
+## Install
+
+```console
+$ python -m pip install -e ".[dev]"
+$ python -m pytest
+```
+
+Python 3.10 or newer. The only runtime dependency is `tomli`, and only on 3.10,
+where the standard library has no `tomllib`.
+
+## The catalog
+
+Catalog data lives in `config/`. `config/projects.toml` is tracked and shared;
+`config/projects.local.toml` is gitignored and belongs to one operator. A
+project's table key is its `project_id`: immutable, never renamed, never reused.
+Display names are `aliases`, and they are free to change.
+
+`config/projects.toml`, tracked and shared:
+
+```toml
+schema_version = 1
+
+[project.cadenza]
+aliases = ["cdz"]
+base_branch = "main"
+
+[project.cadenza.source]
+kind = "git_url"
+url = "https://github.com/suisya-systems/cadenza.git"
+```
+
+A `project_id` is already a resolvable name, so listing it again under `aliases`
+is not shorthand, it is a collision, and composition refuses it.
+
+There is deliberately no `[catalog]` table here. `allowed_local_roots` is
+layer-local and does not merge: a `local_path` is checked against the roots of
+the file that declared it. That is what stops a shared tracked file from
+authorising a directory on somebody else's machine, and it is why local paths
+and the roots that permit them belong in the operator's own layer.
+
+`config/projects.local.toml`, gitignored and yours alone:
+
+```toml
+schema_version = 1
+
+[catalog]
+allowed_local_roots = ["~/work"]
+
+[project.house_ledger]
+aliases = ["ledger"]
+base_branch = "trunk"
+
+[project.house_ledger.source]
+kind = "local_path"
+path = "~/work/house-ledger"
+```
+
+Resolving a name:
+
+```python
+from pathlib import Path
+
+from cadenza.adapters.toml_catalog.loader import TomlCatalogSource
+from cadenza.application.compose import compose_catalog
+from cadenza.application.resolve import resolve_project
+
+catalog = compose_catalog(TomlCatalogSource(Path("config")).load())
+resolved = resolve_project(catalog, "cdz")
+
+resolved.project_id  # 'cadenza'  - immutable identity, not the alias typed
+resolved.source.kind  # 'git_url'
+resolved.base_branch  # 'main'
+resolved.config_digest  # 'sha256:...' over the project's semantics
+resolved.provenance["base_branch"].layer  # 'tracked'
+```
+
+A run persists `project_id` and `config_digest` next to `source` and
+`base_branch`. A digest that no longer matches is the signal that the catalog
+moved under a run that already happened; without it, that change is invisible.
+
+Resolution is pure: it never clones, never opens a network connection and never
+reads a working tree. `local_path` is validated lexically only. Whether a path
+exists, is readable, or is a symlink pointing somewhere else entirely is a
+run-side precondition, declared as the `LocalPathVerifier` port and mandatory
+before any clone.
+
+Every refusal is a typed exception under `cadenza.domain.errors`, carrying the
+file and the key at fault. An unknown key, a colliding name, an unsupported
+`schema_version` or an unreachable `local_path` fails the whole load; a catalog
+that half-loads is worse than one that does not load.
+
+## Layout
+
+```
+src/cadenza/
+  domain/        identifiers, clone sources, project, digest, errors  (no I/O)
+  application/   composition and resolution                          (no I/O)
+  ports/         protocols the outside world implements
+  adapters/
+    toml_catalog/   TOML files -> raw layer documents
+    interlock/      reserved seam, empty
+    claude_code/    reserved seam, empty
+config/          catalog data
+docs/            design documents and policy
+tests/
+```
+
+Dependencies point inward only: `adapters -> application -> domain`, and `ports`
+is depended on but depends on nothing. `tests/test_import_boundaries.py`
+enforces that in CI rather than in review. No module is named `core` or
+`runtime`; those words belong to interlock's vocabulary, and reusing them makes
+a boundary review harder than it needs to be.
+
+## Docs
+
+- `docs/design/g1-project-registry.md` - the G1 contract: identity, clone source
+  union, merge rules, digest, resolution.
+- `docs/repository-policy.md` - branch protection, review and release policy.
+- `SECURITY.md` - how to report a vulnerability.
+
+## Licence
+
+MIT. See `LICENSE`.
