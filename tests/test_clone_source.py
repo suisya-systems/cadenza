@@ -19,13 +19,14 @@ from cadenza.domain.errors import (
     MissingFieldError,
     UnknownFieldError,
 )
+from support import CATALOG_DIR, ELSEWHERE
 
 LOCATION = "config/projects.toml: project.web.source"
 
 
 def parse(table: dict[str, object], **kwargs: object) -> object:
     defaults: dict[str, object] = {
-        "base_dir": Path("/srv/catalog"),
+        "base_dir": CATALOG_DIR,
         "allowed_local_roots": (),
         "location": LOCATION,
     }
@@ -175,7 +176,7 @@ def test_absolute_path_is_kept_as_is(tmp_path: Path) -> None:
     target = tmp_path / "web"
     source = parse(
         {"kind": "local_path", "path": str(target)},
-        base_dir=Path("/somewhere/else"),
+        base_dir=ELSEWHERE,
         allowed_local_roots=(str(tmp_path),),
     )
     assert source == LocalPathSource(path=str(target))
@@ -184,10 +185,13 @@ def test_absolute_path_is_kept_as_is(tmp_path: Path) -> None:
 def test_tilde_is_expanded_against_the_home_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # ntpath.expanduser ignores HOME entirely and reads USERPROFILE, so setting
+    # only HOME makes this test assert nothing on Windows.
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     source = parse(
         {"kind": "local_path", "path": "~/work/web"},
-        base_dir=Path("/srv/catalog"),
+        base_dir=CATALOG_DIR,
         allowed_local_roots=("~/work",),
     )
     assert source == LocalPathSource(path=str(tmp_path / "work" / "web"))
@@ -356,3 +360,26 @@ def test_a_relative_base_dir_cannot_anchor_a_local_path() -> None:
             base_dir=Path("config"),
             allowed_local_roots=(".",),
         )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://example.invalid:abc/o/r.git",
+        "https://example.invalid:99999/o/r.git",
+    ],
+)
+def test_a_malformed_port_is_refused_at_composition(url: str) -> None:
+    # urlsplit carries a nonsense port until something reads it, so an unvalidated
+    # port would let the catalog compose and the clone fail later -- the ordering
+    # this validator exists to fix (Codex review round 2).
+    with pytest.raises(InvalidCloneSourceError, match="is not parseable"):
+        parse({"kind": "git_url", "url": url})
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["https://example.invalid:443/o/r.git", "ssh://git@example.invalid:22/o/r.git"],
+)
+def test_a_well_formed_port_is_accepted(url: str) -> None:
+    assert parse({"kind": "git_url", "url": url}) == GitUrlSource(url=url)

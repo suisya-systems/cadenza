@@ -110,8 +110,18 @@ initialising this, and there is nothing to reproduce from".
 
 `base_branch` is a git ref name and is validated as one: non-empty, no
 whitespace or control characters, no `..`, no `@{`, none of ``~^:?*[\``, no
-leading or trailing `/`, no `//`, no leading `-`, no `.lock` suffix, and no
-component beginning with `.`.
+leading or trailing `/`, no `//`, no leading `-`, no trailing `.`, not the
+single character `@`, no `.lock` suffix on any component, and no component
+beginning with `.`.
+
+The validator's job is to move a git-level refusal earlier, so the property that
+matters is one-directional: it must refuse **everything git refuses**, and it is
+allowed to be stricter. `tests/test_refs.py` pins that direction against
+`git check-ref-format` itself rather than against a second copy of the rules, so
+a rule this list forgets fails the build instead of surfacing at the clone.
+Being stricter than git is a deliberate choice in exactly one place: a bare `@`
+is git's shorthand for HEAD in revision syntax, so a catalog and whatever
+resolves it would read it differently.
 
 `ResolvedProject` is the **snapshot handed to a run** — the whole point of §2:
 

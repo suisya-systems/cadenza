@@ -13,7 +13,7 @@ from cadenza.application.resolve import resolve_project
 from cadenza.domain.clone_source import GitUrlSource, LocalPathSource, NewRepositorySource
 from cadenza.domain.digest import canonical_payload, config_digest
 from cadenza.domain.project import Project
-from support import git_url_project, make_layer
+from support import absolute, git_url_project, make_layer
 
 BASE = Project(
     project_id="web",
@@ -105,8 +105,8 @@ def test_digest_survives_the_catalog_moving_to_another_file() -> None:
             make_layer(
                 data,
                 layer="local",
-                origin="/elsewhere/projects.local.toml",
-                base_dir="/elsewhere",
+                origin=str(absolute("elsewhere", "projects.local.toml")),
+                base_dir=absolute("elsewhere"),
             )
         ]
     )

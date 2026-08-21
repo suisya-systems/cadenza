@@ -144,6 +144,10 @@ def _parse_git_url(table: Mapping[str, object], location: str) -> GitUrlSource:
         username = parts.username
         password = parts.password
         host = parts.hostname
+        # Reading .port is what validates it. urlsplit carries "abc" or 99999
+        # happily until something asks, so an unread port would let a catalog
+        # compose and the clone fail -- the ordering this validation fixes.
+        _ = parts.port
     except ValueError as error:
         raise InvalidCloneSourceError(
             f"url {url!r} is not parseable: {error}", location=location

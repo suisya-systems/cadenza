@@ -121,6 +121,12 @@ def _apply_project(
         entry = _Accumulator(project_id=project_id)
         accumulated[project_id] = entry
         entry.origins["project_id"] = _origin(document)
+        # aliases defaults to (), and a default is still a decision some layer
+        # made. Recording its origin here keeps provenance total, so a caller
+        # can index every field of a ResolvedProject rather than every field a
+        # project happened to state (design section 5.7). A later layer that
+        # states aliases overwrites this.
+        entry.origins["aliases"] = _origin(document)
 
     if "aliases" in table:
         # Replaces whole: appending would leave no way to remove an alias.

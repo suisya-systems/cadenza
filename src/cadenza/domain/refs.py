@@ -61,4 +61,14 @@ def parse_base_branch(value: object, *, location: str | None = None) -> str:
             )
         if component.endswith(".lock"):
             raise _refuse(f"{value!r} must not end with '.lock'", location)
+    if value.endswith("."):
+        # git check-ref-format rejects a trailing dot outright. Accepting it
+        # here would let a catalog compose cleanly and then fail at the clone,
+        # which is the failure this validator exists to move earlier.
+        raise _refuse(f"{value!r} must not end with '.'", location)
+    if value == "@":
+        # A bare '@' is git's shorthand for HEAD in revision syntax, so a
+        # base_branch of '@' means one thing to the catalog and another to
+        # whatever resolves it. Refusing beats picking a reading.
+        raise _refuse("must not be the single character '@'", location)
     return value
