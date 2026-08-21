@@ -16,6 +16,21 @@ Cadenza is **provider-agnostic**. Its domain, application and ports layers name
 no executor: not Claude, not GitHub, not interlock. Anything specific to one of
 those lives behind a port, in an adapter.
 
+## The name
+
+A cadenza is the moment the orchestra falls silent and a soloist plays on
+their own judgment - within an agreed frame, and ending with the trill that
+cues the ensemble back in. That is what this layer defines, not what it
+performs: each delegated run is the soloist, the delegation contract says
+what may be improvised and on whose authority, and gates are the cue that
+ends the solo and hands control back.
+
+The structural counterpart is
+[continuo](https://github.com/suisya-systems/continuo), the basso continuo
+that underpins the piece throughout, realising behaviour from policy rows the
+way a continuo realises chords from figures. The pairing is recorded in
+suisya-systems/interlock#74.
+
 ## Status
 
 Early. This repository currently contains:
