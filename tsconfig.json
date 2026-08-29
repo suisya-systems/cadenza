@@ -34,5 +34,10 @@
 
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "test", "scripts", "vitest.config.ts"]
+  // `src` as a directory rather than `src/**/*.ts`, because
+  // `test/architecture/import-boundaries.test.ts` accepts `.mts`, `.cts` and
+  // `.tsx` as modules under `src/` and a glob for `.ts` alone would have left
+  // one of those discovered by the boundary walk and never type-checked. The
+  // Python half of `src/` is not TypeScript and is not picked up.
+  "include": ["src", "test", "scripts", "vitest.config.ts"]
 }

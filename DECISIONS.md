@@ -988,8 +988,9 @@ That round's two P2s are closed with it. A triple-slash `reference` directive is
 read now, and a `reference path=` into another layer turns the inward case red. And the walk took
 only `.ts`, so a `.mts`, `.cts` or `.tsx` module would have been skipped entirely -- no cases, no
 ledger ids, free to cross a layer. All four extensions are discovered, and a file under `src/` the
-walk does not recognise is now itself a failure rather than a silent skip. `src/cadenza/` is
-excluded by name, because the Python half lives under `src/` too until D-0014 retires it.
+walk does not recognise is now itself a failure rather than a silent skip. `src/cadenza/` was
+excluded by name at this point, because the Python half lives under `src/` too until D-0014 retires
+it -- an exclusion the tenth round showed was drawn one level too wide.
 
 **A seventh round returned one P1, and it was against that paragraph's own claim.**
 `process.getBuiltinModule("module").createRequire(import.meta.url)("interlock")` still worked in
@@ -1044,10 +1045,46 @@ reached from any value at all, naming neither `Function` nor a global. `construc
 property name now, in both the dotted and the bracketed spelling, and bracketed access to any loader
 global goes with it.
 
+**A tenth round found three P1s, all of one shape: a branch that stopped asking.** None is a new
+loader spelling -- the ninth round was the last of those -- and all three are places where a rule
+returned "nothing to say" about a region it was responsible for.
+
+13. **The walk skipped `src/cadenza/` whole, and it was the one place nothing looked.** `tsconfig.json`
+    type-checks every TypeScript file under `src/`, so `src/cadenza/domain/runtime.ts` would have been
+    compiled and free to import anything, while `tests/test_import_boundaries.py` walks `*.py` and
+    would not have seen it either. Excluding a *directory* was the error; excluding the *Python files*
+    is the rule that was meant. The walk descends now, ignores `.py`, `.pyc`, `.pyi` and `.pyo` under
+    that directory alone, and reports anything else there as unrecognised. Measured: an empty
+    `src/cadenza/domain/runtime.ts` turns the walk's own case red and nothing else.
+14. **A module augmentation reached a module and was not recorded.** `declare module
+    "../application/compose.js" { ... }` inside an external module is not a namespace declaration:
+    the compiler resolves that specifier exactly as an import does and merges the declarations into
+    the module it names. So it is a real dependency, and it was the one spelling of one that
+    `importsIn` never read -- while `import type` from the same file, saying less, was refused.
+    String-named module declarations are recorded as `*` now. Measured: the augmentation above,
+    placed in `src/domain/digest.ts`, turns the inward case red.
+15. **Being in no layer exempted the barrel from the inward check entirely.** The case confirmed the
+    module was allowed to be unlayered and then returned, so every relative import `src/index.ts`
+    writes went unread -- and nothing else read them, because `unapprovedExternalsIn` considers bare
+    specifiers only, by design, on the grounds that relative ones are this case's question. `export
+    { absolute } from "../test/support.js"` therefore reached out of the package past both checks.
+    The `UNLAYERED_MODULES` assertion stays and the case no longer returns: an unlayered module is
+    checked against `ALLOWED_FOR_UNLAYERED`, the four layer roots, which is the barrel's job and
+    nothing more. Measured: that re-export turns `src/index.ts`'s case red.
+
+Three P2s went with them. `localStorage`, `sessionStorage` and `indexedDB` join `FORBIDDEN_GLOBALS`
+for the reason `fetch` is there -- the list says what a pure layer may not reach, not what today's
+runtime happens to offer it. `tsconfig.json` now includes `src` as a directory and `knip.json`
+matches all four module extensions, closing the gap the eighth round opened: the walk accepted
+`.mts`, `.cts` and `.tsx`, and a glob for `.ts` alone would have type-checked none of them. And
+`isShadowedOrDeclared` was extended to class members and enum members -- `class Layer { module =
+"domain"; }` was reported as a loader route for the word it names its own field with, the second
+false positive in ten rounds and, like the first, produced by a rule tightened repeatedly.
+
 **Where this stops, and what the check does not claim.** It is not a sandbox and cannot become one.
 A static scan of JavaScript cannot prove a module loads nothing, because the language computes at
-runtime what this file has to decide by reading, and each of the last four rounds found one more
-value that could be made to yield a loader. The claim that *is* made, and that the nine rounds
+runtime what this file has to decide by reading, and four rounds running found one more value that
+could be made to yield a loader. The claim that *is* made, and that the ten rounds
 support, is narrower: every route by which a module loads something **without looking like it** is
 refused, so an evasion has to be written on purpose and in a shape a reviewer can see. Accidents are
 stopped outright; determination is made loud. That is also what

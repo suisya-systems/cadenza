@@ -104,6 +104,23 @@ const ALLOWED_BY_LAYER: Readonly<Record<string, readonly string[]>> = {
 const UNLAYERED_MODULES = ["src/index.ts"];
 
 /**
+ * What a module in no layer may reach: the four layer roots, and nothing else.
+ *
+ * Being unlayered was a way out of the inward check entirely -- the case
+ * returned as soon as it had confirmed the module was allowed to be unlayered,
+ * so every relative import the barrel writes went unread. Nothing else read
+ * them either: `unapprovedExternalsIn` considers bare specifiers only, by
+ * design, because relative ones are this case's question. So
+ * `export { absolute } from "../test/support.js"` in `src/index.ts` reached out
+ * of the package and past both checks.
+ *
+ * Re-exporting across layers is the barrel's whole job, so the allowance is
+ * every layer; what it is not allowed to do is reach somewhere that is not a
+ * layer at all.
+ */
+const ALLOWED_FOR_UNLAYERED = Object.keys(ALLOWED_BY_LAYER);
+
+/**
  * The layers design section 8 marks `(no I/O)`.
  *
  * **Both** of them. The source parametrises its no-I/O case over `cadenza.domain`
@@ -272,6 +289,13 @@ const FORBIDDEN_GLOBALS = [
   "EventSource",
   "XMLHttpRequest",
   "console",
+  // Storage the platform hands over without an import, exactly as it hands
+  // over `fetch`. None of these exist under `types: ["node"]`, which is the
+  // point: the list says what the domain may not reach, not what today's
+  // runtime happens to offer it.
+  "localStorage",
+  "sessionStorage",
+  "indexedDB",
   // `globalThis` and `global` reach every one of the above as a PROPERTY, where
   // the name is somebody else's property name and the sweep below would let it
   // through: `globalThis.fetch(url)`, and `globalThis["fetch"]` besides.
@@ -343,6 +367,13 @@ function isShadowedOrDeclared(node: ts.Identifier): boolean {
   return (
     (ts.isPropertyAssignment(parent) ||
       ts.isPropertySignature(parent) ||
+      // A class member named for a global declares that member; it does not
+      // reference the global. `class Layer { module = "domain"; }` was reported
+      // as a loader route for the word it spells its own field with.
+      ts.isPropertyDeclaration(parent) ||
+      ts.isGetAccessorDeclaration(parent) ||
+      ts.isSetAccessorDeclaration(parent) ||
+      ts.isEnumMember(parent) ||
       ts.isMethodDeclaration(parent) ||
       ts.isMethodSignature(parent) ||
       ts.isVariableDeclaration(parent) ||
@@ -390,12 +421,33 @@ const DECLARATION_EXTENSIONS = [".d.ts", ".d.mts", ".d.cts"];
  *
  * The rewrite happens in place (D-0012): `src/cadenza/` and `src/` coexist
  * until a later PR retires the first (D-0014). So the TypeScript module graph
- * is `src/` MINUS this directory, and the walk skips it whole -- its `.py`
- * files, and the `__pycache__` a local pytest run leaves behind. Nothing is
- * unguarded meanwhile: `tests/test_import_boundaries.py` enforces exactly these
- * boundaries over exactly that tree, and stays green in CI until it goes.
+ * is `src/` MINUS the **Python files** under this directory -- not minus the
+ * directory. Skipping the directory whole was a hole with nothing on either
+ * side of it: `tsconfig.json` covers every TypeScript file under `src/`, so
+ * `src/cadenza/domain/runtime.ts` would be type-checked and would import
+ * whatever it liked, while `tests/test_import_boundaries.py` walks `*.py` and
+ * would not see it either. It is the one place in the tree both scans agreed to
+ * look away from. So the walk descends, ignores the Python half by extension,
+ * and reports anything else as unrecognised. The Python boundaries themselves
+ * stay with the Python test, which enforces them over exactly that tree and
+ * stays green in CI until the directory goes.
  */
 const PYTHON_PACKAGE = "src/cadenza";
+
+/**
+ * The Python half's file extensions, plus the bytecode a local pytest run
+ * leaves in `__pycache__`.
+ *
+ * These are ignored under `PYTHON_PACKAGE` and nowhere else. A `.py` file
+ * anywhere else under `src/` is still unrecognised, because that is not where
+ * the Python package lives.
+ */
+const PYTHON_EXTENSIONS = [".py", ".pyc", ".pyi", ".pyo"];
+
+/** Whether a repo-relative path sits inside the Python half of `src/`. */
+function underPythonPackage(path: string): boolean {
+  return path === PYTHON_PACKAGE || path.startsWith(`${PYTHON_PACKAGE}/`);
+}
 
 /** Files under `src/` the walk did not recognise as modules. See `moduleFiles`. */
 const unrecognised: string[] = [];
@@ -424,11 +476,16 @@ function moduleFiles(directory: string = SRC_ROOT): string[] {
   const found: string[] = [];
   for (const entry of readdirSync(join(ROOT, directory))) {
     const path = `${directory}/${entry}`;
-    if (path === PYTHON_PACKAGE) {
-      continue;
-    }
     if (statSync(join(ROOT, path)).isDirectory()) {
       found.push(...moduleFiles(path));
+    } else if (underPythonPackage(path)) {
+      // The Python half is not part of this graph, so its own files are passed
+      // over -- and only its own files. A TypeScript module placed here is
+      // reported rather than skipped: it is the one location `tsconfig.json`
+      // type-checks and the Python walk does not read.
+      if (!PYTHON_EXTENSIONS.some((extension) => entry.endsWith(extension))) {
+        unrecognised.push(path);
+      }
     } else if (
       !DECLARATION_EXTENSIONS.some((extension) => entry.endsWith(extension)) &&
       MODULE_EXTENSIONS.some((extension) => entry.endsWith(extension))
@@ -541,6 +598,17 @@ function importsIn(source: string, from: string): readonly ImportRef[] {
   };
 
   function visit(node: ts.Node): void {
+    // `declare module "../application/compose.js" { ... }` inside a module is
+    // an augmentation, not a namespace: the compiler resolves that specifier
+    // exactly as an import does, and the declarations inside merge into the
+    // module it names. So it is a real dependency, and it was the one spelling
+    // that crossed a layer without being recorded -- `import type` from the
+    // same file is refused, and this said the same thing about the same module
+    // and was not read at all. A namespace declaration (`declare module Foo`)
+    // has an identifier name, reaches nothing, and is not matched here.
+    if (ts.isModuleDeclaration(node) && ts.isStringLiteral(node.name)) {
+      record(node.name.text, ["*"]);
+    }
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
       record(node.moduleSpecifier.text, namesOf(node.importClause));
     } else if (
@@ -775,9 +843,10 @@ parametrize("each layer imports only inward", PER_MODULE, (module) => {
       UNLAYERED_MODULES,
       `${module} is in no layer; put it in one, or say here why it has none`,
     ).toContain(module);
-    return;
   }
-  const allowed = ALLOWED_BY_LAYER[layer] ?? [];
+  // And being allowed to have no layer does not exempt the module from the
+  // check -- it only changes which table answers it.
+  const allowed = layer === undefined ? ALLOWED_FOR_UNLAYERED : (ALLOWED_BY_LAYER[layer] ?? []);
   const offenders: string[] = [];
   for (const ref of importsIn(sourceOf(module), module)) {
     const resolved = ref.resolved;

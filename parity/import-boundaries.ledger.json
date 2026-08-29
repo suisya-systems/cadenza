@@ -34,8 +34,8 @@
       },
       {
         "from": "`imported_modules(path)`, an `ast.walk` collecting `ast.Import` and `ast.ImportFrom` with relative levels resolved",
-        "to": "`importsIn(source, from)`, a `ts.createSourceFile` walk collecting import declarations, `export ... from` re-exports, `import(...)` calls, `require(...)` calls, `import x = require(...)`, and `import(\"...\").X` type nodes, with relative specifiers resolved by path arithmetic",
-        "why": "The source's docstring states the property that matters -- an import nested in a function or under `TYPE_CHECKING` is still an import, and importing the tree would not see either -- and TypeScript has strictly more routes with that property. A re-export has no Python counterpart at all and is how a layer leaks through a barrel, so the sweep covers it. Resolution is path arithmetic rather than a filesystem lookup, because the detector's own cases name modules that do not exist; `tsc` is what checks a specifier resolves, and this only has to agree about which file it resolves to.",
+        "to": "`importsIn(source, from)`, a `ts.createSourceFile` walk collecting import declarations, `export ... from` re-exports, `import(...)` calls, `require(...)` calls, `import x = require(...)`, `import(\"...\").X` type nodes, and string-named `declare module \"...\"` augmentations, with relative specifiers resolved by path arithmetic",
+        "why": "The source's docstring states the property that matters -- an import nested in a function or under `TYPE_CHECKING` is still an import, and importing the tree would not see either -- and TypeScript has strictly more routes with that property. A re-export has no Python counterpart at all and is how a layer leaks through a barrel, so the sweep covers it. A module augmentation has none either, and is the same kind of thing: `declare module \"../application/compose.js\" { ... }` inside an external module is resolved by the compiler exactly as an import is, and merges declarations into the module it names, so it is recorded rather than read as a namespace. Resolution is path arithmetic rather than a filesystem lookup, because the detector's own cases name modules that do not exist; `tsc` is what checks a specifier resolves, and this only has to agree about which file it resolves to.",
         "affects": "the 7 detector cases and all 87 per-module cases"
       },
       {
@@ -46,8 +46,8 @@
       },
       {
         "from": "`FORBIDDEN_BY_LAYER`, a denylist naming the layers each layer may not import",
-        "to": "`ALLOWED_BY_LAYER`, an allowlist naming the layers each layer may import, plus `UNLAYERED_MODULES` naming the one module that belongs to no layer",
-        "why": "The source's shape answers \"no\" for anything it was not told about, and the port has something the source does not: `src/index.ts`, a public barrel in no layer that re-exports across all of them. Under a denylist a domain module importing `../index.js` matched no forbidden prefix and passed, reaching `src/application` through the re-export; a directory added later would have been the same story. Raised at review of this belt and inverted. The allowlist also makes belonging to no layer fail rather than exempt: a new top-level module under `src/` is an offender until it is classified. Measured: `../index.js` from `src/domain` and from `src/ports`, and a new `src/toplevel.ts`, each turn the expected case red.",
+        "to": "`ALLOWED_BY_LAYER`, an allowlist naming the layers each layer may import, plus `UNLAYERED_MODULES` naming the one module that belongs to no layer and `ALLOWED_FOR_UNLAYERED` naming what that module may reach",
+        "why": "The source's shape answers \"no\" for anything it was not told about, and the port has something the source does not: `src/index.ts`, a public barrel in no layer that re-exports across all of them. Under a denylist a domain module importing `../index.js` matched no forbidden prefix and passed, reaching `src/application` through the re-export; a directory added later would have been the same story. Raised at review of this belt and inverted. The allowlist also makes belonging to no layer fail rather than exempt: a new top-level module under `src/` is an offender until it is classified. And being allowed to have no layer changes which table answers the question rather than whether it is asked: the barrel is checked against the four layer roots, so `export { absolute } from \"../test/support.js\"` -- a re-export reaching out of the package, which no other case reads because `unapprovedExternalsIn` considers bare specifiers only -- is an offender. Measured: `../index.js` from `src/domain` and from `src/ports`, and a new `src/toplevel.ts`, each turn the expected case red.",
         "affects": "the 20 cases of 'each layer imports only inward'"
       },
       {
@@ -199,7 +199,7 @@
       "disposition": "adapted",
       "source_status": "passed",
       "target_status": "passed",
-      "reason": "The same guard against a vacuous pass, over `src/` instead of `src/cadenza/`: the root exists, the walk found at least `MINIMUM_MODULES` (10, the source's own floor), and it found `src/domain/clone-source.ts` by name.",
+      "reason": "The same guard against a vacuous pass, over `src/` instead of `src/cadenza/`: the root exists, the walk found at least `MINIMUM_MODULES` (10, the source's own floor), and it found `src/domain/clone-source.ts` by name. Two things the source's case has no need of go with it: no file under `src/` was passed over unrecognised, and the walk descends into `src/cadenza/` -- the Python half, which is not part of this graph -- ignoring its `.py`, `.pyc`, `.pyi` and `.pyo` files by extension rather than skipping the directory. Skipping the directory was the one region of the tree that `tsconfig.json` type-checks and the Python walk does not read, so a TypeScript module placed there would have been seen by neither.",
       "source_revision": "a5672f8"
     },
     {
