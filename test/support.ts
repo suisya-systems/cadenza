@@ -28,10 +28,11 @@ export function absolute(...parts: readonly string[]): string {
 }
 
 export const CATALOG_DIR = absolute("srv", "catalog");
-// `tests/support.py` also exports ELSEWHERE, and it is deliberately not here:
-// only `tests/test_clone_source.py` uses it, and that file is not this belt's.
-// An export nothing imports is what `npm run knip` exists to refuse, so it comes
-// over with the belt that needs it.
+// `tests/support.py` also exports ELSEWHERE, an absolute directory distinct
+// from CATALOG_DIR for a case that needs one that is merely irrelevant --
+// `tests/test_clone_source.py`'s "an absolute path is kept as-is" passes a
+// base_dir that the already-absolute path must not be anchored to.
+export const ELSEWHERE = absolute("somewhere", "else");
 export const TRACKED_ORIGIN = nativePath.join(CATALOG_DIR, "projects.toml");
 export const LOCAL_ORIGIN = nativePath.join(CATALOG_DIR, "projects.local.toml");
 

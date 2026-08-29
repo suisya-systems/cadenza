@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ports of the Python standard-library behaviour the implementation depends on
   (D-0018): `os.path`/`pathlib`, `urllib.parse.urlsplit`, `difflib` and
   `str.isspace`, each with its own contract test, checked against CPython 3.12.
+- Clone-source belt (cadenza#8, D-0019): `tests/test_clone_source.py` ported -
+  57 node ids, 42 mapped straight and 15 adapted, closing the coverage gap the
+  composition belt left around `parseCloneSource`'s own validation.
 
 ### Changed
 

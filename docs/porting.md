@@ -273,7 +273,7 @@ nobody would be told.
 
 | Source file | Node ids | Functions | Status |
 |---|---:|---:|---|
-| `tests/test_clone_source.py` | 57 | 35 | inventoried |
+| `tests/test_clone_source.py` | 57 | 35 | **ported** (57 mapped) |
 | `tests/test_compose.py` | 50 | 39 | **ported** (49 mapped, 1 not-ported) |
 | `tests/test_digest.py` | 14 | 8 | **ported** (14 mapped) |
 | `tests/test_identifiers.py` | 25 | 6 | inventoried |
@@ -281,7 +281,7 @@ nobody would be told.
 | `tests/test_refs.py` | 62 | 6 | inventoried |
 | `tests/test_resolve.py` | 11 | 11 | **ported** (11 mapped) |
 | `tests/test_toml_loader.py` | 14 | 13 | **ported** (14 mapped) |
-| **Total** | **330** | **127** | 89 ported, 241 inventoried |
+| **Total** | **330** | **127** | 146 ported, 184 inventoried |
 
 *Inventoried* means collected as evidence. It is not a commitment to port; the belt that opens a file
 writes its ledger then.
@@ -291,7 +291,7 @@ another_file` is ported at `test/application/resolve.test.ts` and is still claim
 `parity/digest.ledger.json`, which is why the `unmapped` sweep runs after every ledger has been read
 rather than while each one is read.
 
-Two known traps were recorded here by the kickoff. The first has now been met; the second has not:
+Two known traps were recorded here by the kickoff. Both have now been met:
 
 - **The identifier pattern's `\Z`.** `IDENTIFIER_PATTERN` ends `\Z`, not `$`, so `"web\n"` is
   refused. That is deliberate and must survive translation: JavaScript's `$` without the `m` flag
@@ -301,11 +301,13 @@ Two known traps were recorded here by the kickoff. The first has now been met; t
   the reasoning at the pattern, and there is deliberately no `m` flag.
 - **`str.isspace()` against `/\s/`.** The two accept different sets. `_parse_git_url` rejects any
   character for which `str.isspace()` is true, and a translation to `/\s/` would change which URLs
-  are refused. The *cases* still belong to the `tests/test_clone_source.py` belt, but the composition
-  belt had to meet the trap early, because `parse_base_branch` asks the same predicate and
-  `compose_catalog` calls it: `isPythonSpace` in `src/domain/python-text.ts` is the explicit set, and
-  the two directions it disagrees with `/\s/` in — U+001C..U+001F and U+0085 on Python's side,
-  U+FEFF on JavaScript's — are asserted in `test/domain/python-semantics.test.ts`.
+  are refused. The composition belt had to meet the trap early, because `parse_base_branch` asks the
+  same predicate and `compose_catalog` calls it: `isPythonSpace` in `src/domain/python-text.ts` is
+  the explicit set, and the two directions it disagrees with `/\s/` in — U+001C..U+001F and U+0085 on
+  Python's side, U+FEFF on JavaScript's — are asserted in `test/domain/python-semantics.test.ts`.
+  **Met** for its own cases by the clone-source belt: "whitespace and control characters in a url are
+  refused" exercises `isPythonSpace` through `_parse_git_url` directly, at
+  `test/domain/clone-source.test.ts`.
 
 A third trap was found by this belt rather than predicted, and is recorded for the same reason:
 
