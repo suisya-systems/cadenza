@@ -276,12 +276,12 @@ nobody would be told.
 | `tests/test_clone_source.py` | 57 | 35 | **ported** (57 mapped) |
 | `tests/test_compose.py` | 50 | 39 | **ported** (49 mapped, 1 not-ported) |
 | `tests/test_digest.py` | 14 | 8 | **ported** (14 mapped) |
-| `tests/test_identifiers.py` | 25 | 6 | inventoried |
+| `tests/test_identifiers.py` | 25 | 6 | **ported** (25 mapped) |
 | `tests/test_import_boundaries.py` | 97 | 9 | inventoried |
 | `tests/test_refs.py` | 62 | 6 | inventoried |
 | `tests/test_resolve.py` | 11 | 11 | **ported** (11 mapped) |
 | `tests/test_toml_loader.py` | 14 | 13 | **ported** (14 mapped) |
-| **Total** | **330** | **127** | 146 ported, 184 inventoried |
+| **Total** | **330** | **127** | 171 ported, 159 inventoried |
 
 *Inventoried* means collected as evidence. It is not a commitment to port; the belt that opens a file
 writes its ledger then.
@@ -291,14 +291,19 @@ another_file` is ported at `test/application/resolve.test.ts` and is still claim
 `parity/digest.ledger.json`, which is why the `unmapped` sweep runs after every ledger has been read
 rather than while each one is read.
 
-Two known traps were recorded here by the kickoff. Both have now been met:
+Two known traps were recorded here by the kickoff. Both have now been met, and the identifier belt
+measured both rather than judging them by eye (`D-0020`):
 
 - **The identifier pattern's `\Z`.** `IDENTIFIER_PATTERN` ends `\Z`, not `$`, so `"web\n"` is
   refused. That is deliberate and must survive translation: JavaScript's `$` without the `m` flag
   behaves like `\Z` rather than like Python's `$`, so the naive translation happens to be correct —
   which is exactly why it needs to be recorded rather than rediscovered. **Met** by the composition
   belt, which needed `parse_identifier` for `compose_catalog`; `src/domain/identifiers.ts` records
-  the reasoning at the pattern, and there is deliberately no `m` flag.
+  the reasoning at the pattern, and there is deliberately no `m` flag. **Measured** by the identifier
+  belt (`D-0020`): the risk is not the translation that was written but the flag a later edit adds,
+  because the same source under `m` accepts `web\n` — and `web\r`, `web\u2028` and `web\u2029`
+  besides, three terminators Python's `$` does not break a line at. A target-only case in
+  `test/domain/identifiers.test.ts` holds the flag absent.
 - **`str.isspace()` against `/\s/`.** The two accept different sets. `_parse_git_url` rejects any
   character for which `str.isspace()` is true, and a translation to `/\s/` would change which URLs
   are refused. The composition belt had to meet the trap early, because `parse_base_branch` asks the
@@ -307,7 +312,11 @@ Two known traps were recorded here by the kickoff. Both have now been met:
   Python's side, U+FEFF on JavaScript's — are asserted in `test/domain/python-semantics.test.ts`.
   **Met** for its own cases by the clone-source belt: "whitespace and control characters in a url are
   refused" exercises `isPythonSpace` through `_parse_git_url` directly, at
-  `test/domain/clone-source.test.ts`.
+  `test/domain/clone-source.test.ts`. The identifier belt then measured whether the trap also reaches
+  `parse_identifier`, and it does not (`D-0020`): that gate is a **positive** character class, so a
+  space is refused for being outside `[a-z0-9_-]` rather than for being whitespace, and over a
+  3,169-value corpus the two implementations disagree on zero accept/refuse verdicts — the six
+  whitespace-disagreement code points included.
 
 A third trap was found by this belt rather than predicted, and is recorded for the same reason:
 

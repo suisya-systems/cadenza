@@ -38,6 +38,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clone-source belt (cadenza#8, D-0019): `tests/test_clone_source.py` ported -
   57 node ids, 42 mapped straight and 15 adapted, closing the coverage gap the
   composition belt left around `parseCloneSource`'s own validation.
+- Identifier belt (cadenza#8): `tests/test_identifiers.py` ported - 25 node
+  ids, all mapped - in `test/domain/identifiers.test.ts`, with
+  `parity/identifiers.ledger.json` accounting for them. The two cross-language
+  traps the kickoff named for this file were settled by running both
+  implementations over a 3,169-value corpus and diffing the verdicts (D-0020):
+  zero accept/refuse disagreements, the `\Z`-versus-`$` anchor and the
+  `str.isspace()`-versus-`/\s/` refusal set each held open by a target-only
+  case.
 
 ### Changed
 
