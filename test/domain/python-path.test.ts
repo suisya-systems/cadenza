@@ -60,6 +60,20 @@ describe("posixpath", () => {
     expect(posix.isPathlibAbsolute("C:/srv")).toBe(false);
   });
 
+  test("is_relative_to ignores a dot component but not a dot-dot", () => {
+    // Raised by review. `PurePath` drops `.` while PARSING -- so
+    // `PurePosixPath("/srv/./repo").parts` is `("/", "srv", "repo")` -- and
+    // keeps `..`, which it cannot resolve without touching a filesystem.
+    // Dropping both would make a path that climbs out of a root look contained.
+    expect(posix.isRelativeTo("/srv/repo", "/srv/./repo")).toBe(true);
+    expect(posix.isRelativeTo("/srv/./repo", "/srv")).toBe(true);
+    expect(posix.isRelativeTo("/./srv/repo", "/srv")).toBe(true);
+    // CPython agrees here too, and it surprises: pathlib is purely lexical, so
+    // the `..` is a component like any other and the prefix still matches.
+    expect(posix.isRelativeTo("/srv/../etc", "/srv")).toBe(true);
+    expect(windows.isRelativeTo("C:/srv/repo", "C:/srv/./repo")).toBe(true);
+  });
+
   test("is_relative_to compares whole components, case-sensitively", () => {
     expect(posix.isRelativeTo("/srv/catalog/web", "/srv/catalog")).toBe(true);
     expect(posix.isRelativeTo("/srv/catalog", "/srv/catalog")).toBe(true);

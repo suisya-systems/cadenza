@@ -54,11 +54,24 @@ export interface PathFlavour {
   expanduser(path: string): string;
 }
 
-/** `path` split into `pathlib`'s parts: the anchor, then one entry per component. */
+/**
+ * `path` split into `pathlib`'s parts: the anchor, then one entry per component.
+ *
+ * `PurePath._parse_path` drops empty components **and `.` components** while
+ * parsing -- `PurePosixPath("/srv/./repo").parts` is `("/", "srv", "repo")` --
+ * but keeps `..`, which is not a no-op and cannot be resolved without touching
+ * the filesystem. Both halves matter: dropping `..` as well would make
+ * `is_relative_to` say a path that climbs out of a root is inside it.
+ *
+ * Raised by review. The domain never reaches it, because `parseLocalPath`
+ * compares two paths that `normpath` has already cleaned -- but these flavours
+ * are exported and documented as `pathlib`'s, so "unreachable from one caller"
+ * is not the standard they are held to.
+ */
 function partsOf(anchor: string, rest: string, separators: RegExp): string[] {
   const parts = anchor === "" ? [] : [anchor];
   for (const component of rest.split(separators)) {
-    if (component !== "") {
+    if (component !== "" && component !== ".") {
       parts.push(component);
     }
   }
