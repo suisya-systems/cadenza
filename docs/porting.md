@@ -108,6 +108,12 @@ refuses an alias outright instead of approving one. `const quarantine = test.ski
 leaves no chain at all. Resolving arbitrary aliases is a type checker's job, and refusing them costs
 nothing that a test suite needs.
 
+The **import** decides what counts as a runner in the first place, so the roots are read off each
+file's own imports rather than assumed: `import { test as check } from "vitest"` binds the same
+function to `check`, and `check.skip(...)` disables a test while a sweep looking for the literal
+`test` sees nothing. `import * as v from "vitest"` is refused, because it puts every runner behind a
+property access that no finite list of roots can enumerate.
+
 `npm run inventory` separately checks the inventory as a whole against
 `parity/source-inventory.manifest.json`: stray files in either direction, lines that are not node ids
 of the file's own source, counts, the `all.txt` aggregate, duplicated ids across inventories, the

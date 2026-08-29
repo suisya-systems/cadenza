@@ -96,10 +96,24 @@ const TARGET_ONLY_FILES = "parity/target-only.json";
  */
 /** Modifiers, reported as `test.<modifier>` whichever root they hang off. */
 const RUNNER_MODIFIERS = ["skip", "todo", "fails"];
-/** The roots a modifier may hang off. */
-const RUNNER_ROOTS = ["test", "it", "describe"];
+/**
+ * The names **vitest exports** that a modifier may hang off.
+ *
+ * Not the names a file spells: `import { test as check } from "vitest"` binds
+ * the same function to `check`, and `check.skip(...)` disables a test just as
+ * surely. `runnerRootsOf` maps these to whatever each file calls them, so the
+ * sweep follows the import rather than assuming the conventional spelling.
+ */
+const RUNNER_EXPORTS = ["test", "it", "describe"];
+/** The module those names have to come from for a local binding to count. */
+const RUNNER_MODULE = "vitest";
 /** Bare helpers that mean the same thing, wherever they are referenced. */
 const NON_RUNNING_HELPERS = ["skipIf", "xfail"];
+
+/** The `runner-alias` message for a reference that is never called. */
+function aliasDetail(chain) {
+  return `references '${chain}' without calling it; an alias makes the non-running count uncountable, so it is refused rather than approved`;
+}
 
 const problems = [];
 
@@ -179,10 +193,17 @@ function testFiles(directory = join(ROOT, "test")) {
  * so a single approval would license any number of them; `const { skip } = test;`
  * is worse, because the chain never appears at all. Counting the registrations
  * instead would mean resolving arbitrary aliases, which is a type checker's job.
- * So a reference to `test`, `it` or `describe` that is neither called nor the
- * start of a property-access chain is reported as `runner-alias` and the gate
- * goes red. An approval is a licence for a *counted* construct, and this is what
- * keeps the count countable.
+ * So a reference to a runner that is neither called nor the start of a
+ * property-access chain is reported as `runner-alias` and the gate goes red. An
+ * approval is a licence for a *counted* construct, and this is what keeps the
+ * count countable.
+ *
+ * The **import** is the fourth route and the one that decides what "a runner"
+ * even means here: `import { test as check } from "vitest"` binds the same
+ * function to another name, and `check.skip(...)` disables a test while a sweep
+ * looking for the literal `test` sees nothing. So the roots are read off each
+ * file's own imports (`runnerRootsOf`) rather than assumed, and a namespace
+ * import -- which would put every runner behind a property access -- is refused.
  */
 function nonRunningIn(path, source) {
   const tree = ts.createSourceFile(path, source, ts.ScriptTarget.ES2023, true, ts.ScriptKind.TS);
@@ -190,6 +211,54 @@ function nonRunningIn(path, source) {
   const aliases = [];
 
   const lineOf = (node) => tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
+
+  /**
+   * What this file calls vitest's runners, read off its own imports.
+   *
+   * `import { test } from "vitest"` binds `test`; `import { test as check }`
+   * binds `check`, and `check.skip(...)` is every bit as disabled. Assuming the
+   * conventional spelling was the last aliasing route left open, and it is the
+   * one a text sweep could never have closed either.
+   *
+   * A namespace import is **refused** rather than followed. `import * as v from
+   * "vitest"` makes every runner reachable as a property of `v`, so the roots
+   * are no longer a set of identifiers at all -- and a file that needs one has
+   * not been written yet. Refusing keeps the sweep's subject a finite list.
+   */
+  function runnerRootsOf() {
+    const roots = new Set();
+    for (const statement of tree.statements) {
+      if (!ts.isImportDeclaration(statement)) {
+        continue;
+      }
+      const specifier = statement.moduleSpecifier;
+      if (!ts.isStringLiteral(specifier) || specifier.text !== RUNNER_MODULE) {
+        continue;
+      }
+      const bindings = statement.importClause?.namedBindings;
+      if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+        aliases.push({
+          detail: `imports ${RUNNER_MODULE} as a namespace ('${bindings.name.text}'), which puts every runner behind a property access the non-running sweep cannot enumerate; import the runners by name`,
+          line: lineOf(bindings),
+        });
+        continue;
+      }
+      if (bindings === undefined || !ts.isNamedImports(bindings)) {
+        continue;
+      }
+      for (const element of bindings.elements) {
+        // `propertyName` is set only for `x as y`; otherwise the local name is
+        // the exported name.
+        const exported = (element.propertyName ?? element.name).text;
+        if (RUNNER_EXPORTS.includes(exported)) {
+          roots.add(element.name.text);
+        }
+      }
+    }
+    return roots;
+  }
+
+  const RUNNER_ROOTS = runnerRootsOf();
 
   /** `test.concurrent.skip` -> ["test", "concurrent", "skip"]; null if not a plain chain. */
   function chainOf(node) {
@@ -223,12 +292,12 @@ function nonRunningIn(path, source) {
       // Only the outermost link: an inner one is part of the same chain.
       if (!continuesChain(node)) {
         const chain = chainOf(node);
-        if (chain !== null && RUNNER_ROOTS.includes(chain[0])) {
+        if (chain !== null && RUNNER_ROOTS.has(chain[0])) {
           const modifiers = RUNNER_MODIFIERS.filter((modifier) =>
             chain.slice(1).includes(modifier),
           );
           if (modifiers.length > 0 && !isCallee(node)) {
-            aliases.push({ chain: chain.join("."), line: lineOf(node) });
+            aliases.push({ detail: aliasDetail(chain.join(".")), line: lineOf(node) });
           } else {
             for (const modifier of modifiers) {
               hits.push({ construct: `test.${modifier}`, line: lineOf(node) });
@@ -237,7 +306,7 @@ function nonRunningIn(path, source) {
         }
       }
     }
-    if (ts.isIdentifier(node) && RUNNER_ROOTS.includes(node.text)) {
+    if (ts.isIdentifier(node) && RUNNER_ROOTS.has(node.text)) {
       // A bare `test` that is neither called nor the start of a chain is an
       // alias in the making: `const t = test;` and `const { skip } = test;` both
       // land here, and neither leaves a chain for the sweep above to find. An
@@ -252,9 +321,12 @@ function nonRunningIn(path, source) {
           ts.isParameter(parent) ||
           ts.isVariableDeclaration(parent) ||
           ts.isFunctionDeclaration(parent)) &&
-        parent.name === node;
+        (parent.name === node ||
+          // `import { test as check }`: `test` here names the export being
+          // bound, not a reference to the runner.
+          (ts.isImportSpecifier(parent) && parent.propertyName === node));
       if (!isBinding && !isCallee(node) && !continuesChain(node)) {
-        aliases.push({ chain: node.text, line: lineOf(node) });
+        aliases.push({ detail: aliasDetail(node.text), line: lineOf(node) });
       }
     }
     if (ts.isIdentifier(node) && NON_RUNNING_HELPERS.includes(node.text)) {
@@ -479,10 +551,7 @@ for (const path of testFiles()) {
     observed.set(key, seen);
   }
   for (const alias of aliases) {
-    fail(
-      "runner-alias",
-      `${relativePath}:${alias.line} references '${alias.chain}' without calling it; an alias makes the non-running count uncountable, so it is refused rather than approved`,
-    );
+    fail("runner-alias", `${relativePath}:${alias.line} ${alias.detail}`);
   }
 }
 

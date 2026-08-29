@@ -283,6 +283,17 @@ reported as `runner-alias` and the gate goes red -- which costs a suite nothing 
 the count countable. An approval with no reason is refused for the same reason a `not-ported` entry
 with no reason is.
 
+**What a runner is, is read off the imports.** `import { test as check } from "vitest"` binds the
+same function to another name, and `check.skip(...)` disables a test while a sweep looking for the
+literal `test` sees nothing -- the last aliasing route, and the one that decides the meaning of every
+other rule here. So the roots are per-file, derived from each file's own import declarations, and a
+namespace import is refused: `import * as v from "vitest"` puts every runner behind a property access
+that no finite list of roots can enumerate.
+
+All four routes were found by review, in four rounds, and each is the remaining half of the one
+before it. That is worth recording as a shape rather than as four incidents: a rule about *names* in
+a language with aliasing is not finished until the binding site is the thing being read.
+
 **What would falsify it.** A cadenza test that must be skipped on some hosts. See above: the check
 goes red rather than quiet, which is the outcome this is designed for.
 
