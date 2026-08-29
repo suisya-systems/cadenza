@@ -184,6 +184,48 @@ const ALLOWED_EXTERNALS_UNLAYERED: Readonly<Record<string, readonly string[]>> =
 const CODE_EVALUATION_GLOBALS = ["eval", "Function"];
 
 /**
+ * Every global that reaches a builtin module without an import.
+ *
+ * `eval` and `Function` compile a string. `globalThis` and `global` reach both
+ * of those as properties, where the sweep would see somebody else's property
+ * name. And `process.getBuiltinModule("module")` hands back `node:module`
+ * itself on every supported Node version -- which is why `process` is admitted
+ * for `env` and `platform` and refused for everything else, in EVERY layer
+ * rather than only the pure ones.
+ *
+ * That last clause is the correction this list exists for: the pure layers had
+ * the `process` rule from the start, and `src/adapters` and the barrel did not,
+ * so `process.getBuiltinModule("module").createRequire(import.meta.url)` was
+ * open there while D-0022 claimed the route closed.
+ *
+ * With the per-layer import allowlist beside it, this is the complete set. A
+ * module reaches another module by importing it (approved by layer), by
+ * building code from a string (`eval`, `Function`), by taking a builtin off the
+ * process object (`process`), or by reaching any of those through the global
+ * object (`globalThis`, `global`). `import.meta.resolve` produces a URL and
+ * still needs an `import()` to use it, which fails closed as `<computed>`.
+ */
+const LOADER_ROUTE_GLOBALS = [...CODE_EVALUATION_GLOBALS, "globalThis", "global"];
+
+/**
+ * Report a use of `process` beyond the two members any layer may read.
+ *
+ * Returns the offending spelling, or null when the use is approved.
+ */
+function processMisuse(node: ts.Identifier, module: string): string | null {
+  const parent = node.parent;
+  const member =
+    parent !== undefined && ts.isPropertyAccessExpression(parent) && parent.expression === node
+      ? parent.name.text
+      : undefined;
+  const allowed = PROCESS_ALLOWED_BY_LAYER[layerOf(module) ?? ""] ?? PROCESS_ALLOWED_MEMBERS;
+  if (member !== undefined && allowed.includes(member)) {
+    return null;
+  }
+  return `process.${member ?? "<whole object>"}`;
+}
+
+/**
  * I/O Node hands to every module without an import, so no allowlist over
  * specifiers can see it.
  *
@@ -217,6 +259,23 @@ const FORBIDDEN_GLOBALS = [
  * nothing. `src/domain/python-path.ts` is the module that needs both.
  */
 const PROCESS_ALLOWED_MEMBERS = ["env", "platform"];
+
+/**
+ * The same allowance, per layer, because one layer legitimately needs more.
+ *
+ * `src/adapters` is the layer design section 8 permits I/O, and
+ * `os.path.abspath` -- which `src/adapters/toml-catalog/loader.ts` reproduces
+ * to anchor a relative catalog path -- consults the working directory. So
+ * `cwd` is approved there and nowhere else. Every other member, in every layer,
+ * is refused: `getBuiltinModule` above all, which hands back `node:module`
+ * itself and is the route this table exists to close.
+ */
+const PROCESS_ALLOWED_BY_LAYER: Readonly<Record<string, readonly string[]>> = {
+  "src/domain": PROCESS_ALLOWED_MEMBERS,
+  "src/application": PROCESS_ALLOWED_MEMBERS,
+  "src/ports": PROCESS_ALLOWED_MEMBERS,
+  "src/adapters": [...PROCESS_ALLOWED_MEMBERS, "cwd"],
+};
 
 /**
  * Whether an identifier is a name being declared or a property being named,
@@ -794,15 +853,9 @@ test("no module in a pure layer reaches a global I/O API", () => {
         if (FORBIDDEN_GLOBALS.includes(node.text)) {
           report(node, node.text);
         } else if (node.text === "process") {
-          const parent = node.parent;
-          const member =
-            parent !== undefined &&
-            ts.isPropertyAccessExpression(parent) &&
-            parent.expression === node
-              ? parent.name.text
-              : undefined;
-          if (member === undefined || !PROCESS_ALLOWED_MEMBERS.includes(member)) {
-            report(node, `process.${member ?? "<whole object>"}`);
+          const misuse = processMisuse(node, module);
+          if (misuse !== null) {
+            report(node, misuse);
           }
         }
       }
@@ -839,13 +892,16 @@ test("no module manufactures a loader or an unapproved dependency", () => {
       ts.ScriptKind.TS,
     );
     const visit = (node: ts.Node): void => {
-      if (
-        ts.isIdentifier(node) &&
-        CODE_EVALUATION_GLOBALS.includes(node.text) &&
-        !isShadowedOrDeclared(node)
-      ) {
+      if (ts.isIdentifier(node) && !isShadowedOrDeclared(node)) {
         const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
-        offenders.push(`${module}:${line}: ${node.text}`);
+        if (LOADER_ROUTE_GLOBALS.includes(node.text)) {
+          offenders.push(`${module}:${line}: ${node.text}`);
+        } else if (node.text === "process") {
+          const misuse = processMisuse(node, module);
+          if (misuse !== null) {
+            offenders.push(`${module}:${line}: ${misuse}`);
+          }
+        }
       }
       ts.forEachChild(node, visit);
     };

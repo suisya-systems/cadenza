@@ -979,9 +979,9 @@ Enumerating loaders is a losing game, so the rule was inverted instead. `ALLOWED
 approves **every** bare specifier per layer, not merely for the two pure layers -- six entries, one
 of which is `src/adapters`' `node:fs` and `smol-toml` and two of which are empty -- and `eval` and
 `Function` are refused outright because they build code from a string and leave nothing to read.
-Together those close the whole category at once, the members nobody has thought of included.
-Measured: `node:vm` in the adapter and `smol-toml` in the domain both turn red, and neither was ever
-named in a denylist.
+Together those close the import half of the category at once, the members nobody has thought of
+included. Measured: `node:vm` in the adapter and `smol-toml` in the domain both turn red, and neither
+was ever named in a denylist. The non-import half took one more round -- see below.
 
 That round's two P2s are closed with it. A triple-slash `reference` directive is recorded on the
 `SourceFile` rather than in the tree, so `forEachChild` never reached one; both directive lists are
@@ -990,6 +990,24 @@ only `.ts`, so a `.mts`, `.cts` or `.tsx` module would have been skipped entirel
 ledger ids, free to cross a layer. All four extensions are discovered, and a file under `src/` the
 walk does not recognise is now itself a failure rather than a silent skip. `src/cadenza/` is
 excluded by name, because the Python half lives under `src/` too until D-0014 retires it.
+
+**A seventh round returned one P1, and it was against that paragraph's own claim.**
+`process.getBuiltinModule("module").createRequire(import.meta.url)("interlock")` still worked in
+`src/adapters` and in the barrel, because the `process` rule had been written for the pure layers
+only -- while the text above said the route was closed. The rule now applies in every layer, and
+`LOADER_ROUTE_GLOBALS` states the complete set in one place: `eval` and `Function` build code from a
+string; `globalThis` and `global` reach those as properties, where a name-based sweep sees somebody
+else's property; and `process` is admitted for named members and refused otherwise.
+
+Making it uniform immediately found the layer that legitimately needs more: `src/adapters` is the
+layer permitted I/O, and its `os.path.abspath` port consults `process.cwd()`. So the allowance is
+per-layer -- `env` and `platform` everywhere, `cwd` in the adapters and nowhere else -- which is the
+same shape every other rule in this file converged on, arrived at from the opposite direction.
+
+With the per-layer import allowlist beside it, the set is now closed rather than enumerated: a module
+reaches another by importing it (approved per layer), by building code from a string, by taking a
+builtin off `process`, or by reaching any of those through the global object. `import.meta.resolve`
+produces a URL and still needs an `import()`, which fails closed as `<computed>`.
 
 **A note the belt earned the hard way.** Writing a `reference types=` directive out in full inside a
 comment made knip report the repository as depending on interlock: a tool scanning text rather than
