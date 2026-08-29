@@ -55,8 +55,9 @@ Explicitly **not** here yet:
   delegated run may do, on whose authority, and how that is expressed at the
   seam to a control plane. Interlock recorded the same question - its open
   issue #63, "Operating-layer delegation contract" - and left it unanswered;
-  that reference is where the question came from, not an answer in transit. G2 is held at cadenza#9, and
-  the condition for taking it up is cadenza's to set. It is not set yet:
+  that reference is where the question came from, not an answer in transit.
+  G2 is held at cadenza#9, and the condition for taking it up is cadenza's to
+  set. It is not set yet:
   `DECISIONS.md` D-0023 lists the candidate conditions and records that none has
   been chosen.
 - **any dependency on interlock** - not in `pyproject.toml`, not as an extra.
