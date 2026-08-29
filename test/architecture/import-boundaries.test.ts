@@ -55,12 +55,35 @@ const sourceOf = (module: string): string => readFileSync(join(ROOT, module), "u
  */
 const FORBIDDEN_PACKAGES = new Set(["claude-org-runtime", "interlock"]);
 
-/** Inward only: adapters -> application -> domain, and ports is depended on. */
-const FORBIDDEN_BY_LAYER: Readonly<Record<string, readonly string[]>> = {
-  "src/domain": ["src/application", "src/ports", "src/adapters"],
-  "src/ports": ["src/application", "src/adapters"],
-  "src/application": ["src/adapters"],
+/**
+ * Inward only: adapters -> application -> domain, and ports is depended on.
+ *
+ * Stated as what each layer MAY import rather than what it may not, which is
+ * the difference between a check that fails closed and one that fails open. The
+ * source names the forbidden layers, and a denylist answers "no" for anything it
+ * was not told about: `src/index.ts` is in no layer, so a domain module
+ * importing `../index.js` matched no forbidden prefix and passed -- through a
+ * barrel that re-exports `src/application` and `src/ports`. A directory added
+ * later would have been the same story. An allowlist has no such gap: an import
+ * that resolves anywhere but the layers named here is an offender, including one
+ * that resolves to the barrel.
+ */
+const ALLOWED_BY_LAYER: Readonly<Record<string, readonly string[]>> = {
+  "src/domain": ["src/domain"],
+  "src/ports": ["src/domain", "src/ports"],
+  "src/application": ["src/domain", "src/ports", "src/application"],
+  "src/adapters": ["src/domain", "src/ports", "src/application", "src/adapters"],
 };
+
+/**
+ * Modules that belong to no layer, and are therefore constrained by nothing.
+ *
+ * Exactly one: `src/index.ts`, the package's public barrel, whose whole job is
+ * to re-export across layers. Naming it explicitly is what keeps "no layer"
+ * from being a way to opt out -- a new top-level module under `src/` is an
+ * offender until somebody classifies it.
+ */
+const UNLAYERED_MODULES = ["src/index.ts"];
 
 /**
  * The layers design section 8 marks `(no I/O)`.
@@ -114,7 +137,20 @@ const PURE_ALLOWED_BUILTINS: Readonly<Record<string, readonly string[]>> = {
  * stream is I/O whatever it is for, and because D-0007 governs what cadenza
  * prints.
  */
-const FORBIDDEN_GLOBALS = ["fetch", "WebSocket", "EventSource", "XMLHttpRequest", "console"];
+const FORBIDDEN_GLOBALS = [
+  "fetch",
+  "WebSocket",
+  "EventSource",
+  "XMLHttpRequest",
+  "console",
+  // `globalThis` and `global` reach every one of the above as a PROPERTY, where
+  // the name is somebody else's property name and the sweep below would let it
+  // through: `globalThis.fetch(url)`, and `globalThis["fetch"]` besides.
+  // Refusing the object itself closes the whole route in one line, and nothing
+  // under `src/` has any use for it.
+  "globalThis",
+  "global",
+];
 
 /**
  * The two members of the `process` global a pure layer may read.
@@ -471,21 +507,31 @@ parametrize("no module imports interlock", PER_MODULE, (module) => {
 });
 
 parametrize("each layer imports only inward", PER_MODULE, (module) => {
-  const refs = importsIn(sourceOf(module), module);
-  for (const [layer, forbidden] of Object.entries(FORBIDDEN_BY_LAYER)) {
-    if (!module.startsWith(`${layer}/`)) {
+  const layer = Object.keys(ALLOWED_BY_LAYER).find((candidate) =>
+    module.startsWith(`${candidate}/`),
+  );
+  if (layer === undefined) {
+    // Belonging to no layer is not a way out of this case: it is allowed for
+    // the barrel and for nothing else, so a new top-level module under `src/`
+    // fails here until it is classified.
+    expect(
+      UNLAYERED_MODULES,
+      `${module} is in no layer; put it in one, or say here why it has none`,
+    ).toContain(module);
+    return;
+  }
+  const allowed = ALLOWED_BY_LAYER[layer] ?? [];
+  const offenders: string[] = [];
+  for (const ref of importsIn(sourceOf(module), module)) {
+    const resolved = ref.resolved;
+    if (resolved === null) {
       continue;
     }
-    const offenders = refs
-      .filter(
-        (ref) =>
-          ref.resolved !== null &&
-          forbidden.some((bad) => ref.resolved === bad || ref.resolved?.startsWith(`${bad}/`)),
-      )
-      .map((ref) => ref.resolved)
-      .sort();
-    expect(offenders, `${module} may not import ${offenders.join(", ")}`).toEqual([]);
+    if (!allowed.some((ok) => resolved === ok || resolved.startsWith(`${ok}/`))) {
+      offenders.push(resolved);
+    }
   }
+  expect(offenders.sort(), `${module} may not import ${offenders.join(", ")}`).toEqual([]);
 });
 
 test("the interlock adapter seam has no TypeScript counterpart", () => {
@@ -525,6 +571,13 @@ function impureImportsIn(module: string): string[] {
     const allowed = PURE_ALLOWED_BUILTINS[ref.specifier];
     if (allowed === undefined) {
       offenders.push(ref.specifier);
+      continue;
+    }
+    if (ref.names.length === 0) {
+      // `import "node:net";` binds nothing, so there is nothing to check
+      // against the allowlist -- and it still executes the module. An allowance
+      // granted for `isIP` is not an allowance for that.
+      offenders.push(`${ref.specifier}:<side effect>`);
       continue;
     }
     for (const name of ref.names) {
@@ -606,14 +659,36 @@ test("no module in a pure layer reaches a global I/O API", () => {
 
 // --- the anchors ------------------------------------------------------------
 
-/** The string of a `baseDir: "/x"` or `baseDir: f("/x")` literal, if any. */
+/**
+ * The string of a `baseDir: "/x"` or `baseDir: f("/x")` literal, if any.
+ *
+ * The wrappers are peeled first, because every one of them has the same runtime
+ * value and only one of them is a `StringLiteral`: `` `/srv` `` is a template,
+ * `"/srv" as const` is an assertion, `("/srv")` is a parenthesised expression.
+ * A check that recognised only quotes would have let the other three through
+ * and failed on the windows-latest cells instead, which is the entire failure
+ * this case exists to prevent.
+ */
 function posixOnlyLiteral(node: ts.Expression): string | null {
   let value: ts.Expression = node;
-  const first = ts.isCallExpression(value) ? value.arguments[0] : undefined;
-  if (first !== undefined) {
-    value = first;
+  for (;;) {
+    if (ts.isParenthesizedExpression(value)) {
+      value = value.expression;
+    } else if (
+      ts.isAsExpression(value) ||
+      ts.isSatisfiesExpression(value) ||
+      ts.isTypeAssertionExpression(value)
+    ) {
+      value = value.expression;
+    } else {
+      const first = ts.isCallExpression(value) ? value.arguments[0] : undefined;
+      if (first === undefined) {
+        break;
+      }
+      value = first;
+    }
   }
-  if (!ts.isStringLiteral(value)) {
+  if (!ts.isStringLiteral(value) && !ts.isNoSubstitutionTemplateLiteral(value)) {
     return null;
   }
   // A relative literal is fine: one case asserts a relative anchor is refused,

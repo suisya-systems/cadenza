@@ -898,6 +898,35 @@ red: a template specifier, a computed one, a concatenated one, `node:fs` in `src
 `fetch()` in the domain, `console.log()` in the application, `process.cwd()`, and a bare `process`.
 `process.env` and `process.platform` stay green where the port already uses them.
 
+**A second review round found four more, all of the same family: a rule that answered "allowed"
+for a shape nobody had thought of.** Each is closed, and the pattern is worth naming because three
+of the four were denylists.
+
+4. **The layer rule was a denylist and the port has a barrel.** `src/index.ts` is in no layer and
+   re-exports across all of them, so a domain module importing `../index.js` matched no forbidden
+   prefix and reached `src/application` through the re-export. `ALLOWED_BY_LAYER` now names what
+   each layer *may* import, and `UNLAYERED_MODULES` names the one module allowed to belong to no
+   layer -- so a new top-level module under `src/` fails until it is classified, rather than
+   inheriting the barrel's exemption by accident.
+5. **`globalThis.fetch(url)` slipped past the global sweep**, because `fetch` there is the *name*
+   half of a property access and the sweep suppresses those -- correctly, since `catalog.fetch` is
+   somebody else's property. `globalThis` and `global` are refused outright instead, which closes
+   the property route and the `globalThis["fetch"]` element-access route in one line.
+6. **A side-effect import of an allowlisted builtin bound nothing, so nothing was checked.**
+   `import "node:net";` executes the module and produces an empty binding list, which the
+   binding-level loop iterated zero times and passed. An allowance granted for `isIP` is not an
+   allowance for that, and an empty binding list is now an offender.
+7. **The POSIX-anchor sweep recognised only quotes.** ``baseDir: `/srv` ``, `"/srv" as const` and
+   `("/srv")` have the same runtime value and are not `StringLiteral` nodes, so all three escaped
+   the guard and would have failed on the windows-latest cells instead -- the exact failure the
+   case exists to prevent. Parentheses, `as`, `satisfies` and angle-bracket assertions are peeled
+   first, and a no-substitution template is read as the literal it is.
+
+Nine more violations were planted for these four and each turned the expected case red: `../index.js`
+imported from `src/domain` and from `src/ports`, a new unlayered `src/toplevel.ts`,
+`globalThis.fetch`, `globalThis["process"]`, `import "node:net"` in the domain, and `baseDir` written
+as a template, as `as const`, and parenthesised.
+
 **What would falsify it.** A way to make a lint suppression countable and reviewable the way
 `approved_non_running` is, which would remove reason 1; or a Biome rule that could be addressed by a
 ledger entry, which would remove reason 3. Reason 2 would go if the other seven claims found a

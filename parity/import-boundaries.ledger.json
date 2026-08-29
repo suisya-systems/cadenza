@@ -45,6 +45,12 @@
         "affects": "the 7 cases of 'the domain performs no I/O'"
       },
       {
+        "from": "`FORBIDDEN_BY_LAYER`, a denylist naming the layers each layer may not import",
+        "to": "`ALLOWED_BY_LAYER`, an allowlist naming the layers each layer may import, plus `UNLAYERED_MODULES` naming the one module that belongs to no layer",
+        "why": "The source's shape answers \"no\" for anything it was not told about, and the port has something the source does not: `src/index.ts`, a public barrel in no layer that re-exports across all of them. Under a denylist a domain module importing `../index.js` matched no forbidden prefix and passed, reaching `src/application` through the re-export; a directory added later would have been the same story. Raised at review of this belt and inverted. The allowlist also makes belonging to no layer fail rather than exempt: a new top-level module under `src/` is an offender until it is classified. Measured: `../index.js` from `src/domain` and from `src/ports`, and a new `src/toplevel.ts`, each turn the expected case red.",
+        "affects": "the 20 cases of 'each layer imports only inward'"
+      },
+      {
         "from": "`FORBIDDEN_TOP_LEVEL = (\"claude_org_runtime\", \"interlock\")`, matched against `name.split(\".\")[0]`",
         "to": "the normalised package name of a bare specifier, and the unscoped half of a scoped one, matched against `{\"claude-org-runtime\", \"interlock\"}`",
         "why": "The source's two spellings are Python module names, and the same two dependencies would arrive here written differently: `claude_org_runtime` becomes `claude-org-runtime` on a registry, and either could be scoped as `@suisya-systems/interlock`. Lower-casing and folding `_` to `-`, then checking the unscoped half as well, covers all of those without enumerating them. Measured: `@suisya-systems/interlock` and `claude-org-runtime/control-plane.js` both turn the case red.",
