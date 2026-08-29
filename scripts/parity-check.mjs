@@ -61,6 +61,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -82,18 +83,18 @@ const TARGET_ONLY_FILES = "parity/target-only.json";
 /**
  * Constructs that stop a test from running, or expect it to fail.
  *
- * Keyed by name so an approval can be counted per construct rather than per
- * file. Approving a file wholesale would mean that one approved example makes
- * every later `test.skip` in that file invisible to this check -- which is the
- * hole the check exists to close.
+ * Reported under the names `test.skip`, `test.todo`, `test.fails`, `skipIf` and
+ * `xfail`, so an approval can be counted per construct rather than per file.
+ * Approving a file wholesale would mean that one approved example makes every
+ * later `test.skip` in that file invisible to this check -- which is the hole
+ * the check exists to close.
  */
-const NON_RUNNING = {
-  "test.skip": /\b(?:test|it|describe)\.skip\b/,
-  "test.todo": /\b(?:test|it|describe)\.todo\b/,
-  "test.fails": /\b(?:test|it)\.fails\b/,
-  skipIf: /\bskipIf\(/,
-  xfail: /\bxfail\(/,
-};
+/** Modifiers, reported as `test.<modifier>` whichever root they hang off. */
+const RUNNER_MODIFIERS = ["skip", "todo", "fails"];
+/** The roots a modifier may hang off. */
+const RUNNER_ROOTS = ["test", "it", "describe"];
+/** Bare helpers that mean the same thing, wherever they are referenced. */
+const NON_RUNNING_HELPERS = ["skipIf", "xfail"];
 
 const problems = [];
 
@@ -140,63 +141,94 @@ function testFiles(directory = join(ROOT, "test")) {
 }
 
 /**
- * Blank out comments and single-line strings, keeping line numbering intact.
+ * Every non-running construct in one file, found in its **syntax tree**.
  *
- * The sweep below matches source text, and these files *document* the mapping
- * rules they implement -- a doc comment reading "maps to `test.fails`" is prose,
- * not a non-running test, and so is a test title that mentions one. Counting
- * either would force an approval for something that does not exist, which
- * teaches the reader that the counts are noise.
+ * continuo does this by matching source text with comments and single-line
+ * strings blanked out, and that approach has two holes this port does not
+ * inherit -- both raised at review, both reproducible:
  *
- * Deliberately crude: it does not understand strings containing comment
- * markers, and it leaves multi-line template literals alone. Erring toward
- * blanking means a construct hidden inside such a string would be missed -- but
- * a `test.skip` written inside a string literal is not a skip either, so the
- * error direction is harmless here.
+ *  1. **Chained modifiers.** Vitest accepts `test.concurrent.skip(...)` and
+ *     `test.skip.concurrent(...)` alike, and a pattern requiring `skip` to
+ *     follow `test` immediately matches neither. A skipped test would sit in a
+ *     ledger as an ordinary running target with the gate green.
+ *  2. **Comment markers inside strings.** Blanking comments *before* blanking
+ *     strings means `const marker = "/*";` opens a block comment that runs to
+ *     the next `*` + `/` or to end of file, erasing every `test.skip` in
+ *     between. Doing it the other way round moves the hole rather than closing
+ *     it, and getting both right in one text pass is a lexer.
+ *
+ * So the lexer is the one already installed: `typescript` is a devDependency
+ * because `tsc` type-checks this repository, and `ts.createSourceFile` answers
+ * the question exactly. Comments and string literals are not nodes in the tree
+ * at all, so prose mentioning `test.skip` -- of which these files have a great
+ * deal -- cannot be counted, and a modifier chain is a property-access chain
+ * whatever order it was written in.
+ *
+ * Detection is on the **property-access chain**, not on the call, so
+ * `const quarantine = test.skip;` counts too. Only the outermost link of a chain
+ * is counted, or `test.skip.concurrent` would be counted twice: once for
+ * `test.skip` and once for the whole.
  */
-function withoutComments(source) {
-  return blankStrings(stripComments(source));
-}
+function nonRunningIn(path, source) {
+  const tree = ts.createSourceFile(path, source, ts.ScriptTarget.ES2023, true, ts.ScriptKind.TS);
+  const hits = [];
 
-function blankStrings(source) {
-  return source.replace(
-    /(['"`])(?:\\.|(?!\1)[^\\\n])*\1/g,
-    (match) => match[0] + " ".repeat(Math.max(0, match.length - 2)) + match[0],
-  );
-}
+  const lineOf = (node) => tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
 
-function stripComments(source) {
-  const out = [];
-  let inBlock = false;
-  for (const line of source.split("\n")) {
-    let kept = line;
-    if (inBlock) {
-      const end = kept.indexOf("*/");
-      if (end < 0) {
-        out.push("");
-        continue;
-      }
-      kept = " ".repeat(end + 2) + kept.slice(end + 2);
-      inBlock = false;
+  /** `test.concurrent.skip` -> ["test", "concurrent", "skip"]; null if not a plain chain. */
+  function chainOf(node) {
+    const parts = [];
+    let current = node;
+    while (ts.isPropertyAccessExpression(current)) {
+      parts.unshift(current.name.text);
+      current = current.expression;
     }
-    for (;;) {
-      const start = kept.indexOf("/*");
-      if (start < 0) break;
-      const end = kept.indexOf("*/", start + 2);
-      if (end < 0) {
-        kept = kept.slice(0, start);
-        inBlock = true;
-        break;
-      }
-      kept = kept.slice(0, start) + " ".repeat(end + 2 - start) + kept.slice(end + 2);
+    if (!ts.isIdentifier(current)) {
+      return null;
     }
-    const lineComment = kept.indexOf("//");
-    if (lineComment >= 0) {
-      kept = kept.slice(0, lineComment);
-    }
-    out.push(kept);
+    parts.unshift(current.text);
+    return parts;
   }
-  return out.join("\n");
+
+  function visit(node) {
+    if (ts.isPropertyAccessExpression(node)) {
+      // Only the outermost link: an inner one is part of the same chain.
+      const parent = node.parent;
+      const isInnerLink =
+        parent !== undefined && ts.isPropertyAccessExpression(parent) && parent.expression === node;
+      if (!isInnerLink) {
+        const chain = chainOf(node);
+        if (chain !== null && RUNNER_ROOTS.includes(chain[0])) {
+          for (const modifier of RUNNER_MODIFIERS) {
+            if (chain.slice(1).includes(modifier)) {
+              hits.push({ construct: `test.${modifier}`, line: lineOf(node) });
+            }
+          }
+        }
+      }
+    }
+    if (ts.isIdentifier(node) && NON_RUNNING_HELPERS.includes(node.text)) {
+      // The helper's own definition and its import are not uses of it. Both are
+      // declaration names rather than expressions, which the tree distinguishes
+      // and a text sweep cannot.
+      const parent = node.parent;
+      const isDeclaration =
+        parent !== undefined &&
+        (ts.isFunctionDeclaration(parent) ||
+          ts.isImportSpecifier(parent) ||
+          ts.isPropertySignature(parent) ||
+          ts.isVariableDeclaration(parent) ||
+          ts.isPropertyAssignment(parent)) &&
+        parent.name === node;
+      if (!isDeclaration) {
+        hits.push({ construct: node.text, line: lineOf(node) });
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(tree);
+  return hits;
 }
 
 const collected = collectTargetTests();
@@ -379,22 +411,15 @@ for (const file of declaredTargetOnly.keys()) {
 const observed = new Map();
 for (const path of testFiles()) {
   const relativePath = relative(ROOT, path).split("\\").join("/");
-  const lines = withoutComments(readFileSync(path, "utf8")).split("\n");
-  for (const [index, line] of lines.entries()) {
-    for (const [construct, pattern] of Object.entries(NON_RUNNING)) {
-      // Every occurrence, not merely whether the line matched: two
-      // `test.skip(...)` calls on one physical line would otherwise count as
-      // one, and an approval for one would license the other.
-      const hits = line.match(new RegExp(pattern.source, "g"));
-      if (hits === null) {
-        continue;
-      }
-      const key = `${relativePath}\u0000${construct}`;
-      const seen = observed.get(key) ?? { count: 0, lines: [] };
-      seen.count += hits.length;
-      seen.lines.push(index + 1);
-      observed.set(key, seen);
-    }
+  // Every occurrence, not merely whether the file has one: two `test.skip(...)`
+  // calls on one line are two, and an approval for one must not license the
+  // other.
+  for (const hit of nonRunningIn(relativePath, readFileSync(path, "utf8"))) {
+    const key = `${relativePath}\u0000${hit.construct}`;
+    const seen = observed.get(key) ?? { count: 0, lines: [] };
+    seen.count += 1;
+    seen.lines.push(hit.line);
+    observed.set(key, seen);
   }
 }
 

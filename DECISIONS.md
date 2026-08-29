@@ -45,6 +45,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0012 | The TypeScript tree lives at the repository root, beside the Python package | accepted |
 | D-0013 | The canonical encoder refuses a lone surrogate rather than escaping it | accepted |
 | D-0014 | G2 and the interlock seam are untouched by the port | accepted |
+| D-0015 | Value objects are snapshotted and frozen, not merely typed `readonly` | accepted |
 
 ---
 
@@ -262,6 +263,17 @@ target id. Cadenza's source suite has no `skipif` and no `xfail` anywhere (330 c
 conditionally skipped case introduced later is reported as `missing`, a false red that the belt
 introducing it answers by bringing the declaration over — which is the right moment to do it.
 
+**The non-running sweep reads the syntax tree, not the source text.** Continuo matches text with
+comments and single-line strings blanked out. Two holes in that were raised at review of this
+bootstrap and are both reproducible: a chained modifier (`test.concurrent.skip`, and
+`test.skip.concurrent` -- vitest accepts either order) matches no pattern anchored to `test.` , and
+blanking comments before strings lets `const marker = "/*";` open a block comment that erases every
+`test.skip` up to the next close or to end of file. Getting both right in one text pass is a lexer,
+and the lexer is already installed: `typescript` is a devDependency because `tsc` type-checks this
+repository, so `scripts/parity-check.mjs` uses `ts.createSourceFile` and asks the tree. Comments and
+string literals are not nodes, so the prose in these files -- which discusses `test.skip` at
+length -- cannot be counted either.
+
 **What would falsify it.** A cadenza test that must be skipped on some hosts. See above: the check
 goes red rather than quiet, which is the outcome this is designed for.
 
@@ -408,3 +420,33 @@ removing the Python implementation in the same PR that introduces the TypeScript
 the oracle's Python half (D-0011) in the same diff that first relies on it.
 
 **What would falsify it.** interlock#74 landing, which is the stated precondition for unfreezing G2.
+
+---
+
+## D-0015 — Value objects are snapshotted and frozen, not merely typed `readonly`
+
+**Status:** accepted
+
+**Decision.** `project()`, `gitUrlSource()`, `localPathSource()` and `newRepositorySource()` copy
+what they are given and `Object.freeze` what they return. `Project.aliases` is a copy of the caller's
+array, frozen.
+
+**Why the type is not enough.** `readonly string[]` is a compile-time claim, and a mutable
+`string[]` is assignable to it. A caller can pass an array, keep the reference, and push to it
+afterwards; the `Project` would then report different aliases, and `configDigest` a different digest,
+for a project nobody edited. Python cannot do this: `Project.aliases` is a `tuple`.
+
+That asymmetry would be a curiosity if the digest were computed and discarded. It is persisted
+(design doc section 4), and a later audit reads a changed digest as "the catalog moved underneath a
+run that already happened" — so the failure mode is not a wrong value in a test, it is an audit
+reporting an edit that never happened. The guarantee therefore has to survive to runtime.
+
+Freezing as well as copying is what makes the `readonly` claim true against a cast: in a module,
+which is always strict mode, a write to a frozen object throws rather than failing silently.
+
+**Raised by review** of the bootstrap PR, not designed in. Recorded because the reasoning generalises
+to every value object the port adds, and the next one will be written by someone who did not see the
+review.
+
+**What would falsify it.** A value object large enough that copying it per construction is
+measurable. Nothing in G1 is anywhere near that; `Project` holds four fields and a short array.

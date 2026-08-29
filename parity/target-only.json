@@ -6,6 +6,10 @@
       "why": "The canonical encoder's own contract. `tests/test_digest.py` has nothing to say about code-point collation or lone surrogates because in Python both are true by construction -- `sorted()` compares code points and `str.encode('utf-8')` refuses an unpaired surrogate, with no test written for either. Reimplementing those two facts in a language whose defaults are the other way is what created the surface, so the surface gets assertions. The differential oracle checks the same code against real CPython output and is the stronger check; these cases exist so a failure names which property broke."
     },
     {
+      "path": "test/domain/project.test.ts",
+      "why": "`project()`'s snapshot guarantee. The Python source has nothing to say about it because there is nothing to say: `Project.aliases` is a `tuple` and cannot be mutated by anyone. In TypeScript `readonly string[]` is a compile-time claim only, so the guarantee has to be made at runtime and asserted -- and it matters because `config_digest` is persisted (DECISIONS.md D-0015)."
+    },
+    {
       "path": "test/domain/digest-oracle.test.ts",
       "why": "The differential oracle (docs/porting.md section 4). It makes a claim no ported test can make -- that the artefact CPython produces and the artefact Node produces are the same bytes, on inputs nobody wrote a test about -- so by construction it translates no source case."
     },

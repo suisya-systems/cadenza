@@ -94,6 +94,13 @@ The first six are continuo's, name for name. The seventh is cadenza's addition, 
 `unmapped` sweep is scoped to each ledger's own target file and therefore sees nothing at all in a
 file no ledger mentions (`D-0009`).
 
+The `unapproved-skip` sweep reads each file's **syntax tree** rather than its source text, which is
+the other place cadenza diverges. A text sweep misses a chained modifier — vitest accepts both
+`test.concurrent.skip` and `test.skip.concurrent` — and can be derailed by a comment marker inside a
+string literal. `typescript` is already a devDependency, so the check asks
+`ts.createSourceFile` instead; comments and string literals are not nodes, so the prose in these
+files cannot be counted either.
+
 `npm run inventory` separately checks the inventory as a whole against
 `parity/source-inventory.manifest.json`: stray files in either direction, lines that are not node ids
 of the file's own source, counts, the `all.txt` aggregate, duplicated ids across inventories, the

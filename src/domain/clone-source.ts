@@ -33,16 +33,22 @@ export interface NewRepositorySource {
 
 export type CloneSource = GitUrlSource | LocalPathSource | NewRepositorySource;
 
+/**
+ * The three factories freeze what they return, for the reason `project` does:
+ * the source is part of a persisted digest, and `readonly` is a claim the type
+ * checker makes rather than one the runtime keeps. Python's frozen dataclasses
+ * keep it at runtime.
+ */
 export function gitUrlSource(url: string): GitUrlSource {
-  return { kind: "git_url", url };
+  return Object.freeze({ kind: "git_url", url });
 }
 
 export function localPathSource(path: string): LocalPathSource {
-  return { kind: "local_path", path };
+  return Object.freeze({ kind: "local_path", path });
 }
 
 export function newRepositorySource(): NewRepositorySource {
-  return { kind: "new" };
+  return Object.freeze({ kind: "new" });
 }
 
 /**
