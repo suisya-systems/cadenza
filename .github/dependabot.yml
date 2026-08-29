@@ -1,10 +1,13 @@
-# Dependabot keeps two surfaces fresh, both on a weekly cadence to bound
+# Dependabot keeps three surfaces fresh, all on a weekly cadence to bound
 # review noise while G2 freeze is in effect (updates arrive as PRs and go
 # through the same human review gate as any other change; nothing merges
 # on its own):
 #   - pip: the Python packaging metadata in pyproject.toml. The runtime
 #     dependency surface is deliberately tiny (tomli backport only), so in
 #     practice this mostly tracks the dev tools (pytest / ruff / mypy).
+#   - npm: the TypeScript port's toolchain. Every version is pinned exactly
+#     (.npmrc sets save-exact, DECISIONS.md D-0004), so an update is always a
+#     visible diff to package.json and package-lock.json together.
 #   - github-actions: the pinned action versions used by the workflows.
 version: 2
 updates:
@@ -13,6 +16,10 @@ updates:
     schedule:
       interval: "weekly"
   - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"

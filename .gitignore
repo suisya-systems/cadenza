@@ -33,3 +33,9 @@ dist/
 .ruff_cache/
 .coverage
 htmlcov/
+
+# --- TypeScript / Node ---
+# `dist/` is already ignored above, under Python.
+node_modules/
+*.tsbuildinfo
+.vitest-cache/

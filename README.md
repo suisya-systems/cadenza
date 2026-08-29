@@ -42,6 +42,12 @@ Early. This repository currently contains:
   tombstones, collision refusal, provenance and a config digest. The contract is
   `docs/design/g1-project-registry.md`; where the code and that document
   disagree, the document is the defect report.
+- **a TypeScript rewrite of G1, in progress** (cadenza#8). The rewrite happens
+  in place: the Python implementation and its suite stay here, and stay green in
+  CI, until a later PR retires them. So far the toolchain, the parity ledger
+  covering all 330 collected pytest cases, a differential oracle that compares
+  the TypeScript `config_digest` against CPython's byte for byte, and the pilot
+  port of `tests/test_digest.py`. See `DECISIONS.md` and `docs/porting.md`.
 
 Explicitly **not** here yet:
 
@@ -64,6 +70,16 @@ $ python -m pytest
 
 Python 3.10 or newer. The only runtime dependency is `tomli`, and only on 3.10,
 where the standard library has no `tomllib`.
+
+The TypeScript half needs Node 22 or 24:
+
+```console
+$ npm ci --ignore-scripts
+$ npm run verify
+```
+
+`verify` is lint, unused-export analysis, type-check, the test suite, the parity
+ledger and the source inventory, in that order.
 
 ## The catalog
 
@@ -149,7 +165,7 @@ that half-loads is worse than one that does not load.
 ## Layout
 
 ```
-src/cadenza/
+src/cadenza/       the Python implementation, retired by a later PR
   domain/        identifiers, clone sources, project, digest, errors  (no I/O)
   application/   composition and resolution                          (no I/O)
   ports/         protocols the outside world implements
@@ -157,10 +173,25 @@ src/cadenza/
     toml_catalog/   TOML files -> raw layer documents
     interlock/      reserved seam, empty
     claude_code/    reserved seam, empty
-config/          catalog data
-docs/            design documents and policy
-tests/
+tests/             the Python suite
+
+src/               the TypeScript port
+  domain/        canonical JSON, clone sources, project, digest
+test/              the TypeScript suite
+  testkit/       pytest constructs, vendored from continuo
+  oracle/        the differential oracle's corpus
+parity/            the source inventory, the ledgers and the oracle vectors
+scripts/           the parity and inventory checks, and the oracle's Python half
+
+config/            catalog data
+docs/              design documents and policy
 ```
+
+The two trees coexist at the root on purpose: that is where the TypeScript tree
+finally lives, so the PR that retires the Python one deletes rather than moves
+(`DECISIONS.md` D-0012). The one-character gap between `test/` and `tests/` is
+why both runners are pointed at their directory explicitly rather than left to
+search.
 
 Dependencies point inward only: `adapters -> application -> domain`, and `ports`
 is depended on but depends on nothing. `tests/test_import_boundaries.py`
@@ -172,6 +203,10 @@ a boundary review harder than it needs to be.
 
 - `docs/design/g1-project-registry.md` - the G1 contract: identity, clone source
   union, merge rules, digest, resolution.
+- `DECISIONS.md` - the append-only record of design decisions. Cadenza's own
+  numbering space, starting at D-0001.
+- `docs/porting.md` - the TypeScript rewrite: the oracle order, the parity
+  ledger, the differential oracle, and what has been ported so far.
 - `docs/repository-policy.md` - branch protection, review and release policy.
 - `SECURITY.md` - how to report a vulnerability.
 

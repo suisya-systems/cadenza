@@ -1,0 +1,94 @@
+{
+  "note": "The index of parity/source-inventory, and the record of how it reconciles with the Python suite. Enforced by scripts/source-inventory-check.mjs, which runs without re-collecting pytest: the node ids are a committed snapshot and everything checked is a property of that snapshot, not of the source tree.",
+  "source": {
+    "repository": "suisya-systems/cadenza",
+    "revision": "a5672f8",
+    "python_version": "3.12.3",
+    "collected": 330,
+    "passed": 330,
+    "skipped": 0,
+    "xfailed": 0,
+    "collection_time_skipped_modules": [],
+    "reconciliation": "No module is skipped at collection time, so the eight per-file inventories account for the whole suite with nothing left over: 330 node ids collected, 330 passed, 0 skipped, 0 xfailed."
+  },
+  "regeneration": "From the repository root: `PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python3 -m pytest --collect-only -q -p no:cacheprovider`, in collection order, split per file, with all.txt as the concatenation in the order of `files` below. The ORDER is a claim this procedure makes and nothing offline can test: re-running the collection is the only thing that checks it.",
+  "totals": {
+    "node_ids": 330,
+    "test_functions": 127,
+    "note": "Two numbers, because the kickoff (cadenza#8) states one and the ledger machinery needs the other. 127 is the count of `def test_` functions; 330 is the count of node ids pytest collects from them, the difference being parametrized cases. The ledger unit is the node id (DECISIONS.md D-0010), and both numbers are recorded here so the kickoff's figure reconciles rather than reading as a discrepancy."
+  },
+  "aggregate": {
+    "path": "parity/source-inventory/all.txt",
+    "collected": 330
+  },
+  "statuses": {
+    "ported": "A parity ledger covers this file. scripts/parity-check.mjs enforces it.",
+    "inventoried": "Collected as evidence. No ledger yet, and being here is not a commitment to port."
+  },
+  "files": [
+    {
+      "path": "parity/source-inventory/test_clone_source.txt",
+      "source": "tests/test_clone_source.py",
+      "collected": 57,
+      "test_functions": 35,
+      "status": "inventoried",
+      "note": "Collected as evidence only. Being in the inventory is not a commitment to port; the belt that opens this file writes its ledger then."
+    },
+    {
+      "path": "parity/source-inventory/test_compose.txt",
+      "source": "tests/test_compose.py",
+      "collected": 50,
+      "test_functions": 39,
+      "status": "inventoried",
+      "note": "Collected as evidence only. Being in the inventory is not a commitment to port; the belt that opens this file writes its ledger then."
+    },
+    {
+      "path": "parity/source-inventory/test_digest.txt",
+      "source": "tests/test_digest.py",
+      "collected": 14,
+      "test_functions": 8,
+      "status": "ported",
+      "note": "Covered by parity/digest.ledger.json -- the pilot."
+    },
+    {
+      "path": "parity/source-inventory/test_identifiers.txt",
+      "source": "tests/test_identifiers.py",
+      "collected": 25,
+      "test_functions": 6,
+      "status": "inventoried",
+      "note": "Collected as evidence only. Being in the inventory is not a commitment to port; the belt that opens this file writes its ledger then."
+    },
+    {
+      "path": "parity/source-inventory/test_import_boundaries.txt",
+      "source": "tests/test_import_boundaries.py",
+      "collected": 97,
+      "test_functions": 9,
+      "status": "inventoried",
+      "note": "Collected as evidence only. The kickoff (cadenza#8) re-points these nine functions rather than transcribing them: the source asserts that no module under `cadenza` imports interlock, and the equivalent claim about a TypeScript tree is a different scan over a different module graph. The Python file stays green in CI meanwhile, so the boundary it guards is not unguarded during the port."
+    },
+    {
+      "path": "parity/source-inventory/test_refs.txt",
+      "source": "tests/test_refs.py",
+      "collected": 62,
+      "test_functions": 6,
+      "status": "inventoried",
+      "note": "Collected as evidence only. Being in the inventory is not a commitment to port; the belt that opens this file writes its ledger then."
+    },
+    {
+      "path": "parity/source-inventory/test_resolve.txt",
+      "source": "tests/test_resolve.py",
+      "collected": 11,
+      "test_functions": 11,
+      "status": "inventoried",
+      "note": "Collected as evidence only. Being in the inventory is not a commitment to port; the belt that opens this file writes its ledger then."
+    },
+    {
+      "path": "parity/source-inventory/test_toml_loader.txt",
+      "source": "tests/test_toml_loader.py",
+      "collected": 14,
+      "test_functions": 13,
+      "status": "inventoried",
+      "note": "Collected as evidence only. Being in the inventory is not a commitment to port; the belt that opens this file writes its ledger then."
+    }
+  ]
+}
