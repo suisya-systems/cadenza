@@ -946,9 +946,25 @@ open, which is the honest end state rather than a clean one.
     *are* peeled were widened past the source precisely because they need no scope analysis. This
     case is a second line of defence behind `absolute()`; the windows-latest cells are the first.
 
-The three rounds converged rather than circling: no finding recurred, the severities fell (one P1
-family, then four, then none), and each round's findings were narrower than the last. Items 8 and 9
-were fixed after the third review and have not themselves been through one.
+**A fourth round, run because items 8 and 9 changed behaviour after the third, found two P2s and no
+P1.** One is closed, one is recorded open.
+
+11. **The seam check asked about a directory, and a file is the other shape.** `src/adapters/
+    interlock.ts` is the same seam spelled differently, and an `existsSync` on one extensionless
+    path stayed green for it. The question is asked of `MODULES` now, so no module anywhere under
+    `src/` may be called `interlock` — as a directory it sits in or as its own name. The ledger
+    would have noticed such a file too, by the four target ids it adds, but a gate reporting
+    "unaccounted target test" is not the gate that should be reporting an opened interlock seam.
+12. **The anchor sweep's `absolute` exemption matches a name, not a binding.** A test declaring its
+    own `const absolute = (value: string) => value` would be exempted. **Left open**, recorded in
+    the ledger's `inherited_limitations`: resolving the binding is the same line this file already
+    draws at `isShadowedOrDeclared`, and shadowing the helper with an identity function is a longer
+    way to write a POSIX-only anchor than writing one.
+
+The four rounds converged rather than circling: no finding recurred, the severities fell
+monotonically (a P1 family, then four P1s, then P2s only, then two P2s), and each round's findings
+were narrower than the last. Item 11 was fixed after the fourth review; items 8 and 9 were fixed
+after the third and reviewed by the fourth.
 
 **What would falsify it.** A way to make a lint suppression countable and reviewable the way
 `approved_non_running` is, which would remove reason 1; or a Biome rule that could be addressed by a

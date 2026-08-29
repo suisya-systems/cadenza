@@ -565,6 +565,21 @@ test("the interlock adapter seam has no TypeScript counterpart", () => {
   // `adapters` was renamed out from under it.
   expect(existsSync(join(ROOT, "src/adapters"))).toBe(true);
   expect(existsSync(join(ROOT, "src/adapters/interlock"))).toBe(false);
+  // A directory is not the only shape the seam can take. `src/adapters/
+  // interlock.ts` is the same seam spelled as a file, and the check above --
+  // which asks about one extensionless path -- would stay green for it. Asking
+  // `MODULES` instead makes the question total: no module anywhere under `src/`
+  // is called `interlock`, whether that name is a directory it sits in or its
+  // own. The ledger would also notice such a file, by way of the four target
+  // ids it would add, but a gate that reports "unaccounted target test" is not
+  // the gate that should be telling you the interlock seam was opened.
+  const seam = MODULES.filter((module) => {
+    const segments = module.split("/");
+    return (
+      segments.includes("interlock") || (segments.at(-1) ?? "").replace(/\.ts$/, "") === "interlock"
+    );
+  });
+  expect(seam, `these open the interlock seam: ${seam.join(", ")}`).toEqual([]);
 });
 
 parametrize("no module is named core or runtime", PER_MODULE, (module) => {

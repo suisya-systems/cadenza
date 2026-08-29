@@ -118,6 +118,10 @@
     {
       "behaviour": "The POSIX-only-anchor sweep reads the expression written at the `baseDir` property. An anchor reached through a name -- `const ROOT = \"/srv/catalog\";` then `baseDir: ROOT` -- is not resolved, so a POSIX-only literal behind one identifier escapes it.",
       "why": "The source has the identical hole: `_posix_only_literal` accepts an `ast.Constant`, or a `Path(...)` wrapping one, and returns None for an `ast.Name`. Following the name means resolving a binding in its scope, which is a type checker's job rather than a boundary check's, and the wrappers that ARE unwrapped here (parentheses, `as`, `satisfies`, a call's first argument) were widened past the source precisely because they need no scope analysis. Raised at review of this belt and left open deliberately: the case is a second line of defence behind `test/support.ts`'s `absolute()`, and the windows-latest cells are the first."
+    },
+    {
+      "behaviour": "The anchor sweep exempts a call whose callee is named `absolute`, matched by NAME rather than by binding. A test that declared its own `const absolute = (value: string) => value` and wrote `baseDir: absolute(\"/srv\")` would pass.",
+      "why": "Establishing that the callee is `test/support.ts`'s helper rather than a local of the same name is binding resolution, which is the same line this file already draws at `isShadowedOrDeclared` and for the same reason: a type checker's job, not a boundary check's. The exemption exists to stop the sweep reporting the one helper that makes an anchor portable, and shadowing it with a function that returns its argument unchanged is a way of writing a POSIX-only anchor that takes more effort than writing one. Raised at review of this belt and left open deliberately; the windows-latest cells remain the first line of defence."
     }
   ],
   "entries": [
