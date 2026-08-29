@@ -51,6 +51,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0018 | Python's standard library is ported, not approximated | accepted |
 | D-0019 | The clone-source belt: `tmp_path`-only fixtures need no filesystem, and a frozen structural type is proven at both the type checker and the runtime | accepted |
 | D-0020 | The identifier belt's two predicted traps, settled by measurement | accepted |
+| D-0021 | The git-parity oracle runs the real `git` binary; `match=` becomes a `RegExp` only where a plain substring would look for a character the message never contains | accepted |
 
 ---
 
@@ -736,3 +737,50 @@ something.
 `parse_identifier` that gains a whitespace or normalisation step; or an `m` flag on
 `IDENTIFIER_PATTERN`, which the target-only case turns red. The measurement is pinned to CPython
 3.12.3 and Node 22; a Unicode version change would move the `repr` figure and nothing else here.
+
+---
+
+## D-0021 — The git-parity oracle runs the real `git` binary; `match=` becomes a `RegExp` only where a plain substring would look for a character the message never contains
+
+**Status:** accepted
+
+**Decision.** `tests/test_refs.py::test_the_validator_refuses_everything_git_refuses` -- the case
+the design doc names by name as the reason `parse_base_branch`'s rule list is checked against `git
+check-ref-format` rather than a second copy of the rules -- is ported as a real subprocess call, not
+a fixed corpus of pre-recorded answers. `test/domain/refs.test.ts` spawns `git --version` once to
+decide whether the suite has `git` on `PATH` at all, and `git check-ref-format refs/heads/<name>` per
+corpus row, using `node:child_process.execFileSync`. No dependency was added: `execFileSync` is
+`node:child_process`, already reachable everywhere Node runs, and never goes through a shell. Where
+`git` is absent, the 24 cases are skipped as a group (`test.skipIf`, approved once in
+`parity/refs.ledger.json` because the check that counts non-running constructs reads the syntax tree
+and this is one call site inside a loop, not 24).
+
+Second, and considered while porting the file's other parametrized case
+(`test_refuses_each_documented_ref_violation`, 23 rows): pytest's `match=` is `re.search` against
+`str(exc)`, and the naive translation is `expect(...).toThrow(pattern)`. For every row but two, the
+source pattern carries no regex metacharacter and a plain string (`.includes()`) is the same check.
+Two rows -- `r"must not contain '\.\.'"` and `r"must not end with '\.lock'"` -- are regexes whose only
+metacharacter is an escaped, **literal** dot: `\.` matches the same one character `.` does here, so a
+plain substring of the *rendered* text (`"must not contain '..'"`, no backslash -- confirmed against
+`pythonRepr`'s actual output) is an equally correct translation, and a mismatched substring fails
+`toThrow` loudly rather than passing vacuously either way. There is no silent-pass hazard in either
+choice. What is NOT equivalent is transcribing the regex **source** verbatim into a plain string --
+`"must not contain '\\.\\.'"`, backslashes and all -- and handing that to `toThrow`: `.includes()`
+then looks for a backslash character the message never contains, and the two dots it does contain are
+never checked at all. That transcription is close enough to what copying `r"...\.\.. "` out of the
+Python source looks like to write by reflex, which is why this belt used a `RegExp` built from the
+same characters for these two rows instead of reasoning about which characters survive the switch:
+a `RegExp` and its source string mean the same thing in both languages, so there is nothing to get
+backwards. The rule for later belts: a `match=` pattern with a regex metacharacter is carried over as
+a `RegExp`, not re-derived as a substring by hand.
+
+**Why not a fixed vector, the way the two digest oracles use one.** Those two compare a **persisted**
+value against a committed vector so a regenerated vector re-proves it was measured against real
+CPython (docs/porting.md section 4). `git check-ref-format`'s answer is not persisted anywhere and
+is not migrating away from Python -- both the Python suite and this one ask the *installed* `git`
+the same question at run time, and the property under test ("never more permissive than git") is
+exactly the property a frozen snapshot of git's answers on one version would stop checking.
+
+**What would falsify it.** A CI image or a contributor's machine with no `git` on `PATH` would silently
+skip 24 cases rather than fail the build -- inherited from the source's own `skipif`, recorded in
+`parity/refs.ledger.json`'s `inherited_limitations`, and not this belt's to tighten.

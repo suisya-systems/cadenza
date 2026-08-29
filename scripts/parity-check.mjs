@@ -88,6 +88,8 @@ const LEDGERS = [
   "parity/clone-source.ledger.json",
   // the identifier belt
   "parity/identifiers.ledger.json",
+  // the refs belt
+  "parity/refs.ledger.json",
 ];
 
 /** Files that carry tests translating no source case. */

@@ -1,0 +1,640 @@
+{
+  "source": {
+    "repository": "suisya-systems/cadenza",
+    "revision": "a5672f8",
+    "note": "The source is this repository's own Python implementation, not a second checkout. Cadenza is being rewritten in place (cadenza#8): `src/cadenza/` and `tests/` are the specification until a later PR retires them, so every inventory here is collected from the working tree at the recorded revision.",
+    "suite_baseline": {
+      "collected": 330,
+      "passed": 330,
+      "skipped": 0,
+      "xfailed": 0,
+      "reconciliation": "`PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q -p no:cacheprovider` at a5672f8 on CPython 3.12.3: 330 passed. No module is skipped at collection time, so collected == the sum of the eight per-file inventories with nothing left over. See parity/source-inventory.manifest.json."
+    },
+    "file": {
+      "path": "tests/test_refs.py",
+      "collected": 62,
+      "inventory": "parity/source-inventory/test_refs.txt",
+      "note": "6 test functions, 62 collected node ids: `test_refuses_each_documented_ref_violation` alone contributes 23, and the git-parity corpus contributes another 24 by construction."
+    }
+  },
+  "target": {
+    "test_file": "test/domain/refs.test.ts",
+    "systematic_mappings": [
+      {
+        "from": "`pytest.raises(InvalidBaseBranchError, match=...)`, where `match=` is `re.search` against `str(exc)`",
+        "to": "`expect(() => parseBaseBranch(value)).toThrow(expected)`, where `expected` is a plain string (substring match, which is what every source `match=` pattern reduces to once it carries no regex metacharacter beyond a literal escaped dot) or, in the three rows whose pattern is exactly that escaped dot, a `RegExp` built from the same characters",
+        "why": "`InvalidBaseBranchError.message` already carries the formatted `\"<detail> (at <location>)\"` text (design doc's one shape change from Python, recorded at `src/domain/errors.ts`), so `str(exc)` and `.message` are the same string and no adaptation was needed there. What changed is the assertion's own vocabulary: vitest's `toThrow(string)` is `.includes()`, not `re.search`. For every row except the two ref rules whose `match=` is itself a regex (`r\"must not contain '\\.\\.'\"`, `r\"must not end with '\\.lock'\"`), the two are the same check by construction. Those two carry a `RegExp` built from the same characters rather than a plain string transcribed from the regex source (DECISIONS.md D-0021): the source pattern's only metacharacter is an escaped, literal dot, so a plain substring of the rendered text -- which `pythonRepr` prints with two literal dots and no backslash -- would also have been correct, but transcribing the pattern's own backslashes into a plain string would not be, and a `RegExp` removes the choice rather than relying on reasoning it through by hand each time.",
+        "affects": "all 23 cases of 'refuses each documented ref violation'"
+      },
+      {
+        "from": "`type(value).__name__` in the refusal text",
+        "to": "`pythonTypeName(value)` from `src/domain/python-text.ts`",
+        "why": "Recorded once at D-0018 rather than per case: `True` has no direct TypeScript analogue distinct from `1`, so the port represents it as the JavaScript `boolean` `true` and relies on `pythonTypeName` to print `bool`, and `None` as `null` relies on it to print `NoneType`. The source only asserts the substring `must be a string, got`, not the printed type name, so this mapping is not itself pinned by any case in this file -- it is pinned in `test/domain/python-semantics.test.ts`, which is target-only.",
+        "affects": "all 4 cases of 'refuses non-string values naming the type'"
+      },
+      {
+        "from": "`shutil.which(\"git\")` at import time, and `@pytest.mark.skipif(GIT is None, ...)` on the parametrized function",
+        "to": "`gitAvailable()`, spawning `git --version` once via `node:child_process.execFileSync` and catching ENOENT, then `test.skipIf(!GIT_AVAILABLE)(...)` applied inside a loop rather than to a single decorated function",
+        "why": "pytest's `skipif` marker decorates the whole parametrized test once and every generated case inherits it; vitest has no equivalent that composes with `testkit/parametrize`'s shared id-preserving helper, so this one group is written as a plain `for` loop calling `test.skipIf` per case instead. The loop is one call site in the source text -- `scripts/parity-check.mjs`'s non-running sweep is syntactic, not a runtime count -- so it is approved once in `target.approved_non_running` regardless of how many of the 24 cases the loop produces.",
+        "affects": "all 24 cases of 'the validator refuses everything git refuses'"
+      },
+      {
+        "from": "`subprocess.run([str(GIT), \"check-ref-format\", f\"refs/heads/{name}\"], capture_output=True, check=False).returncode == 0`",
+        "to": "`gitAcceptsBranchName(name)`: the same `git check-ref-format refs/heads/<name>` invocation via `execFileSync`, with a non-zero exit caught and turned into `false` rather than read off a `returncode` field",
+        "why": "`execFileSync` throws on a non-zero exit instead of returning a status code, which is the one shape difference from `subprocess.run(check=False)`; the question asked of the process -- did `git` accept this ref name -- is identical, and neither invocation goes through a shell.",
+        "affects": "all 24 cases of 'the validator refuses everything git refuses'"
+      }
+    ],
+    "target_only_tests": {
+      "count": 0,
+      "ids": [],
+      "why": "Every test in this file translates a source case."
+    },
+    "approved_non_running": [
+      {
+        "file": "test/domain/refs.test.ts",
+        "constructs": {
+          "skipIf": 1
+        },
+        "reason": "One `test.skipIf(!GIT_AVAILABLE)` call site inside the loop that ports 'the validator refuses everything git refuses' (24 source cases), mirroring the source's own `@pytest.mark.skipif(GIT is None, reason=\"git is not installed\")`. It runs the 24 cases normally wherever `git` is on PATH -- true in this repository's own dev environment and in CI -- and skips them together, rather than failing, on a machine without `git`. Counted once because the check reads the syntax tree, not the loop's 24 runtime iterations."
+      }
+    ]
+  },
+  "totals": {
+    "source_cases": 62,
+    "ported": 33,
+    "adapted": 29,
+    "not_ported": 0,
+    "waivers": 0
+  },
+  "inherited_limitations": [
+    {
+      "behaviour": "The git-parity corpus (`PARITY_CORPUS`) is 24 branch-name shapes chosen by the source file to exercise every rule the validator makes a decision about, not an exhaustive search of `git check-ref-format`'s own behaviour.",
+      "why": "The source's own shape, recorded there as \"the point of the corpus is that git, not this file, says what the answer is\" -- a claim about direction (never more permissive than git), not about coverage. Carried over unchanged rather than widened, because widening the corpus is a decision about the source file's own scope and belongs to whichever belt owns `tests/test_refs.py`, not to this translation."
+    },
+    {
+      "behaviour": "'the validator refuses everything git refuses' and 'the shapes codex review found' skip -- entirely, not merely report inconclusive -- on a machine with no `git` on `PATH`.",
+      "why": "The source's own shape: `@pytest.mark.skipif(GIT is None, ...)` does the same. `git` is present in this repository's own CI images and dev containers, so the skip is not expected to fire there; it is inherited rather than tightened because CI's binary environment is not this belt's to decide."
+    }
+  ],
+  "entries": [
+    {
+      "source_nodeid": "tests/test_refs.py::test_accepts_ordinary_branch_names[main]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > accepts ordinary branch names[main]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: an ordinary branch name round-trips unchanged.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_accepts_ordinary_branch_names[develop]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > accepts ordinary branch names[develop]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_accepts_ordinary_branch_names[feature/g1-registry]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > accepts ordinary branch names[feature/g1-registry]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a slash-separated component name is fine.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_accepts_ordinary_branch_names[release-1.2.0]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > accepts ordinary branch names[release-1.2.0]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: dots inside a component are fine.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_accepts_ordinary_branch_names[v1.0]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > accepts ordinary branch names[v1.0]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_accepts_ordinary_branch_names[a.b]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > accepts ordinary branch names[a.b]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a dot is fine as long as no component starts with one.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[-must not be empty]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[-must not be empty]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the empty string is refused.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[main branch-whitespace or control characters]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[main branch-whitespace or control characters]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: an embedded space is whitespace.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[main\\tbranch-whitespace or control characters]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[main\\tbranch-whitespace or control characters]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a real tab character, not the two-character escape the pytest id prints for it.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[main\\nbranch-whitespace or control characters]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[main\\nbranch-whitespace or control characters]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a real newline character.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[main\\x01-whitespace or control characters]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[main\\x01-whitespace or control characters]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a C0 control character below whitespace's own range.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[main\\x7f-whitespace or control characters]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[main\\x7f-whitespace or control characters]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: DEL is refused alongside the C0 controls, on the same branch as whitespace.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[main~1-must not contain any of]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[main~1-must not contain any of]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `~` is a forbidden character.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[main^-must not contain any of]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[main^-must not contain any of]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `^` is a forbidden character.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[refs:main-must not contain any of]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[refs:main-must not contain any of]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `:` is a forbidden character.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[main?-must not contain any of]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[main?-must not contain any of]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `?` is a forbidden character.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[main*-must not contain any of]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[main*-must not contain any of]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `*` is a forbidden character.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[main[0]-must not contain any of]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[main[0]-must not contain any of]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `[` is a forbidden character.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[main\\\\branch-must not contain any of]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[main\\\\branch-must not contain any of]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a real backslash character is a forbidden character, not the doubled two-character escape the pytest id prints for it.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[main..dev-must not contain '\\\\.\\\\.']",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[main..dev-must not contain '\\\\.\\\\.']",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `..` is refused. Adapted rather than covered by the file-wide substring mapping: the source's own `match=` is a regex (`r\"must not contain '\\.\\.'\"`) whose only metacharacter is an escaped, literal dot, so matching it as a plain substring in TypeScript would search for a backslash the thrown message never contains -- `pythonRepr` prints two literal dots. A `RegExp` built from the same characters is used instead, which is the one case where the mechanism genuinely has to stay a regex rather than collapse to `.includes()`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[main@{1}-must not contain '@]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[main@{1}-must not contain '@]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `@{` is refused. The expected text is deliberately a prefix (no closing quote), and a substring check still matches the full `must not contain '@{'` the port prints.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[/main-must not start or end with '/']",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[/main-must not start or end with '/']",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a leading slash is refused.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[main/-must not start or end with '/']",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[main/-must not start or end with '/']",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a trailing slash is refused.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[feature//x-must not contain '//']",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[feature//x-must not contain '//']",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a doubled interior slash is refused.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[-main-would be read as an option]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[-main-would be read as an option]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a leading hyphen is refused.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[.main-component beginning with]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[.main-component beginning with]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the sole component begins with a dot.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[feature/.hidden-component beginning with]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[feature/.hidden-component beginning with]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a non-leading component begins with a dot.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[main.lock-must not end with '\\\\.lock']",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[main.lock-must not end with '\\\\.lock']",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the sole component ends with `.lock`. Adapted for the same reason as `main..dev`: the source's `match=` is a regex over an escaped literal dot, so a `RegExp` is used rather than a plain substring.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_each_documented_ref_violation[feature/x.lock-must not end with '\\\\.lock']",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses each documented ref violation[feature/x.lock-must not end with '\\\\.lock']",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a non-leading component ends with `.lock`. Adapted for the same reason as `main..dev`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_non_string_values_naming_the_type[1]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses non-string values naming the type[1]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: an integer is refused, naming its type in the refusal.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_non_string_values_naming_the_type[None]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses non-string values naming the type[None]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion. Adapted: `None` is represented as `null`, per D-0018's `pythonTypeName` mapping (`NoneType` for both `null` and `undefined`); the source case itself only asserts the substring `must be a string, got`, not the printed type name.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_non_string_values_naming_the_type[True]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses non-string values naming the type[True]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion. Adapted: `True` is represented as the JavaScript `boolean` `true`, per D-0018's `pythonTypeName` mapping (`bool`); TypeScript has no separate boolean-subclass-of-int type to reach for.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_refuses_non_string_values_naming_the_type[value3]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > refuses non-string values naming the type[value3]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a list is refused, naming its type in the refusal.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_error_carries_the_location_it_was_given",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > error carries the location it was given",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the location survives onto the error object and is appended to the formatted message.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[main]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[main]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` accepts this name, so the case returns without calling the validator. See the systematic mappings for the subprocess and skip adaptations shared by all 24 cases in this group.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[feat/cadenza-bootstrap]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[feat/cadenza-bootstrap]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` accepts this name.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[release-1.2]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[release-1.2]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` accepts this name.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a.b]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[a.b]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` accepts this name.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[release.]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[release.]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses a trailing dot, and so does the validator.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a.]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[a.]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses a trailing dot.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[feat/x.]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[feat/x.]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses a component ending with a trailing dot.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[x.lock]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[x.lock]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses a `.lock` suffix.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[feat/x.lock]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[feat/x.lock]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses a non-leading component's `.lock` suffix.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[.hidden]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[.hidden]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses a component beginning with a dot.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[feat/.hidden]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[feat/.hidden]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses a non-leading component beginning with a dot.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a..b]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[a..b]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses a doubled dot.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a b]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[a b]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses an embedded space.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a~b]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[a~b]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses `~`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a^b]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[a^b]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses `^`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a:b]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[a:b]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses `:`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a?b]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[a?b]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses `?`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a*b]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[a*b]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses `*`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a[b]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[a[b]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses `[`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a\\\\b]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[a\\\\b]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses a real backslash character, not the doubled two-character escape the pytest id prints for it.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a@{b]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[a@{b]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses `@{`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a//b]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[a//b]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses a doubled interior slash.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[/leading]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[/leading]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses a leading slash.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[trailing/]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the validator refuses everything git refuses[trailing/]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `git` refuses a trailing slash.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_shapes_codex_review_found[release.]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the shapes codex review found[release.]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Regression pin: a trailing dot is refused, per the round-1 review finding.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_shapes_codex_review_found[a.]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the shapes codex review found[a.]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Regression pin: a trailing dot is refused.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_shapes_codex_review_found[feat/x.]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the shapes codex review found[feat/x.]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Regression pin: a trailing dot on a non-leading component is refused.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_refs.py::test_the_shapes_codex_review_found[@]",
+      "target_id": "test/domain/refs.test.ts::parse_base_branch > the shapes codex review found[@]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Regression pin: a bare '@' collides with git's shorthand for HEAD and is refused.",
+      "source_revision": "a5672f8"
+    }
+  ]
+}

@@ -46,6 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   zero accept/refuse disagreements, the `\Z`-versus-`$` anchor and the
   `str.isspace()`-versus-`/\s/` refusal set each held open by a target-only
   case.
+- Refs belt (cadenza#8): `tests/test_refs.py` ported - all 62 node ids mapped,
+  none deferred. The git-parity case (D-0021) runs the real `git` binary via
+  `node:child_process`, mirroring the source's own `subprocess` call against
+  `git check-ref-format`, rather than a fixed corpus of pre-recorded answers.
 
 ### Changed
 
