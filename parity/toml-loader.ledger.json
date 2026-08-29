@@ -1,0 +1,198 @@
+{
+  "source": {
+    "repository": "suisya-systems/cadenza",
+    "revision": "a5672f8",
+    "note": "The source is this repository's own Python implementation, not a second checkout. Cadenza is being rewritten in place (cadenza#8): `src/cadenza/` and `tests/` are the specification until a later PR retires them, so every inventory here is collected from the working tree at the recorded revision.",
+    "suite_baseline": {
+      "collected": 330,
+      "passed": 330,
+      "skipped": 0,
+      "xfailed": 0,
+      "reconciliation": "`PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q -p no:cacheprovider` at a5672f8 on CPython 3.12.3: 330 passed. No module is skipped at collection time, so collected == the sum of the eight per-file inventories with nothing left over. See parity/source-inventory.manifest.json."
+    },
+    "file": {
+      "path": "tests/test_toml_loader.py",
+      "collected": 14,
+      "inventory": "parity/source-inventory/test_toml_loader.txt",
+      "note": "13 test functions, 14 collected node ids: `test_a_syntax_error_surfaces_as_a_catalog_error_naming_the_file` is parametrized over the two filenames."
+    }
+  },
+  "target": {
+    "test_file": "test/adapters/toml-loader.test.ts",
+    "systematic_mappings": [
+      {
+        "from": "`tomllib` from the standard library",
+        "to": "`smol-toml`, a pinned dependency",
+        "why": "Node ships no TOML parser. Writing one was rejected: none of these 14 cases would notice a hand-rolled parser disagreeing with `tomllib` about escapes, integers or dotted keys, so the ledger would stay green over a parser that read catalogs differently from the specification's. `smol-toml` is TOML 1.0.0 conformant and has no dependencies of its own. The known disagreements are listed under `inherited_limitations`; the choice is recorded in DECISIONS.md and the version is pinned in `package-lock.json` (D-0004).",
+        "affects": "all fourteen cases"
+      },
+      {
+        "from": "pytest's `tmp_path` fixture",
+        "to": "`mkdtempSync` in `beforeEach`, removed in `afterEach`",
+        "why": "The nearest equivalent, with one addition the source does not need: the created path is lexically normalised with the port's own `normpath`, because `mkdtempSync` can return a path through a symlink (`/var` -> `/private/var` on macOS) while the adapter reports the string it was given. Resolving it instead would have been the wrong repair -- the adapter deliberately never resolves.",
+        "affects": "the ten cases that touch a filesystem"
+      },
+      {
+        "from": "`pathlib.Path` as the type of a directory, an origin and a base_dir",
+        "to": "`string`, with `src/domain/python-path.ts` supplying the operations",
+        "why": "`Path` carries flavour-specific behaviour that `node:path` does not reproduce, and the values here end up inside `LayerDocument.baseDir`, which anchors a `local_path` that reaches a persisted digest. Porting the operations was the alternative to porting the class, and it is the smaller surface.",
+        "affects": "all fourteen cases"
+      }
+    ],
+    "target_only_tests": {
+      "count": 0,
+      "ids": [],
+      "why": "Every test in this file translates a source case. The port's `os.path`/`pathlib` reimplementation has far more surface than these cases touch, and it is asserted in `test/domain/python-path.test.ts`, which is declared target-only in `parity/target-only.json` rather than smuggled into this file: those are claims about the standard library the port had to rebuild, not about `tests/test_toml_loader.py`."
+    },
+    "approved_non_running": []
+  },
+  "totals": {
+    "source_cases": 14,
+    "ported": 9,
+    "adapted": 5,
+    "not_ported": 0,
+    "waivers": 0
+  },
+  "inherited_limitations": [
+    {
+      "behaviour": "`smol-toml` and `tomllib` are known to disagree twice, and neither disagreement is reachable by any case in this file. (1) An integer outside JavaScript's safe range is a parse ERROR for `smol-toml` and an ordinary arbitrary-precision `int` for `tomllib`, so such a file becomes `invalid TOML` here and composes there. (2) A float and an integer of the same value are one number in JavaScript, so `schema_version = 1.0` parses to `1` and is ACCEPTED here, where `tomllib` yields a float that section 5.2 refuses.",
+      "why": "The second is a defect in the port under D-0001's oracle order -- design doc section 5.2 says a non-integer is refused -- and it is not closable at this layer: the distinction is destroyed by the parser before the composer sees the value, and recovering it would mean re-lexing the TOML. It is raised for a decision rather than transcribed silently, and `parity/compose.ledger.json` carries the full finding on the source case that exposed it. The first is a divergence in the refusing direction on a value no catalog has a use for, and is recorded so that the belt that meets it does not have to rediscover it."
+    },
+    {
+      "behaviour": "Invalid UTF-8 in a layer file raises a decoding failure that is NOT a `CatalogError`, so it escapes this adapter untyped.",
+      "why": "Faithful to the source, which has the same hole: `tomllib.load` decodes the bytes itself, and a `UnicodeDecodeError` is neither a `TOMLDecodeError` nor an `OSError`, so `_read`'s two `except` clauses both miss it. The port uses a fatal `TextDecoder` to keep the behaviour rather than quietly substituting U+FFFD, which would have handed a corrupted catalog to the composer -- a worse failure than the untyped one, and a silent one."
+    },
+    {
+      "behaviour": "`os.path.abspath` on Windows calls `_getfullpathname`, which consults a per-drive current directory, so `C:relative` resolves against the CWD of drive C rather than the process CWD.",
+      "why": "Node exposes no per-drive CWD. The one part of `_getfullpathname` that a catalog can plausibly reach -- a drive-less rooted path such as `\\srv` picking up the current drive -- IS reproduced; the per-drive case is not, and no case in this file uses one."
+    }
+  ],
+  "entries": [
+    {
+      "source_nodeid": "tests/test_toml_loader.py::test_filenames_are_the_documented_ones",
+      "target_id": "test/adapters/toml-loader.test.ts::TomlCatalogSource > the filenames are the documented ones",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the two constants are the filenames the design document and the example file name.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_toml_loader.py::test_the_tracked_file_is_required_and_its_absence_names_the_path",
+      "target_id": "test/adapters/toml-loader.test.ts::TomlCatalogSource > the tracked file is required and its absence names the path",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, including the location naming the full path rather than the directory.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_toml_loader.py::test_the_local_file_is_optional",
+      "target_id": "test/adapters/toml-loader.test.ts::TomlCatalogSource > the local file is optional",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the operator-owned layer is gitignored, so its absence is the normal case.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_toml_loader.py::test_layers_are_returned_lowest_precedence_first",
+      "target_id": "test/adapters/toml-loader.test.ts::TomlCatalogSource > layers are returned lowest precedence first",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: order is the whole contract between this adapter and the composer.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_toml_loader.py::test_each_document_carries_its_origin_and_base_dir",
+      "target_id": "test/adapters/toml-loader.test.ts::TomlCatalogSource > each document carries its origin and base dir",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion on all four values. Adapted because `Path` becomes a string: `document.base_dir == tmp_path` compares two `Path` objects and `toBe` compares two strings, so the fixture path is lexically normalised once when it is created -- with the same `normpath` the adapter uses, never with a call that resolves symlinks. Without that, `mkdtempSync` on macOS returns a path through `/var` while the adapter reports the same string it was given, and the case would fail for a reason that has nothing to do with the adapter.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_toml_loader.py::test_the_parsed_data_is_handed_over_unvalidated",
+      "target_id": "test/adapters/toml-loader.test.ts::TomlCatalogSource > the parsed data is handed over unvalidated",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the adapter parses and section 5 validates, so the raw nested data is reachable and uninspected.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_toml_loader.py::test_a_syntax_error_surfaces_as_a_catalog_error_naming_the_file[projects.toml]",
+      "target_id": "test/adapters/toml-loader.test.ts::TomlCatalogSource > a syntax error surfaces as a catalog error naming the file[projects.toml]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The tracked layer. A raw decoder error names an offset and no file, which is useless when two layers are in play.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_toml_loader.py::test_a_syntax_error_surfaces_as_a_catalog_error_naming_the_file[projects.local.toml]",
+      "target_id": "test/adapters/toml-loader.test.ts::TomlCatalogSource > a syntax error surfaces as a catalog error naming the file[projects.local.toml]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The local layer, which is why the case is parametrized at all: both layers have to name themselves.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_toml_loader.py::test_a_directory_where_the_tracked_file_should_be_is_not_mistaken_for_one",
+      "target_id": "test/adapters/toml-loader.test.ts::TomlCatalogSource > a directory where the tracked file should be is not mistaken for one",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `Path.is_file()` is false for a directory, and `statSync(...).isFile()` is the same question. The port also reproduces pathlib's swallowing of every `OSError`, which `statSync` does not do by itself.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_toml_loader.py::test_the_repository_catalog_loads_and_composes",
+      "target_id": "test/adapters/toml-loader.test.ts::TomlCatalogSource > the repository catalog loads and composes",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the file shipped in `config/` is valid input. The one end-to-end case, and the one place a TOML parser disagreeing with `tomllib` about a real catalog would show.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_toml_loader.py::test_a_relative_directory_still_yields_an_absolute_anchor",
+      "target_id": "test/adapters/toml-loader.test.ts::TomlCatalogSource > a relative directory still yields an absolute anchor",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the adapter is the one component allowed to consult the CWD, and only to find the files. Adapted because `monkeypatch.chdir` has no counterpart -- `process.chdir` is restored in a `finally` instead, which is safe here because vitest gives each file its own worker and does not run cases within a file concurrently. `Path(...).is_absolute()` becomes `isPathlibAbsolute`, which is the pathlib question and not the `os.path` one; on Windows they differ and this case wants the stricter.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_toml_loader.py::test_layer_document_refuses_a_relative_base_dir",
+      "target_id": "test/adapters/toml-loader.test.ts::TomlCatalogSource > a layer document refuses a relative base dir",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion. Adapted in the exception type: the source raises a bare `ValueError` from `__post_init__` and the port raises `RangeError`, JavaScript's nearest equivalent -- the type is right and the value is not. Deliberately NOT a `CadenzaError`, which matches the source: design doc section 7 governs catalog refusals that name a file an operator can edit, and this is a class invariant broken by a caller inside cadenza.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_toml_loader.py::test_the_shipped_tracked_catalog_composes",
+      "target_id": "test/adapters/toml-loader.test.ts::TomlCatalogSource > the shipped tracked catalog composes",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertions, per project: a non-empty base branch, and no project listing its own id as an alias. Adapted in the guard: the source writes `assert catalog.projects` before the loop, and the port asserts a count greater than zero, because a loop over an empty collection passes while proving nothing and a truthiness check on an object is always true in JavaScript. Probed by emptying the collection, which turns the case red as it should.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_toml_loader.py::test_a_drive_less_path_is_not_absolute_on_windows",
+      "target_id": "test/adapters/toml-loader.test.ts::TomlCatalogSource > a drive-less path is not absolute on windows",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, and the same reason for existing: it explains why `test/support.ts` builds absolute paths from a platform anchor instead of writing `/srv/...`. Adapted because `PureWindowsPath` and `PurePosixPath` become the two flavour objects of `src/domain/python-path.ts`, which is the port's way of holding both answers at once -- the same thing pathlib's flavours are.",
+      "source_revision": "a5672f8"
+    }
+  ]
+}

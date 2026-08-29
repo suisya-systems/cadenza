@@ -4,9 +4,9 @@
  * `projectId` is immutable and never reused; `aliases` are mutable display
  * names, ordered as declared and unique across the whole namespace.
  *
- * `ResolvedProject` -- the snapshot handed to a run, carrying `configDigest`
- * and per-field provenance -- is not here yet. It is the subject of
- * `tests/test_resolve.py`, and resolution is a later belt.
+ * `ResolvedProject` -- the snapshot handed to a run, carrying `configDigest` and
+ * per-field provenance -- arrived with the composition belt, which ports
+ * `tests/test_resolve.py`.
  */
 import { type CloneSource, snapshotSource } from "./clone-source.js";
 
@@ -46,4 +46,30 @@ export function project(
     source: snapshotSource(source),
     baseBranch,
   });
+}
+
+/** Which layer, and which file within it, decided one field. */
+export interface FieldOrigin {
+  readonly layer: string;
+  readonly file: string;
+}
+
+/** Frozen for the reason {@link project} is: provenance is reported, not edited. */
+export function fieldOrigin(layer: string, file: string): FieldOrigin {
+  return Object.freeze({ layer, file });
+}
+
+/**
+ * What a run persists.
+ *
+ * `configDigest` is what makes a later audit possible: a run that recorded only
+ * the typed name cannot tell that the catalog moved underneath it.
+ */
+export interface ResolvedProject {
+  readonly projectId: string;
+  readonly aliases: readonly string[];
+  readonly source: CloneSource;
+  readonly baseBranch: string;
+  readonly configDigest: string;
+  readonly provenance: Readonly<Record<string, FieldOrigin>>;
 }

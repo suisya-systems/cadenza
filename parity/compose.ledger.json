@@ -1,0 +1,540 @@
+{
+  "source": {
+    "repository": "suisya-systems/cadenza",
+    "revision": "a5672f8",
+    "note": "The source is this repository's own Python implementation, not a second checkout. Cadenza is being rewritten in place (cadenza#8): `src/cadenza/` and `tests/` are the specification until a later PR retires them, so every inventory here is collected from the working tree at the recorded revision.",
+    "suite_baseline": {
+      "collected": 330,
+      "passed": 330,
+      "skipped": 0,
+      "xfailed": 0,
+      "reconciliation": "`PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q -p no:cacheprovider` at a5672f8 on CPython 3.12.3: 330 passed. No module is skipped at collection time, so collected == the sum of the eight per-file inventories with nothing left over. See parity/source-inventory.manifest.json."
+    },
+    "file": {
+      "path": "tests/test_compose.py",
+      "collected": 50,
+      "inventory": "parity/source-inventory/test_compose.txt",
+      "note": "39 test functions, 50 collected node ids: four functions are parametrized (schema versions over 4, wrongly shaped tables over 5, missing required fields over 3, non-boolean tombstones over 3). The ledger counts node ids, for the reason recorded in DECISIONS.md D-0010."
+    }
+  },
+  "target": {
+    "test_file": "test/application/compose.test.ts",
+    "systematic_mappings": [
+      {
+        "from": "`pytest.raises(Kind, match=...) as caught`, then `caught.value.location`",
+        "to": "a `refusal(Kind, () => ...)` helper in `test/support.ts` that returns the error, then `caught.message` and `caught.location`",
+        "why": "`expect(...).toThrow(Kind)` checks the class and `toThrow(/re/)` checks the message, but neither yields the INSTANCE, and 14 of these cases go on to assert `location`. The helper is `pytest.raises(...) as caught`, with the same failure when nothing is raised. It also fixes what `match=` means: pytest matches `str(exc)`, which includes the location, so `CatalogError.message` in the port carries the FORMATTED text and the bare text moves to `.detail`. Spelled the other way round, every translated `match=` would silently stop seeing the location.",
+        "affects": "every case that asserts a refusal (30 of the 50)"
+      },
+      {
+        "from": "`make_layer(...)` / `git_url_project(...)` from `tests/support.py`, with `**extra` keyword arguments",
+        "to": "`makeLayer(data, options)` / `gitUrlProject(options)` from `test/support.ts`, with an explicit `extra` object",
+        "why": "TypeScript has no `**kwargs`. The one property that had to be preserved is ORDER: `table.update(extra)` appends the extras AFTER `source` and `base_branch`, and `refuseUnknownKeys` reports the first offending key it meets, so moving the extras to the front would change which key a refusal names.",
+        "affects": "all fifty cases"
+      },
+      {
+        "from": "`assert catalog.names == {...}` on a `MappingProxyType` over a `dict`",
+        "to": "`expect(catalog.names).toEqual({...})` on a frozen plain object",
+        "why": "A frozen plain object is the faithful `MappingProxyType`: a property assignment on one throws `TypeError` in strict mode, which is what the source's last case observes. A `Map` would have kept only the compile-time claim. The object is safe from JavaScript's integer-like key reordering because every key is a `project_id`, an alias or a fixed field name, and `^[a-z][a-z0-9_-]{0,63}$` cannot spell an array index.",
+        "affects": "the cases that compare a whole mapping (4)"
+      },
+      {
+        "from": "`X not in catalog.names`",
+        "to": "`Object.hasOwn(catalog.names, X)` is `false`",
+        "why": "Python's `in` on a dict tests its own keys. JavaScript's `in` also finds inherited ones, and a plain object inherits from `Object.prototype`, so a name such as `constructor` would answer the wrong way. `Object.hasOwn` is the question the source asks.",
+        "affects": "cases 9 and 34"
+      },
+      {
+        "from": "`base_dir=tmp_path` (pytest's filesystem fixture)",
+        "to": "`baseDir: CATALOG_DIR` (an absolute path built for this platform)",
+        "why": "The three `allowed_local_roots` cases take `tmp_path` only because they need SOME absolute directory; none of them touches a filesystem. `test/support.ts` provides one that is absolute on Windows as well -- where a drive-less path is drive-relative and `layerDocument` refuses it -- which is why the source's own `tests/support.py` builds paths the same way.",
+        "affects": "cases 41, 42 and 43"
+      }
+    ],
+    "target_only_tests": {
+      "count": 1,
+      "ids": [
+        "test/application/compose.test.ts::section 5.2: schema version > a number with a fractional part is refused"
+      ],
+      "why": "One test, standing where `test_non_integer_schema_version_is_refused[1.0]` could not be translated. That source case refuses a Python FLOAT whose value is 1, and JavaScript has a single numeric type in which `1.0 === 1`, so no value reproduces it. The branch is real and would otherwise be untested, so the nearest property that DOES exist -- a number with a fractional part is refused -- is asserted instead. It is declared here rather than mapped, because it is not that source case: it is what is left of it."
+    },
+    "approved_non_running": []
+  },
+  "totals": {
+    "source_cases": 50,
+    "ported": 41,
+    "adapted": 8,
+    "not_ported": 1,
+    "waivers": 0
+  },
+  "inherited_limitations": [
+    {
+      "behaviour": "`composeCatalog` calls `parseCloneSource`, `parseIdentifier` and `parseBaseBranch`, and this belt ports NONE of their test files: `tests/test_clone_source.py` (57 cases), `tests/test_identifiers.py` (25) and `tests/test_refs.py` (62) stay `inventoried`. The three functions are implemented here because a composer that cannot read a `[...source]` table is not a composer, but they are exercised only as far as these 50 cases reach them -- one valid https URL, one relative and two absolute local paths, and the identifier and ref shapes as used rather than as specified.",
+      "why": "The digest pilot's precedent, and the same reasoning: it ported the SHAPE of `CloneSource` and left `parse_clone_source` to the belt that owns its 57 cases, rather than putting unledgered coverage claims into the tree. The Python implementations stay green in CI throughout, so the rules are not unguarded meanwhile. Approved by the 窓口 with the belt's scope."
+    },
+    {
+      "behaviour": "`urlsplit`'s `_check_bracketed_host` defers to `ipaddress.ip_address` in CPython and to `node:net`'s `isIP` here. The two agree on ordinary addresses and may disagree at the edges -- a scoped or otherwise unusual literal.",
+      "why": "No case in this belt's three source files uses a bracketed host. The URL surface is `tests/test_clone_source.py`'s subject and that belt owns closing this. Recorded rather than left for someone to find; `src/domain/python-urlsplit.ts` says the same thing at the line it applies to."
+    },
+    {
+      "behaviour": "`expanduser` resolves `~` and NOT `~user`: CPython consults the password database, and where the user is unknown it returns the path unchanged, which is the branch this port always takes.",
+      "why": "Node has no password database. Guessing would put a wrong ABSOLUTE path into a persisted digest, which is worse than the documented gap. A bare `~` -- the spelling `config/projects.local.toml.example` actually documents -- is exact, and no case in these three files uses `~user`."
+    },
+    {
+      "behaviour": "Where several keys of one table are invalid, WHICH one is reported first can differ. Python's `dict` iterates in insertion order; JavaScript reorders integer-like keys ahead of the rest, so a table with a key such as `1` (a valid TOML bare key) would be visited in a different order.",
+      "why": "Every key the composer iterates that could be integer-like is a project_id, which `parseIdentifier` refuses anyway -- so the refusal happens either way and only its ORDER could differ, and only for a catalog that is already invalid. Recorded because it is a real difference in behaviour, not because it is reachable by a valid catalog."
+    }
+  ],
+  "entries": [
+    {
+      "source_nodeid": "tests/test_compose.py::test_single_layer_yields_a_project_keyed_by_its_id",
+      "target_id": "test/application/compose.test.ts::the happy path > a single layer yields a project keyed by its id",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: one layer, one project, keyed by its id, with the source and base_branch it stated and a names mapping of exactly one entry.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_aliases_and_id_share_one_flat_namespace",
+      "target_id": "test/application/compose.test.ts::the happy path > aliases and id share one flat namespace",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the id and both aliases map to the one project, and the aliases keep their declared order.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_empty_document_set_yields_an_empty_catalog",
+      "target_id": "test/application/compose.test.ts::the happy path > an empty document set yields an empty catalog",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: no documents, no projects, no names. `toEqual({})` on the frozen plain objects the composer returns.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_supported_schema_versions_is_exactly_one",
+      "target_id": "test/application/compose.test.ts::the happy path > supported schema versions is exactly one",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, and deliberately still written with the expected value on the LEFT as the source has it. Adapted because `frozenset` becomes a `ReadonlySet` and `==` becomes `toEqual`: `toBe` is `Object.is`, which on two Sets is reference equality and would compare the constant with itself.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_local_layer_replaces_only_the_fields_it_states",
+      "target_id": "test/application/compose.test.ts::section 5.3: field-level merge > the local layer replaces only the fields it states",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the stated base_branch wins, the unstated source and aliases are inherited.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_provenance_names_the_layer_and_file_of_each_field",
+      "target_id": "test/application/compose.test.ts::section 5.3: field-level merge > provenance names the layer and file of each field",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion over the same four fields. `FieldOrigin` is a frozen object built by a factory rather than a frozen dataclass, so the comparison is `toEqual`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_source_replaces_whole_rather_than_field_wise",
+      "target_id": "test/application/compose.test.ts::section 5.3: field-level merge > source replaces whole rather than field-wise",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a local `[...source]` of a different kind replaces the tracked one entirely.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_a_partial_source_override_is_refused_instead_of_inheriting_a_kind",
+      "target_id": "test/application/compose.test.ts::section 5.3: field-level merge > a partial source override is refused instead of inheriting a kind",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a source table with a `path` and no `kind` is refused rather than inheriting the tracked kind, so no shape nobody wrote can be composed.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_aliases_replace_whole_so_an_alias_can_be_removed",
+      "target_id": "test/application/compose.test.ts::section 5.3: field-level merge > aliases replace whole so an alias can be removed",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion. Adapted in one half: `\"frontend\" not in catalog.names` tests a dict's KEYS, and `!(\"frontend\" in catalog.names)` in TypeScript would also be false for an inherited property, so it is written as `Object.hasOwn`. The distinction is real here because `names` is a plain object and `Object.prototype` has keys.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_local_layer_may_introduce_a_project_the_tracked_layer_does_not_have",
+      "target_id": "test/application/compose.test.ts::section 5.3: field-level merge > the local layer may introduce a project the tracked layer does not have",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: an operator-only project composes, and its provenance names the local layer.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_aliases_must_be_a_list_of_identifiers",
+      "target_id": "test/application/compose.test.ts::section 5.3: field-level merge > aliases must be a list of identifiers",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a bare string where a list belongs is refused. `isinstance(value, list)` becomes `Array.isArray`, which is the same question.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_the_same_alias_listed_twice_is_refused",
+      "target_id": "test/application/compose.test.ts::section 5.3: field-level merge > the same alias listed twice is refused",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a repeated alias inside one list is a collision, refused before the namespace is even assembled.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_missing_schema_version_is_refused_naming_the_file",
+      "target_id": "test/application/compose.test.ts::section 5.2: schema version > a missing schema_version is refused naming the file",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, including the location. `caught.value.location` is `caught.location`; see the ledger's systematic mapping on where the formatted text lives.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_non_integer_schema_version_is_refused[1]",
+      "target_id": "test/application/compose.test.ts::section 5.2: schema version > a non-integer schema_version is refused[1]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The string `\"1\"`. Refused for not being a number at all, in both languages.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_non_integer_schema_version_is_refused[1.0]",
+      "target_id": null,
+      "disposition": "not-ported",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "NOT TRANSLATABLE, and it exposes a divergence rather than merely resisting translation. The source passes the Python FLOAT `1.0`: a value equal to `1` and of the wrong type, which `isinstance(version, int)` refuses. JavaScript has a single numeric type in which `1.0 === 1`, so there is no value that reproduces the case -- and, worse, `smol-toml` (like every JavaScript TOML parser) parses `schema_version = 1.0` in a real catalog file to the number `1`, which this port then ACCEPTS. Design doc section 5.2 says a non-integer is refused, so under D-0001's oracle order this is a defect in the port and not a finding against the suite. It is not closable at this layer: the int/float distinction is destroyed by the parser before the composer sees the value, and recovering it would mean re-lexing the TOML. Raised for a decision rather than silently transcribed. The property that DOES exist here -- a number with a fractional part is refused -- is asserted by the target-only test named in `target_only_tests`, so the branch is not left uncovered.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_non_integer_schema_version_is_refused[None]",
+      "target_id": "test/application/compose.test.ts::section 5.2: schema version > a non-integer schema_version is refused[None]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Python's `None` becomes `null`. Refused in both.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_non_integer_schema_version_is_refused[version3]",
+      "target_id": "test/application/compose.test.ts::section 5.2: schema version > a non-integer schema_version is refused[version3]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "A list containing 1. Refused in both. The pytest id `version3` is preserved verbatim by `testkit/parametrize`, so the mapping is a byte-stable function of the source id rather than of how the row was worded.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_boolean_schema_version_is_refused_although_bool_is_an_int",
+      "target_id": "test/application/compose.test.ts::section 5.2: schema version > a boolean schema_version is refused although bool is an int",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, and the reason it exists differs between the languages. In Python `bool` IS an `int`, so `isinstance(True, int)` is true and the implementation needs an explicit `isinstance(version, bool)` guard ahead of it. In TypeScript `typeof true` is \"boolean\" and the guard is redundant -- but it is written anyway and this case still pins it, because the check is a claim about which VALUES are accepted, and a later edit that reordered the guards must not start accepting `true`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_unsupported_schema_version_is_refused_naming_the_file",
+      "target_id": "test/application/compose.test.ts::section 5.2: schema version > an unsupported schema_version is refused naming the file",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, including the message naming the version and the location naming the local layer.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_each_layer_carries_its_own_schema_version",
+      "target_id": "test/application/compose.test.ts::section 5.2: schema version > each layer carries its own schema_version",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a valid tracked layer does not excuse a local layer that states no version, and the refusal names the local file.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_unknown_top_level_key_is_refused",
+      "target_id": "test/application/compose.test.ts::section 5.6: closed tables > an unknown top-level key is refused",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `projects` is not `project`, and a near-miss key is refused rather than ignored.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_unknown_catalog_key_is_refused",
+      "target_id": "test/application/compose.test.ts::section 5.6: closed tables > an unknown catalog key is refused",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, including the location's `: catalog` suffix.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_unknown_project_key_is_refused_naming_the_key_and_the_project",
+      "target_id": "test/application/compose.test.ts::section 5.6: closed tables > an unknown project key is refused naming the key and the project",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion -- the typo this catalog exists to prevent -- and the table is built and then mutated exactly as the source builds and mutates it, which is why `gitUrlProject` returns an unfrozen object.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_unknown_source_key_is_refused_naming_the_source_table",
+      "target_id": "test/application/compose.test.ts::section 5.6: closed tables > an unknown source key is refused naming the source table",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, including the location naming the source table rather than the project.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_wrongly_shaped_tables_are_refused[data0-'project' must be a table]",
+      "target_id": "test/application/compose.test.ts::section 5.6: closed tables > wrongly shaped tables are refused[data0-'project' must be a table]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "A list where the `project` table belongs.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_wrongly_shaped_tables_are_refused[data1-'catalog' must be a table]",
+      "target_id": "test/application/compose.test.ts::section 5.6: closed tables > wrongly shaped tables are refused[data1-'catalog' must be a table]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "A list where the `catalog` table belongs.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_wrongly_shaped_tables_are_refused[data2-must be a table]",
+      "target_id": "test/application/compose.test.ts::section 5.6: closed tables > wrongly shaped tables are refused[data2-must be a table]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "A list where one project's table belongs.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_wrongly_shaped_tables_are_refused[data3-'source' must be a table]",
+      "target_id": "test/application/compose.test.ts::section 5.6: closed tables > wrongly shaped tables are refused[data3-'source' must be a table]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "A list where a `[...source]` table belongs.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_wrongly_shaped_tables_are_refused[data4-must be a list of strings]",
+      "target_id": "test/application/compose.test.ts::section 5.6: closed tables > wrongly shaped tables are refused[data4-must be a list of strings]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "A bare string where `allowed_local_roots` expects a list of them.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_a_project_missing_a_required_field_is_refused[table0-has no source]",
+      "target_id": "test/application/compose.test.ts::required fields > a project missing a required field is refused[table0-has no source]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "A base_branch and no source.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_a_project_missing_a_required_field_is_refused[table1-has no base_branch]",
+      "target_id": "test/application/compose.test.ts::required fields > a project missing a required field is refused[table1-has no base_branch]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "A source and no base_branch.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_a_project_missing_a_required_field_is_refused[table2-has no source]",
+      "target_id": "test/application/compose.test.ts::required fields > a project missing a required field is refused[table2-has no source]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "An empty table, which is refused for the source first -- the order the implementation checks in, which this row pins.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_a_field_may_be_supplied_by_either_layer",
+      "target_id": "test/application/compose.test.ts::required fields > a field may be supplied by either layer",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a project completed across two layers composes.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_tombstone_removes_a_tracked_project_and_its_names",
+      "target_id": "test/application/compose.test.ts::section 5.5: tombstones > a tombstone removes a tracked project and its names",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion. Adapted in the same one place as the alias-removal case: `\"site\" not in catalog.names` becomes `Object.hasOwn(...)` so that a key on `Object.prototype` cannot answer the question instead.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_a_tombstone_carrying_a_sibling_field_is_refused",
+      "target_id": "test/application/compose.test.ts::section 5.5: tombstones > a tombstone carrying a sibling field is refused",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: it reads as both \"delete this\" and \"and configure it\". `len(table) != 1` becomes `Object.keys(table).length !== 1`, which counts the same own keys.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_a_tombstone_naming_an_unknown_project_is_refused",
+      "target_id": "test/application/compose.test.ts::section 5.5: tombstones > a tombstone naming an unknown project is refused",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a stale or typo'd tombstone is a refusal, because accepting it silently makes the next typo silent too.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_a_non_boolean_tombstone_is_refused[true]",
+      "target_id": "test/application/compose.test.ts::section 5.5: tombstones > a non-boolean tombstone is refused[true]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The string `\"true\"`, which is not the boolean.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_a_non_boolean_tombstone_is_refused[1]",
+      "target_id": "test/application/compose.test.ts::section 5.5: tombstones > a non-boolean tombstone is refused[1]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The integer 1. In Python this row also exercises `bool` being a subclass of `int` from the other side; in TypeScript `typeof 1` is \"number\" and it is refused for the plain reason.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_a_non_boolean_tombstone_is_refused[None]",
+      "target_id": "test/application/compose.test.ts::section 5.5: tombstones > a non-boolean tombstone is refused[None]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Python's `None` becomes `null`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_tombstone_false_is_refused_rather_than_read_as_keep",
+      "target_id": "test/application/compose.test.ts::section 5.5: tombstones > tombstone false is refused rather than read as keep",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: only the absence of the key means \"keep this project\".",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_a_local_path_is_checked_against_its_own_layers_roots",
+      "target_id": "test/application/compose.test.ts::section 3.3: allowed_local_roots does not merge > a local path is checked against its own layer's roots",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a relative `path` is anchored to the declaring file's directory and admitted by that layer's roots. Adapted because pytest's `tmp_path` fixture has no counterpart that would help here -- the case never touches a filesystem, it only needs an absolute directory -- so it uses `CATALOG_DIR` from `test/support.ts`, which is absolute on the running platform for the reason `tests/support.py` records. The expected path is built with the same `join` the implementation uses rather than with a POSIX-shaped literal, so the case is checkable on the Windows cell instead of only true there by luck.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_a_tracked_layers_roots_do_not_authorise_a_local_layers_path",
+      "target_id": "test/application/compose.test.ts::section 3.3: allowed_local_roots does not merge > a tracked layer's roots do not authorise a local layer's path",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a shared tracked file must not authorise a directory on one operator's machine. Adapted for the `tmp_path` reason recorded on the previous row.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_a_local_layers_roots_do_not_authorise_a_tracked_layers_path",
+      "target_id": "test/application/compose.test.ts::section 3.3: allowed_local_roots does not merge > a local layer's roots do not authorise a tracked layer's path",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, in the other direction: an operator's roots do not retroactively authorise the tracked layer. Adapted for the `tmp_path` reason recorded two rows above.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_an_alias_colliding_with_another_projects_id_is_refused",
+      "target_id": "test/application/compose.test.ts::section 5.4: names collide -> refuse > an alias colliding with another project's id is refused",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: one flat namespace, so an alias cannot shadow another project's id.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_two_projects_claiming_the_same_alias_are_refused_naming_both",
+      "target_id": "test/application/compose.test.ts::section 5.4: names collide -> refuse > two projects claiming the same alias are refused naming both",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, and the same three substrings: the message names both projects and the contested alias. `in str(caught.value)` becomes `expect(caught.message).toContain(...)`, which is why the error's `message` carries the formatted text.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_a_collision_across_layers_is_refused_naming_the_layers",
+      "target_id": "test/application/compose.test.ts::section 5.4: names collide -> refuse > a collision across layers is refused naming the layers",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the message names both layers, so an operator knows which file to edit.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_the_same_project_id_in_two_layers_merges_rather_than_colliding",
+      "target_id": "test/application/compose.test.ts::section 5.4: names collide -> refuse > the same project_id in two layers merges rather than colliding",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, and it is the case that must not be mistaken for a collision: restating one id across layers is the merge of section 5.3.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_a_tombstoned_projects_name_is_free_for_another_project",
+      "target_id": "test/application/compose.test.ts::section 5.4: names collide -> refuse > a tombstoned project's name is free for another project",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: removal happens before the namespace is assembled, so a freed alias can be claimed in the same layer that freed it.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_a_project_id_that_is_not_an_identifier_is_refused",
+      "target_id": "test/application/compose.test.ts::section 5.4: names collide -> refuse > a project_id that is not an identifier is refused",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: an upper-case table key is not an identifier. The pattern's end anchor is the trap `docs/porting.md` section 7 records, and it is pinned in `src/domain/identifiers.ts` rather than re-argued here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_compose.py::test_the_composed_mappings_cannot_be_mutated_by_a_caller",
+      "target_id": "test/application/compose.test.ts::the composed catalog is not a mutable view > the composed mappings cannot be mutated by a caller",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion and the same exception type. Adapted because `MappingProxyType` has no counterpart: the composer returns FROZEN PLAIN OBJECTS, and an assignment to a frozen object's property throws `TypeError` in a module (always strict mode), which is exactly what the source observes. A `Map` was the other candidate and would have lost the guarantee -- `Object.freeze` does not stop `map.set` -- leaving the claim to the type checker alone.",
+      "source_revision": "a5672f8"
+    }
+  ]
+}

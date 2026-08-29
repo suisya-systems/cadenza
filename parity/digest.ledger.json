@@ -48,7 +48,7 @@
         "from": "`assert x == y` / `assert x != y`",
         "to": "`expect(x).toBe(y)` / `expect(x).not.toBe(y)`",
         "why": "House style, and `toBe` is `Object.is` -- reference equality for objects, value equality for the strings every assertion here compares. `toEqual` is used only where the compared value is a `Set`.",
-        "affects": "all thirteen ported cases"
+        "affects": "all fourteen ported cases (thirteen at the pilot, plus the case the composition belt re-pointed here)"
       }
     ],
     "target_only_tests": {
@@ -60,15 +60,15 @@
   },
   "totals": {
     "source_cases": 14,
-    "ported": 11,
+    "ported": 12,
     "adapted": 2,
-    "not_ported": 1,
+    "not_ported": 0,
     "waivers": 0
   },
   "inherited_limitations": [
     {
       "behaviour": "Every case in this file asserts about a digest computed from a hand-built `Project`. Nothing here proves the digest a *catalog* produces is the same one: composition, resolution and the TOML loader are all upstream of it and none is ported yet.",
-      "why": "The source's own case 8 is the one that closes this, by composing the same catalog from two files and comparing the resolved digests -- and it is the one entry below marked not-ported. The limitation is therefore stated rather than hidden, and it is discharged by the belt that ports `tests/test_compose.py` and `tests/test_resolve.py`, not by anything this pilot can add."
+      "why": "DISCHARGED by the composition belt. The source's own case 8 is the one that closes this, by composing the same catalog from two files and comparing the resolved digests -- and it was the one entry below marked not-ported. It is now ported, at `test/application/resolve.test.ts`, alongside the 75 cases of `tests/test_compose.py`, `tests/test_resolve.py` and `tests/test_toml_loader.py`. The limitation is left recorded rather than deleted so that the pilot's own scope, and what closed it, stay legible."
     },
     {
       "behaviour": "`config_digest` is a total function over a `Project`, and no case here builds one the catalog validator would refuse. A `Project` with a control character in its path, or an alias outside the identifier shape, reaches the encoder without ever meeting `parse_clone_source` or `parse_identifier`.",
@@ -195,11 +195,11 @@
     },
     {
       "source_nodeid": "tests/test_digest.py::test_digest_survives_the_catalog_moving_to_another_file",
-      "target_id": null,
-      "disposition": "not-ported",
+      "target_id": "test/application/resolve.test.ts::resolve_project > the digest survives the catalog moving to another file",
+      "disposition": "ported",
       "source_status": "passed",
-      "target_status": null,
-      "reason": "Its subject is the COMPOSITION path, not the digest: it composes one catalog from two different files, in two different layers, with two different base directories, and asserts that `resolve_project(...).config_digest` agrees. Porting it here would mean porting `compose_catalog`, `resolve_project`, the TOML layer loader and the layer/tombstone/provenance rules behind them -- 75 further source cases across `tests/test_compose.py` and `tests/test_resolve.py` -- as an uninventoried side effect of a pilot whose stated subject is byte-identity of the digest. Re-pointed at the belt that ports those two files, where it belongs and where the machinery it needs will exist. What is NOT deferred is the property it defends: that provenance and file paths are outside the payload is asserted by case 4 above, on the payload's key set, which is the strongest form of it available without a composer.",
+      "target_status": "passed",
+      "reason": "Same assertion: one configuration composed from two different files, in two different layers, with two different base directories, resolves to one digest. Deferred by the pilot because its subject is the COMPOSITION path rather than the digest -- porting it there would have meant porting `compose_catalog`, `resolve_project`, the TOML layer loader and the layer/tombstone/provenance rules behind them as an uninventoried side effect. The composition belt built that machinery, so the case is ported now, and it lives in that belt's file because that is where the machinery is: the target id therefore crosses ledgers, which `scripts/parity-check.mjs` sweeps for after reading every ledger rather than while reading each one.",
       "source_revision": "a5672f8"
     }
   ]

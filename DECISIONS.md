@@ -46,6 +46,9 @@ so the two spaces can never be read as one. The same applies to
 | D-0013 | The canonical encoder refuses a lone surrogate rather than escaping it | accepted |
 | D-0014 | G2 and the interlock seam are untouched by the port | accepted |
 | D-0015 | Value objects are snapshotted and frozen, not merely typed `readonly` | accepted |
+| D-0016 | `smol-toml` is the port's one runtime dependency | accepted |
+| D-0017 | The oracle's second face: composition, over the persisted digest only | accepted |
+| D-0018 | Python's standard library is ported, not approximated | accepted |
 
 ---
 
@@ -478,3 +481,129 @@ review.
 
 **What would falsify it.** A value object large enough that copying it per construction is
 measurable. Nothing in G1 is anywhere near that; `Project` holds four fields and a short array.
+
+---
+
+## D-0016 — `smol-toml` is the port's one runtime dependency
+
+**Status:** accepted
+
+**Decision.** The TOML layer loader parses with [`smol-toml`](https://www.npmjs.com/package/smol-toml),
+pinned exactly in `package-lock.json` (D-0004). It is the port's **only** runtime dependency; the
+package had none before.
+
+**Why a dependency at all.** `tomllib` is in Python's standard library and Node ships no TOML parser,
+so porting `src/cadenza/adapters/toml_catalog/loader.py` meant taking a dependency or writing a
+parser.
+
+**Why not write one.** Because the ledger could not tell the difference. The 14 cases of
+`tests/test_toml_loader.py` assert that a syntax error becomes a `CatalogError` naming the file, that
+layers arrive lowest-precedence-first, and that the shipped `config/projects.toml` composes. Not one
+of them would notice a hand-rolled parser disagreeing with `tomllib` about string escapes, integer
+forms, dotted keys or inline tables — so `npm run parity` would stay green over a parser that read
+catalogs differently from the specification's, and the difference would surface as a composed value,
+which is to say as a **digest**. A parser is exactly the wrong place to accept untested surface.
+
+**Why this one.** TOML 1.0.0 conformant, no dependencies of its own, and small enough to read. The
+alternatives with a wider install base carry transitive dependencies, and the supply-chain surface is
+the thing being spent here.
+
+**Two known disagreements with `tomllib`**, both recorded in
+`parity/toml-loader.ledger.json` and neither reachable by any ported case:
+
+- An integer outside JavaScript's safe range is a **parse error** for `smol-toml` and an ordinary
+  arbitrary-precision `int` for `tomllib`.
+- A float and an integer of the same value are one number in JavaScript, so `schema_version = 1.0`
+  parses to `1` and is **accepted**, where `tomllib` yields a float that design doc section 5.2
+  refuses. Under D-0001 that is a defect in the port, and it is **not closable at the composer**: the
+  distinction is destroyed by the parser before the composer sees the value. It is raised as a
+  finding rather than transcribed silently, and it is why
+  `tests/test_compose.py::test_non_integer_schema_version_is_refused[1.0]` is the belt's one
+  `not-ported` case.
+
+**Approved by the 窓口** before implementation, together with the belt's scope, because taking the
+supply-chain surface from zero to one is not a decision a belt makes on its own.
+
+**What would falsify it.** A TOML parser for Node that preserves the integer/float distinction would
+close the second disagreement above and would be worth the swap on its own.
+
+---
+
+## D-0017 — The oracle's second face: composition, over the persisted digest only
+
+**Status:** accepted
+
+**Decision.** The differential oracle (D-0011) gains a **second face**: for a fixed corpus of layer
+documents, the `config_digest` that CPython's `resolve_project` produces and the one the port's
+`resolveProject` produces are compared, as `scripts/oracle/dump_compose_digest.py`,
+`parity/oracle/compose-digest-vector.json` and `test/application/compose-oracle.test.ts`.
+
+**Why the first face is not enough.** It questions the **encoder**, over `Project` values built by
+hand. A `Project` in production is not built by hand: it is composed from ordered layer documents,
+merged field by field, tombstoned, aliased and resolved, and every one of those steps feeds the value
+the encoder hashes. `tests/test_compose.py` asserts *which* project comes out and *which* refusals
+fire; it asserts almost nothing about the exact strings that reach the digest, because in Python
+those are right by construction.
+
+**It earned its place, measured the same way D-0011's did.** A `parseBaseBranch` that returns
+`value.normalize("NFC")` — a plausible edit, since JavaScript makes normalising look like tidying —
+leaves **all 103 ported tests green, the first oracle face included**, and turns the second face red
+on the corpus row `base-branch-nfd`. Nothing else in the suite can see it: no ported compose or
+resolve case uses a non-ASCII branch name, and the first face never calls the validator.
+
+**What the face deliberately excludes.**
+
+- **Refusal messages and `difflib` suggestions.** They are displayed, never persisted, so a
+  divergence costs a confusing sentence rather than a suspect digest. A committed vector of message
+  strings would be a large artefact defending the smaller risk.
+- **`local_path` sources.** Their normalised form is platform-dependent, so a committed vector would
+  be a statement about the machine that generated it and would fail the Windows cell for being
+  correct. That surface is pinned by `test/domain/python-path.test.ts` instead, which asserts **both**
+  flavours on **every** platform — strictly more than a single-platform vector could.
+
+**Approved by the 窓口** before implementation, with the scope limited to the persisted value.
+
+**What would falsify it.** The same thing that falsifies D-0011: retiring `src/cadenza/`.
+
+---
+
+## D-0018 — Python's standard library is ported, not approximated
+
+**Status:** accepted
+
+**Decision.** Where the Python implementation depends on standard-library behaviour, the port
+**reproduces that behaviour explicitly** rather than reaching for the nearest platform equivalent.
+This belt added four such modules: `src/domain/python-path.ts` (`os.path`, `pathlib`),
+`src/domain/python-urlsplit.ts` (`urllib.parse`), `src/domain/python-difflib.ts` (`difflib`) and
+`src/domain/python-text.ts` (`str.isspace`, `repr`, `type(...).__name__`). Each carries its own
+target-only contract test, for the reason `test/domain/canonical-json.test.ts` already records:
+reimplementing something that was true by construction in Python is what creates the surface.
+
+**Why not the platform equivalent.** In every case the equivalent is *nearly* right, and the gap is
+silent:
+
+| Reached for | Would have been | Disagrees on |
+|---|---|---|
+| `node:path` | `os.path` | a trailing slash; two leading slashes; a `..` inside a UNC anchor |
+| `new URL(...)` | `urllib.parse.urlsplit` | lower-casing, percent-encoding, IDNA, a dropped default port — the URL is stored **verbatim** and hashed |
+| an edit-distance library | `difflib.SequenceMatcher.ratio` | it is not edit distance, so a different set of names is suggested |
+| `/\s/` | `str.isspace()` | U+001C..U+001F and U+0085 (Python only); U+FEFF (JavaScript only) |
+
+The first two feed `LocalPathSource.path` and `GitUrlSource.url`, which are **persisted** through
+`config_digest`; the fourth decides which catalogs are accepted at all.
+
+**How each port was checked.** Against real CPython 3.12, by generating inputs and comparing both
+sides before any of it was committed: 6,511 paths across both flavours for `normpath`, `isabs` and
+`is_absolute`, 190 more for `join` and `is_relative_to`, 39 URLs, and 112 `get_close_matches` rows
+including astral characters. The committed tests are the subset a reader can check by eye; the sweep
+is what established there was nothing else.
+
+**It caught a real one.** `PureWindowsPath.is_absolute` turns on CPython's
+`drv_parts[2] not in '?.'`, and `in` on a `str` is a **substring** test, not a membership test over
+two characters — so the empty piece that `///C:` produces is "in" `'?.'`. Written as two character
+comparisons, the port called `///C:` absolute and CPython does not.
+
+**What would falsify it.** A platform API that matches the Python one exactly. `node:path` is not
+becoming `os.path`; the more likely case is a future belt needing so little of a module that a
+five-line local helper is honest, and the test that pins it is what makes that judgeable.
+

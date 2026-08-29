@@ -16,6 +16,18 @@
     {
       "path": "test/testkit/testkit.contract.test.ts",
       "why": "The vendored testkit's own contract. `parametrize` is the one piece of machinery the ledger's correctness depends on: if it stopped spelling ids the way pytest does, every mapping in every ledger would still reconcile against the new spelling and nobody would be told."
+    },
+    {
+      "path": "test/application/compose-oracle.test.ts",
+      "why": "The composition differential oracle (docs/porting.md section 4.5). The digest oracle questions the encoder; this one questions everything upstream of it -- composition, the layer merge, tombstones and resolution -- by comparing `resolveProject(...).configDigest` against what CPython recorded for the same layer documents. It makes a claim no ported test can make and therefore translates no source case. Measured: a `parseBaseBranch` that NFC-normalises its result leaves all 103 ported tests green, the digest oracle included, and turns this one red on the row named `base-branch-nfd`."
+    },
+    {
+      "path": "test/domain/python-path.test.ts",
+      "why": "The `os.path` / `pathlib` port's own contract. The Python suite has nothing to say about `posixpath.normpath` or `PureWindowsPath.is_absolute` because in Python they are the standard library; `tests/test_toml_loader.py` asks about them once, and only to explain why `tests/support.py` builds paths as it does. Reimplementing them in a language whose `node:path` answers differently -- on trailing slashes, on two leading slashes, on a `..` inside a UNC anchor -- is what created the surface, and the results reach `LocalPathSource.path` and therefore a persisted digest. Both flavours are asserted on every platform, which a single-platform oracle vector could not do."
+    },
+    {
+      "path": "test/domain/python-semantics.test.ts",
+      "why": "The contracts of the other Python built-ins the port had to rebuild: `str.isspace()`, `repr`, `difflib.get_close_matches` and `urlsplit`. Each is a place where the obvious JavaScript spelling gives a different answer -- `/\\s/` disagrees with `str.isspace()` in both directions, an edit-distance library is not `SequenceMatcher.ratio`, and `new URL` normalises where `urlsplit` splits -- and what they decide is which catalogs are accepted and what an operator is told when a name is wrong. The Python suite asserts none of it, for the reason `test/domain/canonical-json.test.ts` records: in Python it is all true by construction."
     }
   ]
 }
