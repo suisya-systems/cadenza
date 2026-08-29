@@ -1055,7 +1055,8 @@ returned "nothing to say" about a region it was responsible for.
     would not have seen it either. Excluding a *directory* was the error; excluding the *Python files*
     is the rule that was meant. The walk descends now, ignores `.py`, `.pyc`, `.pyi` and `.pyo` under
     that directory alone, and reports anything else there as unrecognised. Measured: an empty
-    `src/cadenza/domain/runtime.ts` turns the walk's own case red and nothing else.
+    `src/cadenza/domain/runtime.ts` turns the walk's own case red and nothing else. The eleventh
+    round narrowed the ignore list further -- see below.
 14. **A module augmentation reached a module and was not recorded.** `declare module
     "../application/compose.js" { ... }` inside an external module is not a namespace declaration:
     the compiler resolves that specifier exactly as an import does and merges the declarations into
@@ -1081,10 +1082,26 @@ matches all four module extensions, closing the gap the eighth round opened: the
 "domain"; }` was reported as a loader route for the word it names its own field with, the second
 false positive in ten rounds and, like the first, produced by a rule tightened repeatedly.
 
+**An eleventh round returned one P1, against the fix above rather than against a new route.** The
+ignore list item 13 introduced covered `.pyi` and `.pyo` as well, and `.pyi` is a *source* file with
+imports in it: `tests/test_import_boundaries.py` walks `rglob("*.py")` and does not match a stub
+either, so `src/cadenza/domain/stub.pyi` importing interlock would have been read by neither scan --
+the identical hole, one extension smaller, recreated by the line that closed it. The list is now
+exactly what the Python scan does read: `.py`, and the `.pyc` compiled from one. `.pyo` went with
+`.pyi` because Python 3 does not produce one, so ignoring it swallows a file nobody can account for
+and buys nothing. Measured: a `.pyi` under `src/cadenza/` turns the walk's own case red and nothing
+else, and the Python suite stays at 330.
+
+That is the shape worth naming, because it is the second time it has happened: an *exclusion* is a
+claim about what something else is already checking, and it is wrong exactly when that claim is
+untrue. Item 13 was the directory version of it and this is the extension version. The rule the file
+now follows is to exclude by pointing at the scan that covers the exclusion, rather than by naming a
+category that sounds adjacent.
+
 **Where this stops, and what the check does not claim.** It is not a sandbox and cannot become one.
 A static scan of JavaScript cannot prove a module loads nothing, because the language computes at
 runtime what this file has to decide by reading, and four rounds running found one more value that
-could be made to yield a loader. The claim that *is* made, and that the ten rounds
+could be made to yield a loader. The claim that *is* made, and that the eleven rounds
 support, is narrower: every route by which a module loads something **without looking like it** is
 refused, so an evasion has to be written on purpose and in a shape a reviewer can see. Accidents are
 stopped outright; determination is made loud. That is also what

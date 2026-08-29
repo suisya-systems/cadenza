@@ -427,22 +427,35 @@ const DECLARATION_EXTENSIONS = [".d.ts", ".d.mts", ".d.cts"];
  * `src/cadenza/domain/runtime.ts` would be type-checked and would import
  * whatever it liked, while `tests/test_import_boundaries.py` walks `*.py` and
  * would not see it either. It is the one place in the tree both scans agreed to
- * look away from. So the walk descends, ignores the Python half by extension,
- * and reports anything else as unrecognised. The Python boundaries themselves
+ * look away from. So the walk descends, ignores exactly the files the Python
+ * scan does read, and reports everything else as unrecognised. The Python boundaries themselves
  * stay with the Python test, which enforces them over exactly that tree and
  * stays green in CI until the directory goes.
  */
 const PYTHON_PACKAGE = "src/cadenza";
 
 /**
- * The Python half's file extensions, plus the bytecode a local pytest run
- * leaves in `__pycache__`.
+ * The files under `PYTHON_PACKAGE` that the Python scan does read.
+ *
+ * `.py`, because `tests/test_import_boundaries.py` walks `rglob("*.py")` and
+ * asserts these boundaries over exactly those files; and `.pyc`, the bytecode a
+ * local pytest run leaves in `__pycache__`, which is compiled from a `.py` that
+ * walk already read.
+ *
+ * That is the whole test, and it is deliberately narrower than "extensions
+ * Python uses". A `.pyi` stub was ignored here at first and is not: the Python
+ * walk does not match it either, so a stub importing interlock or `socket`
+ * would have been read by neither scan -- the same hole this ignore list was
+ * introduced to close, one extension smaller. `.pyo` went with it: Python 3
+ * does not produce one, so ignoring it buys nothing and would swallow a file
+ * nobody can account for. Both are unrecognised now, which is a question a
+ * reviewer answers rather than a silence.
  *
  * These are ignored under `PYTHON_PACKAGE` and nowhere else. A `.py` file
  * anywhere else under `src/` is still unrecognised, because that is not where
  * the Python package lives.
  */
-const PYTHON_EXTENSIONS = [".py", ".pyc", ".pyi", ".pyo"];
+const PYTHON_EXTENSIONS = [".py", ".pyc"];
 
 /** Whether a repo-relative path sits inside the Python half of `src/`. */
 function underPythonPackage(path: string): boolean {
