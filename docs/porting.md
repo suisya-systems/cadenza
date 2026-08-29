@@ -278,10 +278,10 @@ nobody would be told.
 | `tests/test_digest.py` | 14 | 8 | **ported** (14 mapped) |
 | `tests/test_identifiers.py` | 25 | 6 | **ported** (25 mapped) |
 | `tests/test_import_boundaries.py` | 97 | 9 | inventoried |
-| `tests/test_refs.py` | 62 | 6 | inventoried |
+| `tests/test_refs.py` | 62 | 6 | **ported** (62 mapped) |
 | `tests/test_resolve.py` | 11 | 11 | **ported** (11 mapped) |
 | `tests/test_toml_loader.py` | 14 | 13 | **ported** (14 mapped) |
-| **Total** | **330** | **127** | 171 ported, 159 inventoried |
+| **Total** | **330** | **127** | 233 ported, 97 inventoried |
 
 *Inventoried* means collected as evidence. It is not a commitment to port; the belt that opens a file
 writes its ledger then.

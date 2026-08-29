@@ -71,8 +71,8 @@
       "source": "tests/test_refs.py",
       "collected": 62,
       "test_functions": 6,
-      "status": "inventoried",
-      "note": "Collected as evidence only. Being in the inventory is not a commitment to port; the belt that opens this file writes its ledger then."
+      "status": "ported",
+      "note": "Covered by parity/refs.ledger.json -- the refs belt."
     },
     {
       "path": "parity/source-inventory/test_resolve.txt",
