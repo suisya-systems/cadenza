@@ -1009,6 +1009,30 @@ reaches another by importing it (approved per layer), by building code from a st
 builtin off `process`, or by reaching any of those through the global object. `import.meta.resolve`
 produces a URL and still needs an `import()`, which fails closed as `<computed>`.
 
+**An eighth round found the last loader route, and a false positive the earlier ones had hidden.**
+`require` and `module` are loaders in their own right and both survive an alias: `const load =
+require; load("interlock")` leaves no call with a callee named `require`, and
+`module.require("interlock")` leaves none either. Both are refused as references now -- the same
+answer `scripts/parity-check.mjs` gives an aliased test runner, for the same reason, that an alias is
+what makes an enumeration uncountable.
+
+The other three were about reading the tree correctly rather than about boundaries:
+
+- **`.tsx` is a different grammar, not TypeScript with extra tokens.** Parsed as `ScriptKind.TS` it
+  is wrong in both directions -- a dynamic import inside JSX is not exposed, and JSX text can be read
+  as code that is not there. Every `createSourceFile` here now asks `scriptKindOf`. Measured: a
+  `.tsx` module with `import("interlock")` inside JSX is invisible before the fix and red after.
+- **`.d.ts` ends with `.ts`**, so a declaration file was discovered as an ordinary module, and
+  `stemOf("interlock.d.ts")` gave `interlock.d` -- meaning a declaration counterpart of the reserved
+  seam would have walked past the case guarding it. Declarations are matched first and reported as
+  unrecognised.
+- **A false positive, and the only one in eight rounds.** `import { fetch as loadRecord } from
+  "./record.js"` visits `fetch` as the specifier's *property* name while `parent.name` is
+  `loadRecord`, so `isShadowedOrDeclared` did not exclude it and an ordinary relative import was
+  reported as global network I/O. Worth recording next to the rest: every other finding was a check
+  that admitted too much, and a rule tightened seven times running is exactly where the opposite
+  error hides.
+
 **A note the belt earned the hard way.** Writing a `reference types=` directive out in full inside a
 comment made knip report the repository as depending on interlock: a tool scanning text rather than
 syntax read the comment as the directive it describes. That is the same confusion

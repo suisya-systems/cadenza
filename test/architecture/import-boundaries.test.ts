@@ -205,7 +205,21 @@ const CODE_EVALUATION_GLOBALS = ["eval", "Function"];
  * object (`globalThis`, `global`). `import.meta.resolve` produces a URL and
  * still needs an `import()` to use it, which fails closed as `<computed>`.
  */
-const LOADER_ROUTE_GLOBALS = [...CODE_EVALUATION_GLOBALS, "globalThis", "global"];
+const LOADER_ROUTE_GLOBALS = [
+  ...CODE_EVALUATION_GLOBALS,
+  "globalThis",
+  "global",
+  // `require` and `module` are loaders in their own right, and both survive an
+  // alias: `const load = require; load("interlock")` puts no call with a callee
+  // named `require` in the tree, and `module.require("interlock")` puts none
+  // either. `.cts` is a discovered extension, so both are live routes rather
+  // than theoretical. Refused as references, which is the same answer
+  // `scripts/parity-check.mjs` gives to an aliased test runner and for the same
+  // reason: an alias is what makes an enumeration uncountable. A direct
+  // `require("x")` is recorded as an import besides, so it is caught twice.
+  "require",
+  "module",
+];
 
 /**
  * Report a use of `process` beyond the two members any layer may read.
@@ -298,6 +312,17 @@ function isShadowedOrDeclared(node: ts.Identifier): boolean {
   if (ts.isQualifiedName(parent) && parent.right === node) {
     return true;
   }
+  // `import { fetch as loadRecord } from "./record.js"` visits `fetch` as the
+  // specifier's PROPERTY name while `parent.name` is `loadRecord`, so a check
+  // that looked only at `parent.name` reported a perfectly ordinary relative
+  // import as global network I/O. The property half of a rename is the exported
+  // name, never a reference to the global that shares its spelling.
+  if (
+    (ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent) || ts.isBindingElement(parent)) &&
+    parent.propertyName === node
+  ) {
+    return true;
+  }
   return (
     (ts.isPropertyAssignment(parent) ||
       ts.isPropertySignature(parent) ||
@@ -334,6 +359,16 @@ const MINIMUM_MODULES = 10;
 const MODULE_EXTENSIONS = [".ts", ".mts", ".cts", ".tsx"];
 
 /**
+ * Declaration files, which are not modules and must not be read as one.
+ *
+ * Checked BEFORE `MODULE_EXTENSIONS`, because `.d.ts` ends with `.ts` and would
+ * otherwise be discovered as an ordinary module -- and `stemOf` would then call
+ * `interlock.d.ts` "interlock.d", which is not `interlock`, so a declaration
+ * counterpart of the reserved seam would have walked past the case guarding it.
+ */
+const DECLARATION_EXTENSIONS = [".d.ts", ".d.mts", ".d.cts"];
+
+/**
  * The Python half, which lives under `src/` too and is not part of this graph.
  *
  * The rewrite happens in place (D-0012): `src/cadenza/` and `src/` coexist
@@ -347,6 +382,19 @@ const PYTHON_PACKAGE = "src/cadenza";
 
 /** Files under `src/` the walk did not recognise as modules. See `moduleFiles`. */
 const unrecognised: string[] = [];
+
+/**
+ * The grammar a module's extension implies.
+ *
+ * `.tsx` is not TypeScript with extra tokens, it is a different grammar, and
+ * parsing one as `ScriptKind.TS` yields a tree that is wrong in both
+ * directions: a dynamic import inside JSX is not exposed, and JSX text can be
+ * read as code that is not there. Every `createSourceFile` in this file asks
+ * for the kind rather than assuming one.
+ */
+function scriptKindOf(path: string): ts.ScriptKind {
+  return path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+}
 
 /** A file name without whichever module extension it carries. */
 function stemOf(fileName: string): string {
@@ -364,7 +412,10 @@ function moduleFiles(directory: string = SRC_ROOT): string[] {
     }
     if (statSync(join(ROOT, path)).isDirectory()) {
       found.push(...moduleFiles(path));
-    } else if (MODULE_EXTENSIONS.some((extension) => entry.endsWith(extension))) {
+    } else if (
+      !DECLARATION_EXTENSIONS.some((extension) => entry.endsWith(extension)) &&
+      MODULE_EXTENSIONS.some((extension) => entry.endsWith(extension))
+    ) {
       found.push(path);
     } else {
       // Not skipped quietly. A file under `src/` that this walk does not
@@ -444,7 +495,7 @@ function resolveSpecifier(specifier: string, from: string): string | null {
  * would see nothing.
  */
 function importsIn(source: string, from: string): readonly ImportRef[] {
-  const tree = ts.createSourceFile(from, source, ts.ScriptTarget.ES2023, true, ts.ScriptKind.TS);
+  const tree = ts.createSourceFile(from, source, ts.ScriptTarget.ES2023, true, scriptKindOf(from));
   const found: ImportRef[] = [];
 
   const record = (specifier: string, names: readonly string[]): void => {
@@ -842,7 +893,7 @@ test("no module in a pure layer reaches a global I/O API", () => {
       sourceOf(module),
       ts.ScriptTarget.ES2023,
       true,
-      ts.ScriptKind.TS,
+      scriptKindOf(module),
     );
     const report = (node: ts.Node, what: string): void => {
       const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
@@ -889,7 +940,7 @@ test("no module manufactures a loader or an unapproved dependency", () => {
       sourceOf(module),
       ts.ScriptTarget.ES2023,
       true,
-      ts.ScriptKind.TS,
+      scriptKindOf(module),
     );
     const visit = (node: ts.Node): void => {
       if (ts.isIdentifier(node) && !isShadowedOrDeclared(node)) {
@@ -1024,7 +1075,7 @@ test("no test anchors a layer on a posix-only literal", () => {
       readFileSync(join(ROOT, path), "utf8"),
       ts.ScriptTarget.ES2023,
       true,
-      ts.ScriptKind.TS,
+      scriptKindOf(path),
     );
     const visit = (node: ts.Node): void => {
       if (ts.isPropertyAssignment(node) && propertyNameOf(node.name) === "baseDir") {
