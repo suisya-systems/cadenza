@@ -429,7 +429,7 @@ the oracle's Python half (D-0011) in the same diff that first relies on it.
 
 **Decision.** `project()`, `gitUrlSource()`, `localPathSource()` and `newRepositorySource()` copy
 what they are given and `Object.freeze` what they return. `Project.aliases` is a copy of the caller's
-array, frozen.
+array, frozen, and `Project.source` is a copy rebuilt through the factories by `snapshotSource`.
 
 **Why the type is not enough.** `readonly string[]` is a compile-time claim, and a mutable
 `string[]` is assignable to it. A caller can pass an array, keep the reference, and push to it
@@ -441,10 +441,18 @@ That asymmetry would be a curiosity if the digest were computed and discarded. I
 run that already happened" — so the failure mode is not a wrong value in a test, it is an audit
 reporting an edit that never happened. The guarantee therefore has to survive to runtime.
 
+The clone source has the same problem by a second route, and the factories alone do not close it:
+`CloneSource` is a **structural** type, so `{ kind: "git_url", url }` written as an object literal is
+a valid one and arrives unfrozen however carefully the factories behave. `snapshotSource` rebuilds it
+through them. It is a `switch` rather than a spread so that the copy carries exactly the fields its
+`kind` defines, and so that a member added later fails to compile rather than falling through to a
+shared reference.
+
 Freezing as well as copying is what makes the `readonly` claim true against a cast: in a module,
 which is always strict mode, a write to a frozen object throws rather than failing silently.
 
-**Raised by review** of the bootstrap PR, not designed in. Recorded because the reasoning generalises
+**Raised by review** of the bootstrap PR, in two rounds -- the aliases first, the structurally-typed
+source second -- not designed in. Recorded because the reasoning generalises
 to every value object the port adds, and the next one will be written by someone who did not see the
 review.
 

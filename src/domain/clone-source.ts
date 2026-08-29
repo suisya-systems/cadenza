@@ -52,6 +52,31 @@ export function newRepositorySource(): NewRepositorySource {
 }
 
 /**
+ * A frozen copy of `source`, whatever the caller handed over.
+ *
+ * The factories above freeze what *they* return, and that is not enough on its
+ * own: `CloneSource` is a structural type, so `{ kind: "git_url", url }` written
+ * as a plain object literal is a perfectly valid one and is not frozen. A caller
+ * can pass such an object, keep the reference, and mutate `url` afterwards --
+ * and `configDigest` would then report a different value for a project nobody
+ * edited. Python's frozen dataclasses have no such route.
+ *
+ * Rebuilt through the factories rather than spread, so the copy carries exactly
+ * the fields its `kind` defines. The `switch` is exhaustive: a member added
+ * later fails to compile here rather than falling through to a shared reference.
+ */
+export function snapshotSource(source: CloneSource): CloneSource {
+  switch (source.kind) {
+    case "git_url":
+      return gitUrlSource(source.url);
+    case "local_path":
+      return localPathSource(source.path);
+    case "new":
+      return newRepositorySource();
+  }
+}
+
+/**
  * The union member as the digest payload holds it.
  *
  * The **tag travels with the value**, which is what stops a URL and a path that

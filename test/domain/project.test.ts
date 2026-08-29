@@ -32,6 +32,23 @@ describe("project", () => {
     expect(configDigest(value)).toBe(before);
   });
 
+  test("snapshots the clone source it is given", () => {
+    // `CloneSource` is a structural type, so an object literal is a valid one --
+    // and unlike a factory's return value it arrives unfrozen. This is the route
+    // freezing the `Project` wrapper alone does not close.
+    const mutable = { kind: "git_url" as const, url: "https://example.invalid/org/web.git" };
+    const value = project("web", [], mutable, "main");
+    const before = configDigest(value);
+
+    mutable.url = "https://example.invalid/org/other.git";
+
+    expect(value.source).toEqual({
+      kind: "git_url",
+      url: "https://example.invalid/org/web.git",
+    });
+    expect(configDigest(value)).toBe(before);
+  });
+
   test("freezes what it returns, so a cast cannot reach past readonly", () => {
     const value = project("web", ["site"], SOURCE, "main");
     expect(Object.isFrozen(value)).toBe(true);

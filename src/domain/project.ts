@@ -8,7 +8,7 @@
  * and per-field provenance -- is not here yet. It is the subject of
  * `tests/test_resolve.py`, and resolution is a later belt.
  */
-import type { CloneSource } from "./clone-source.js";
+import { type CloneSource, snapshotSource } from "./clone-source.js";
 
 export interface Project {
   readonly projectId: string;
@@ -29,6 +29,10 @@ export interface Project {
  *
  * Frozen as well as copied, so a cast that reaches past the `readonly` fails
  * loudly in strict mode instead of silently succeeding.
+ *
+ * The same applies to `source`, and for a route the aliases do not have:
+ * `CloneSource` is a structural type, so an object literal is a valid one and
+ * arrives unfrozen. `snapshotSource` is what closes it.
  */
 export function project(
   projectId: string,
@@ -39,7 +43,7 @@ export function project(
   return Object.freeze({
     projectId,
     aliases: Object.freeze([...aliases]),
-    source,
+    source: snapshotSource(source),
     baseBranch,
   });
 }

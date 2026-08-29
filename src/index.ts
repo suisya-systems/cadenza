@@ -22,6 +22,7 @@ export {
   localPathSource,
   type NewRepositorySource,
   newRepositorySource,
+  snapshotSource,
   toCanonical,
 } from "./domain/clone-source.js";
 export { canonicalPayload, configDigest } from "./domain/digest.js";
