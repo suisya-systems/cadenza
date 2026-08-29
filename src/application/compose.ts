@@ -12,13 +12,14 @@ import {
   TombstoneError,
   UnknownFieldError,
 } from "../domain/errors.js";
+import { frozenSet } from "../domain/frozen.js";
 import { parseIdentifier } from "../domain/identifiers.js";
 import { type FieldOrigin, fieldOrigin, type Project, project } from "../domain/project.js";
 import { pythonRepr } from "../domain/python-text.js";
 import { parseBaseBranch } from "../domain/refs.js";
 import type { LayerDocument } from "../ports/catalog-source.js";
 
-export const SUPPORTED_SCHEMA_VERSIONS: ReadonlySet<number> = new Set([1]);
+export const SUPPORTED_SCHEMA_VERSIONS: ReadonlySet<number> = frozenSet([1]);
 
 const TOP_LEVEL_KEYS = ["schema_version", "catalog", "project"];
 const CATALOG_KEYS = ["allowed_local_roots"];

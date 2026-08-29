@@ -15,7 +15,10 @@
  */
 import { describe, expect, test } from "vitest";
 
+import { SUPPORTED_SCHEMA_VERSIONS } from "../../src/application/compose.js";
+import { ALLOWED_URL_SCHEMES } from "../../src/domain/clone-source.js";
 import { getCloseMatches } from "../../src/domain/python-difflib.js";
+import { nativePath, posix, windows } from "../../src/domain/python-path.js";
 import {
   isControlCharacter,
   isPythonSpace,
@@ -89,6 +92,49 @@ describe("repr and type names", () => {
     // because JavaScript has a single numeric type. Asserted rather than left
     // as a comment, so the limitation is visible where it bites.
     expect(pythonTypeName(1.0)).toBe("int");
+  });
+});
+
+describe("frozen validation constants", () => {
+  test("the exported sets refuse to be added to", () => {
+    // Target-only, raised by review. `ReadonlySet` is a compile-time claim and
+    // `Object.freeze` does nothing to a Set's internal slots, so the Python
+    // `frozenset` these translate had to be rebuilt. The consequence is not
+    // theoretical: `ALLOWED_URL_SCHEMES.add("ftp")` would make every subsequent
+    // catalog accept an unauthenticated transport, and a clone is code
+    // execution.
+    const schemes = ALLOWED_URL_SCHEMES as Set<string>;
+    expect(() => schemes.add("ftp")).toThrow(TypeError);
+    expect(() => schemes.delete("https")).toThrow(TypeError);
+    expect(() => schemes.clear()).toThrow(TypeError);
+    expect(ALLOWED_URL_SCHEMES.has("ftp")).toBe(false);
+    expect(ALLOWED_URL_SCHEMES.has("https")).toBe(true);
+
+    const versions = SUPPORTED_SCHEMA_VERSIONS as Set<number>;
+    expect(() => versions.add(2)).toThrow(TypeError);
+    expect(SUPPORTED_SCHEMA_VERSIONS.has(2)).toBe(false);
+  });
+
+  test("freezing leaves the set comparing equal to a plain one", () => {
+    // The overrides are non-enumerable precisely so that this stays true: the
+    // case translated from `test_supported_schema_versions_is_exactly_one`
+    // compares the constant against a plain `Set`.
+    expect(SUPPORTED_SCHEMA_VERSIONS).toEqual(new Set([1]));
+    expect([...ALLOWED_URL_SCHEMES].sort()).toEqual(["https", "ssh"]);
+  });
+
+  test("the path flavours cannot have their methods replaced", () => {
+    // `parseCloneSource` reads `normpath` and `isRelativeTo` off these for
+    // allowed-root containment and for the path it persists through
+    // `configDigest`, so a replaceable method is a way to admit a path outside
+    // the configured roots, or to change a digest, for every later catalog.
+    const flavour = posix as { normpath: (path: string) => string };
+    expect(() => {
+      flavour.normpath = (path) => path;
+    }).toThrow(TypeError);
+    expect(Object.isFrozen(posix)).toBe(true);
+    expect(Object.isFrozen(windows)).toBe(true);
+    expect(Object.isFrozen(nativePath)).toBe(true);
   });
 });
 

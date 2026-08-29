@@ -27,7 +27,7 @@
     },
     {
       "path": "test/domain/python-semantics.test.ts",
-      "why": "The contracts of the other Python built-ins the port had to rebuild: `str.isspace()`, `repr`, `difflib.get_close_matches` and `urlsplit`. Each is a place where the obvious JavaScript spelling gives a different answer -- `/\\s/` disagrees with `str.isspace()` in both directions, an edit-distance library is not `SequenceMatcher.ratio`, and `new URL` normalises where `urlsplit` splits -- and what they decide is which catalogs are accepted and what an operator is told when a name is wrong. The Python suite asserts none of it, for the reason `test/domain/canonical-json.test.ts` records: in Python it is all true by construction."
+      "why": "The contracts of the other Python built-ins the port had to rebuild: `str.isspace()`, `repr`, `difflib.get_close_matches` and `urlsplit`. Each is a place where the obvious JavaScript spelling gives a different answer -- `/\\s/` disagrees with `str.isspace()` in both directions, an edit-distance library is not `SequenceMatcher.ratio`, and `new URL` normalises where `urlsplit` splits -- and what they decide is which catalogs are accepted and what an operator is told when a name is wrong. The Python suite asserts none of it, for the reason `test/domain/canonical-json.test.ts` records: in Python it is all true by construction. The file also carries the frozen-constant cases: `ReadonlySet` is a compile-time claim and `Object.freeze` does nothing to a Set's internal slots, so the `frozenset` the Python side spells had to be rebuilt (DECISIONS.md D-0015). Same reason for being target-only -- the Python suite asserts none of it, because in Python a `frozenset` simply cannot be added to."
     }
   ]
 }

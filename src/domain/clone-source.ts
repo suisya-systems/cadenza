@@ -18,6 +18,7 @@
  */
 
 import { InvalidCloneSourceError, MissingFieldError, UnknownFieldError } from "./errors.js";
+import { frozenSet } from "./frozen.js";
 import { nativePath } from "./python-path.js";
 import { isControlCharacter, isPythonSpace, pythonRepr, pythonTypeName } from "./python-text.js";
 import { hostname, port, UrlValueError, urlsplit, userinfo } from "./python-urlsplit.js";
@@ -107,7 +108,7 @@ export function toCanonical(source: CloneSource): Readonly<Record<string, string
 // --- parsing --------------------------------------------------------------
 
 /** Transports a clone may use. A clone is code execution, so it is authenticated. */
-export const ALLOWED_URL_SCHEMES: ReadonlySet<string> = new Set(["https", "ssh"]);
+export const ALLOWED_URL_SCHEMES: ReadonlySet<string> = frozenSet(["https", "ssh"]);
 
 /**
  * Refused with the reason, not a generic "bad scheme": the operator needs to

@@ -147,7 +147,7 @@ function posixParts(path: string): string[] {
   return partsOf("/".repeat(slashes), path.slice(slashes), /\//);
 }
 
-export const posix: PathFlavour = {
+export const posix: PathFlavour = Object.freeze<PathFlavour>({
   name: "posix",
   isAbsolute: (path) => path.startsWith("/"),
   isPathlibAbsolute: (path) => path.startsWith("/"),
@@ -155,7 +155,7 @@ export const posix: PathFlavour = {
   join: posixJoin,
   expanduser: posixExpanduser,
   isRelativeTo: (path, other) => isPrefix(posixParts(path), posixParts(other)),
-};
+});
 
 // --- Windows --------------------------------------------------------------
 
@@ -332,7 +332,7 @@ function windowsParts(path: string): string[] {
   return partsOf(anchor, tail, /[\\/]/).map((part) => part.toLowerCase());
 }
 
-export const windows: PathFlavour = {
+export const windows: PathFlavour = Object.freeze<PathFlavour>({
   name: "windows",
   // `ntpath.isabs`: a leading separator is enough, with no drive required.
   isAbsolute(path) {
@@ -349,7 +349,16 @@ export const windows: PathFlavour = {
   join: windowsJoin,
   expanduser: windowsExpanduser,
   isRelativeTo: (path, other) => isPrefix(windowsParts(path), windowsParts(other)),
-};
+});
 
-/** The flavour of the platform this process is running on. */
+/**
+ * The flavour of the platform this process is running on.
+ *
+ * Both flavours are frozen at their definitions, which is what makes this safe
+ * to export. `parseCloneSource` reads `nativePath.normpath` and
+ * `nativePath.isRelativeTo` for allowed-root containment and for the path it
+ * then persists through `config_digest`, so a caller able to replace either
+ * method could admit a path outside the configured roots, or change a digest,
+ * for every catalog loaded afterwards. Raised by review.
+ */
 export const nativePath: PathFlavour = process.platform === "win32" ? windows : posix;

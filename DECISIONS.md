@@ -479,6 +479,20 @@ source second -- not designed in. Recorded because the reasoning generalises
 to every value object the port adds, and the next one will be written by someone who did not see the
 review.
 
+**The same asymmetry reaches the module-level constants**, and the composition belt was caught by it:
+`ALLOWED_URL_SCHEMES` and `SUPPORTED_SCHEMA_VERSIONS` translate Python `frozenset`s, and a
+`ReadonlySet` is an ordinary `Set` at runtime — `Object.freeze` does not help, because freezing an
+object does nothing to a `Set`'s internal slots. These are **validation state on the public surface**:
+`ALLOWED_URL_SCHEMES.add("ftp")` makes every later catalog accept an unauthenticated transport, and a
+clone is code execution. `src/domain/frozen.ts` rebuilds `frozenset` — mutators that throw
+`TypeError`, defined non-enumerable so the value still compares equal to a plain `Set`. The two
+`PathFlavour` objects are frozen for the same reason one level along: `parseCloneSource` reads
+`normpath` and `isRelativeTo` off them for root containment and for the path it persists.
+
+**Raised by review** again, in the belt's fourth round, which is the argument for the entry existing:
+the principle was written down after the bootstrap and still had to be rediscovered by a reviewer on
+the next belt, because it had only ever been applied to value objects.
+
 **What would falsify it.** A value object large enough that copying it per construction is
 measurable. Nothing in G1 is anywhere near that; `Project` holds four fields and a short array.
 

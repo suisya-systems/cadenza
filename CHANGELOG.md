@@ -46,6 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Exported validation constants are immutable at runtime, not merely typed as
+  such. `ALLOWED_URL_SCHEMES` and `SUPPORTED_SCHEMA_VERSIONS` translate Python
+  `frozenset`s, and a `ReadonlySet` is an ordinary `Set` once compiled; the two
+  `PathFlavour` objects are frozen for the same reason (D-0015).
 - The TOML loader no longer swallows a leading byte-order mark. `TextDecoder`
   strips one by default, so a BOM-prefixed catalog parsed cleanly here while
   `tomllib` rejects it at line 1.
