@@ -90,6 +90,8 @@ const LEDGERS = [
   "parity/identifiers.ledger.json",
   // the refs belt
   "parity/refs.ledger.json",
+  // the import-boundaries belt
+  "parity/import-boundaries.ledger.json",
 ];
 
 /** Files that carry tests translating no source case. */

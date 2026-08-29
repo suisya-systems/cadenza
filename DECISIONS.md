@@ -52,6 +52,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0019 | The clone-source belt: `tmp_path`-only fixtures need no filesystem, and a frozen structural type is proven at both the type checker and the runtime | accepted |
 | D-0020 | The identifier belt's two predicted traps, settled by measurement | accepted |
 | D-0021 | The git-parity oracle runs the real `git` binary; `match=` becomes a `RegExp` only where a plain substring would look for a character the message never contains | accepted |
+| D-0022 | The import boundary is a test that parses the tree, not a lint rule: measured against Biome, chosen for the ledger | accepted |
 
 ---
 
@@ -784,3 +785,381 @@ exactly the property a frozen snapshot of git's answers on one version would sto
 **What would falsify it.** A CI image or a contributor's machine with no `git` on `PATH` would silently
 skip 24 cases rather than fail the build -- inherited from the source's own `skipif`, recorded in
 `parity/refs.ledger.json`'s `inherited_limitations`, and not this belt's to tighten.
+
+---
+
+## D-0022 — The import boundary is a test that parses the tree, not a lint rule: measured against Biome, chosen for the ledger
+
+**Status:** accepted
+
+**Decision.** The TypeScript half of design section 8's dependency direction is enforced by
+`test/architecture/import-boundaries.test.ts`, a vitest test file that walks `src/` and parses each
+module with `ts.createSourceFile`. It is not a Biome rule, not `dependency-cruiser`, and not a
+standalone script. It runs in the ordinary suite -- so under the double-green rule (D-0006) on all
+six matrix cells -- and additionally as its own named step in the `checks` job, mirroring what
+`tests.yml` already does for the Python half.
+
+Its 98 cases are the target of `parity/import-boundaries.ledger.json`, which endorses all 97 node
+ids of `tests/test_import_boundaries.py`: 64 `adapted`, 33 `waived`, none `ported`. That is the
+kickoff's own instruction (cadenza#8) rather than a judgement made here -- re-point the file, record
+the result as `adapted`, do not silently drop it.
+
+**Biome can do the graph half, and that is not the question. Measured.**
+`noRestrictedImports` has been in Biome since 1.6.0, and 2.5.10 supports both `patterns` (for the
+layer rule) and `allowImportNames` (for the binding-level allowance the domain rule needs). Under an
+`overrides` entry scoped to `src/domain/**`, it reported all three planted violations -- a
+`node:fs` import, `createConnection` from `node:net`, and a `src/domain` -> `src/application` import.
+Capability is not why it was not chosen. Three other things are:
+
+1. **A suppression comment silently waives it, and nothing counts suppressions.** Measured: adding
+   one `// biome-ignore lint/style/noRestrictedImports: shipping a hotfix` line took the run from
+   three errors to two, with no other signal anywhere. The boundary would be removable in the same
+   diff that crosses it. The parity machinery has a whole failure class (`unapproved-skip`) built on
+   the premise that a disabled check needs an approval with a reason and an exact count; a lint
+   suppression is that hole reopened next to it.
+2. **It covers two of the nine source functions.** The other seven are not import-graph claims:
+   module naming, a forbidden word in the text, the reserved seam's state, the walk's own
+   non-vacuity, and the sweep for POSIX-only anchors in the *test* tree. Splitting one file's
+   subject across a lint config and a test file makes the boundary harder to review, which is the
+   thing section 8 says it exists to avoid.
+3. **Decisively: the ledger's unit is a target test id, and a diagnostic has none.** D-0010 makes
+   the unit a node id, and `scripts/parity-check.mjs` reads target ids from `vitest list --json`. A
+   Biome rule produces findings, not collected tests, so 97 source cases would have had nowhere to
+   map and the file could not have been endorsed at all. Anything that enforces this boundary has to
+   be a test for the accounting to reach it.
+
+**What was not measured, stated so nobody reads more into this entry.** `dependency-cruiser` and
+`eslint-plugin-boundaries` were not evaluated: the worker sandbox's npm cache is read-only, so
+nothing could be installed to try. Point 3 applies to both by construction and point 2 applies to
+both as graph-only tools, but the claim here is reasoning, not measurement. Adding either would also
+be a new devDependency for a job `typescript` already does -- it is a devDependency because `tsc`
+type-checks this repository, and `scripts/parity-check.mjs` already parses with it rather than
+sweeping text, for the reason recorded there: a text sweep misses a chained modifier and can be
+derailed by a comment marker inside a string.
+
+**The domain rule is inverted from the source's, deliberately.** `tests/test_import_boundaries.py`
+states a **denylist** -- `socket`, `subprocess`, `shutil`, `sqlite3`, `http.client`,
+`urllib.request` -- with `os` allowed wholesale for `expanduser`. That shape does not survive the
+crossing: `node:net` *is* the socket module the denylist names first, and `isIP` is a pure predicate
+that lives in it, so a denylist either forbids `node:net` and fails on
+`src/domain/python-urlsplit.ts` today or admits `createConnection` along with `isIP`. The port names
+the **bindings** instead -- `node:crypto` for `createHash`, `node:os` for `homedir`, `node:net` for
+`isIP` -- which makes it an allowlist that fails closed: a builtin nobody thought of is a violation
+rather than an omission, and a namespace or default import of an allowed module is refused because
+neither can be checked binding by binding. Widening it is a diff to that table with a reason beside
+it, which is the review the source's `os` allowance got once and cannot ask for again.
+
+**How the check itself was checked.** Fourteen violations were planted one at a time and the tree
+restored between each: domain -> application, ports -> application, application -> adapters,
+`node:fs` in domain, `createConnection` from `node:net`, a namespace import of the *allowed*
+`node:os`, interlock reached five ways (bare side-effect import, scoped `@suisya-systems/interlock`
+in type position, `claude-org-runtime` through a dynamic `import()` in a function body, a re-export,
+and a plain named import), a module named `runtime`, `provider-neutral` in a module's text,
+`src/adapters/interlock/` created, and a POSIX-only `baseDir` literal in a test. Each turned the
+expected case red and nothing else; there were no holes. A green suite is not evidence that a
+boundary check guards anything, which is why this paragraph exists.
+
+**What stops it passing vacuously**, which is the failure mode a discovery-driven check invites: 89
+of the 98 cases are generated from a directory walk, and a walk that found nothing would generate
+nothing. Three things, one of them new. The walk has its own case, as the source's does. The
+allowlists fail closed. And -- the one the source could not have -- every generated id is claimed by
+the ledger, so module churn is a red gate rather than a silent change in coverage. Measured: a new
+`src/domain/*.ts` produced five `unmapped` failures, and renaming an existing one produced five
+`missing` plus five `unmapped`.
+
+**Three holes were found at review, and all three are closed.** Recorded because each one is a way
+this check could have been green while guarding less than it claims, and the first is the class the
+whole entry is about:
+
+1. **A dynamic import whose specifier is not a quoted string was dropped silently.**
+   ``import(`interlock`)`` is a no-substitution template -- statically known, and invisible to a
+   scan that only recognised `ts.isStringLiteral`. `import(name)` cannot be read at all. The first
+   is now read as the literal it is; the second is recorded as `<computed>` and **fails closed**,
+   turning `no module imports interlock` and the no-I/O cases red. This is the one place the port is
+   deliberately stricter than its source, which resolves the same blind spot by seeing nothing: an
+   unreadable edge makes every other check optional, because one variable would let the module graph
+   say whatever its author wanted.
+2. **`src/application` was not swept for I/O.** Design section 8 marks `application/` `(no I/O)` in
+   the same code block that marks `domain/`, and the source parametrises its case over the domain
+   alone. Under D-0001 the document is the primary oracle and the narrower source test is the
+   finding, so the two application modules get the same sweep. Their cases are target-only: the
+   claim is the document's, and no source case states it.
+3. **An import allowlist cannot see the global surface.** Node hands `fetch` to every module without
+   an import, and `console` writes to a stream nobody imported either, so a domain module that
+   simply called `fetch(url)` would have been reported by nothing. This has no counterpart in the
+   source and could not have one -- reaching the network in Python means importing something, which
+   is exactly why a denylist over modules was a complete answer there. A target-only case now sweeps
+   both pure layers for `fetch`, `WebSocket`, `EventSource`, `XMLHttpRequest` and `console`, and for
+   any use of `process` beyond `env` and `platform` -- the two `src/domain/python-path.ts` already
+   depends on, `env` being the same `expanduser` allowance the source records in the same words.
+
+Eight further violations were planted to check the three fixes, and each turned the expected case
+red: a template specifier, a computed one, a concatenated one, `node:fs` in `src/application`,
+`fetch()` in the domain, `console.log()` in the application, `process.cwd()`, and a bare `process`.
+`process.env` and `process.platform` stay green where the port already uses them.
+
+**A second review round found four more, all of the same family: a rule that answered "allowed"
+for a shape nobody had thought of.** Each is closed, and the pattern is worth naming because three
+of the four were denylists.
+
+4. **The layer rule was a denylist and the port has a barrel.** `src/index.ts` is in no layer and
+   re-exports across all of them, so a domain module importing `../index.js` matched no forbidden
+   prefix and reached `src/application` through the re-export. `ALLOWED_BY_LAYER` now names what
+   each layer *may* import, and `UNLAYERED_MODULES` names the one module allowed to belong to no
+   layer -- so a new top-level module under `src/` fails until it is classified, rather than
+   inheriting the barrel's exemption by accident.
+5. **`globalThis.fetch(url)` slipped past the global sweep**, because `fetch` there is the *name*
+   half of a property access and the sweep suppresses those -- correctly, since `catalog.fetch` is
+   somebody else's property. `globalThis` and `global` are refused outright instead, which closes
+   the property route and the `globalThis["fetch"]` element-access route in one line.
+6. **A side-effect import of an allowlisted builtin bound nothing, so nothing was checked.**
+   `import "node:net";` executes the module and produces an empty binding list, which the
+   binding-level loop iterated zero times and passed. An allowance granted for `isIP` is not an
+   allowance for that, and an empty binding list is now an offender.
+7. **The POSIX-anchor sweep recognised only quotes.** ``baseDir: `/srv` ``, `"/srv" as const` and
+   `("/srv")` have the same runtime value and are not `StringLiteral` nodes, so all three escaped
+   the guard and would have failed on the windows-latest cells instead -- the exact failure the
+   case exists to prevent. Parentheses, `as`, `satisfies` and angle-bracket assertions are peeled
+   first, and a no-substitution template is read as the literal it is.
+
+Nine more violations were planted for these four and each turned the expected case red: `../index.js`
+imported from `src/domain` and from `src/ports`, a new unlayered `src/toplevel.ts`,
+`globalThis.fetch`, `globalThis["process"]`, `import "node:net"` in the domain, and `baseDir` written
+as a template, as `as const`, and parenthesised.
+
+**A third round found three more, and the entry stops there.** Two are closed and one is recorded
+open, which is the honest end state rather than a clean one.
+
+8. **`createRequire` manufactures a loader the scan cannot follow.** `const load =
+   createRequire(import.meta.url); load("interlock")` is valid ESM, and only a callee literally
+   spelled `require` was followed. The pure layers already refused `node:module` by allowlist, so
+   the gap was `src/adapters` and the barrel. Tracking the alias is scope analysis; refusing the one
+   import that can produce it is two lines, and `node:module` is now refused everywhere under
+   `src/`. Measured: the two-line `createRequire` route turns the adapter's case red.
+9. **The anchor sweep unwrapped every call, including the one that fixes the problem.**
+   `absolute("/srv")` was reported for being what `test/support.ts` exists to provide. Unwrapping
+   now skips a call to `absolute` and nothing else, so `nativePath.join("/srv", x)` is still caught.
+10. **An anchor behind a name is still not seen** — `const ROOT = "/srv"` then `baseDir: ROOT`.
+    **Left open**, and recorded in the ledger's `inherited_limitations` rather than fixed: the source
+    has the identical hole for the identical reason (`_posix_only_literal` returns `None` for an
+    `ast.Name`), and following the name means resolving a binding in its scope. The wrappers that
+    *are* peeled were widened past the source precisely because they need no scope analysis. This
+    case is a second line of defence behind `absolute()`; the windows-latest cells are the first.
+
+**A fourth round, run because items 8 and 9 changed behaviour after the third, found two P2s and no
+P1.** One is closed, one is recorded open.
+
+11. **The seam check asked about a directory, and a file is the other shape.** `src/adapters/
+    interlock.ts` is the same seam spelled differently, and an `existsSync` on one extensionless
+    path stayed green for it. The question is asked of `MODULES` now, so no module anywhere under
+    `src/` may be called `interlock` — as a directory it sits in or as its own name. The ledger
+    would have noticed such a file too, by the four target ids it adds, but a gate reporting
+    "unaccounted target test" is not the gate that should be reporting an opened interlock seam.
+12. **The anchor sweep's `absolute` exemption matches a name, not a binding.** A test declaring its
+    own `const absolute = (value: string) => value` would be exempted. **Left open**, recorded in
+    the ledger's `inherited_limitations`: resolving the binding is the same line this file already
+    draws at `isShadowedOrDeclared`, and shadowing the helper with an identity function is a longer
+    way to write a POSIX-only anchor than writing one.
+
+**A fifth round, run for the same reason, found two more P2s and no P1. Both closed, both one
+line.** `import { createRequire } from "module"` is the same builtin as `"node:module"` and only the
+prefixed spelling was refused; and `{ ["baseDir"]: "/srv" }` is a `ComputedPropertyName` that sets
+exactly the property `baseDir: "/srv"` does, which the anchor sweep skipped.
+
+**A sixth round returned a P1, and it is the finding that changed the design.** Rounds four and five
+had been P1-clear and had returned a tail of *syntactic spellings* -- a file instead of a directory,
+`"module"` instead of `"node:module"`, a computed key instead of a plain one -- which looked like
+grammar enumeration. The sixth named `eval('import("interlock")')`, and that made the pattern legible
+rather than incidental: `<computed>`, then `createRequire` from `node:module`, then `"module"`
+unprefixed, then `eval`/`Function` were **four spellings of one category** -- a module loading
+something this scan cannot follow -- and each had been closed by name, leaving the next one open.
+`node:vm` and `process.getBuiltinModule` were still open and nobody had named them yet.
+
+Enumerating loaders is a losing game, so the rule was inverted instead. `ALLOWED_EXTERNALS_BY_LAYER`
+approves **every** bare specifier per layer, not merely for the two pure layers -- six entries, one
+of which is `src/adapters`' `node:fs` and `smol-toml` and two of which are empty -- and `eval` and
+`Function` are refused outright because they build code from a string and leave nothing to read.
+Together those close the import half of the category at once, the members nobody has thought of
+included. Measured: `node:vm` in the adapter and `smol-toml` in the domain both turn red, and neither
+was ever named in a denylist. The non-import half took one more round -- see below.
+
+That round's two P2s are closed with it. A triple-slash `reference` directive is recorded on the
+`SourceFile` rather than in the tree, so `forEachChild` never reached one; both directive lists are
+read now, and a `reference path=` into another layer turns the inward case red. And the walk took
+only `.ts`, so a `.mts`, `.cts` or `.tsx` module would have been skipped entirely -- no cases, no
+ledger ids, free to cross a layer. All four extensions are discovered, and a file under `src/` the
+walk does not recognise is now itself a failure rather than a silent skip. `src/cadenza/` was
+excluded by name at this point, because the Python half lives under `src/` too until D-0014 retires
+it -- an exclusion the tenth round showed was drawn one level too wide.
+
+**A seventh round returned one P1, and it was against that paragraph's own claim.**
+`process.getBuiltinModule("module").createRequire(import.meta.url)("interlock")` still worked in
+`src/adapters` and in the barrel, because the `process` rule had been written for the pure layers
+only -- while the text above said the route was closed. The rule now applies in every layer, and
+`LOADER_ROUTE_GLOBALS` states the complete set in one place: `eval` and `Function` build code from a
+string; `globalThis` and `global` reach those as properties, where a name-based sweep sees somebody
+else's property; and `process` is admitted for named members and refused otherwise.
+
+Making it uniform immediately found the layer that legitimately needs more: `src/adapters` is the
+layer permitted I/O, and its `os.path.abspath` port consults `process.cwd()`. So the allowance is
+per-layer -- `env` and `platform` everywhere, `cwd` in the adapters and nowhere else -- which is the
+same shape every other rule in this file converged on, arrived at from the opposite direction.
+
+With the per-layer import allowlist beside it, the set is now closed rather than enumerated: a module
+reaches another by importing it (approved per layer), by building code from a string, by taking a
+builtin off `process`, or by reaching any of those through the global object. `import.meta.resolve`
+produces a URL and still needs an `import()`, which fails closed as `<computed>`.
+
+**An eighth round found the last loader route, and a false positive the earlier ones had hidden.**
+`require` and `module` are loaders in their own right and both survive an alias: `const load =
+require; load("interlock")` leaves no call with a callee named `require`, and
+`module.require("interlock")` leaves none either. Both are refused as references now -- the same
+answer `scripts/parity-check.mjs` gives an aliased test runner, for the same reason, that an alias is
+what makes an enumeration uncountable.
+
+The other three were about reading the tree correctly rather than about boundaries:
+
+- **`.tsx` is a different grammar, not TypeScript with extra tokens.** Parsed as `ScriptKind.TS` it
+  is wrong in both directions -- a dynamic import inside JSX is not exposed, and JSX text can be read
+  as code that is not there. Every `createSourceFile` here now asks `scriptKindOf`. Measured: a
+  `.tsx` module with `import("interlock")` inside JSX is invisible before the fix and red after.
+- **`.d.ts` ends with `.ts`**, so a declaration file was discovered as an ordinary module, and
+  `stemOf("interlock.d.ts")` gave `interlock.d` -- meaning a declaration counterpart of the reserved
+  seam would have walked past the case guarding it. Declarations are matched first and reported as
+  unrecognised.
+- **A false positive, and the only one in eight rounds.** `import { fetch as loadRecord } from
+  "./record.js"` visits `fetch` as the specifier's *property* name while `parent.name` is
+  `loadRecord`, so `isShadowedOrDeclared` did not exclude it and an ordinary relative import was
+  reported as global network I/O. Worth recording next to the rest: every other finding was a check
+  that admitted too much, and a rule tightened seven times running is exactly where the opposite
+  error hides.
+
+**A note the belt earned the hard way.** Writing a `reference types=` directive out in full inside a
+comment made knip report the repository as depending on interlock: a tool scanning text rather than
+syntax read the comment as the directive it describes. That is the same confusion
+`scripts/parity-check.mjs` records about its own sweep, met from the other side, in the file arguing
+for syntax trees.
+
+**A ninth round found `Object.constructor("return import(...)")()`** -- the `Function` constructor
+reached from any value at all, naming neither `Function` nor a global. `constructor` is refused as a
+property name now, in both the dotted and the bracketed spelling, and bracketed access to any loader
+global goes with it.
+
+**A tenth round found three P1s, all of one shape: a branch that stopped asking.** None is a new
+loader spelling -- the ninth round was the last of those -- and all three are places where a rule
+returned "nothing to say" about a region it was responsible for.
+
+13. **The walk skipped `src/cadenza/` whole, and it was the one place nothing looked.** `tsconfig.json`
+    type-checks every TypeScript file under `src/`, so `src/cadenza/domain/runtime.ts` would have been
+    compiled and free to import anything, while `tests/test_import_boundaries.py` walks `*.py` and
+    would not have seen it either. Excluding a *directory* was the error; excluding the *Python files*
+    is the rule that was meant. The walk descends now, ignores `.py`, `.pyc`, `.pyi` and `.pyo` under
+    that directory alone, and reports anything else there as unrecognised. Measured: an empty
+    `src/cadenza/domain/runtime.ts` turns the walk's own case red and nothing else. The eleventh
+    round narrowed the ignore list further -- see below.
+14. **A module augmentation reached a module and was not recorded.** `declare module
+    "../application/compose.js" { ... }` inside an external module is not a namespace declaration:
+    the compiler resolves that specifier exactly as an import does and merges the declarations into
+    the module it names. So it is a real dependency, and it was the one spelling of one that
+    `importsIn` never read -- while `import type` from the same file, saying less, was refused.
+    String-named module declarations are recorded as `*` now. Measured: the augmentation above,
+    placed in `src/domain/digest.ts`, turns the inward case red.
+15. **Being in no layer exempted the barrel from the inward check entirely.** The case confirmed the
+    module was allowed to be unlayered and then returned, so every relative import `src/index.ts`
+    writes went unread -- and nothing else read them, because `unapprovedExternalsIn` considers bare
+    specifiers only, by design, on the grounds that relative ones are this case's question. `export
+    { absolute } from "../test/support.js"` therefore reached out of the package past both checks.
+    The `UNLAYERED_MODULES` assertion stays and the case no longer returns: an unlayered module is
+    checked against `ALLOWED_FOR_UNLAYERED`, the four layer roots, which is the barrel's job and
+    nothing more. Measured: that re-export turns `src/index.ts`'s case red.
+
+Three P2s went with them. `localStorage`, `sessionStorage` and `indexedDB` join `FORBIDDEN_GLOBALS`
+for the reason `fetch` is there -- the list says what a pure layer may not reach, not what today's
+runtime happens to offer it. `tsconfig.json` now includes `src` as a directory and `knip.json`
+matches all four module extensions, closing the gap the eighth round opened: the walk accepted
+`.mts`, `.cts` and `.tsx`, and a glob for `.ts` alone would have type-checked none of them. And
+`isShadowedOrDeclared` was extended to class members and enum members -- `class Layer { module =
+"domain"; }` was reported as a loader route for the word it names its own field with, the second
+false positive in ten rounds and, like the first, produced by a rule tightened repeatedly.
+
+**An eleventh round returned one P1, against the fix above rather than against a new route.** The
+ignore list item 13 introduced covered `.pyi` and `.pyo` as well, and `.pyi` is a *source* file with
+imports in it: `tests/test_import_boundaries.py` walks `rglob("*.py")` and does not match a stub
+either, so `src/cadenza/domain/stub.pyi` importing interlock would have been read by neither scan --
+the identical hole, one extension smaller, recreated by the line that closed it. The list is now
+exactly what the Python scan does read: `.py`, and the `.pyc` compiled from one. `.pyo` went with
+`.pyi` because Python 3 does not produce one, so ignoring it swallows a file nobody can account for
+and buys nothing. Measured: a `.pyi` under `src/cadenza/` turns the walk's own case red and nothing
+else, and the Python suite stays at 330.
+
+That is the shape worth naming, because it is the second time it has happened: an *exclusion* is a
+claim about what something else is already checking, and it is wrong exactly when that claim is
+untrue. Item 13 was the directory version of it and this is the extension version. The rule the file
+now follows is to exclude by pointing at the scan that covers the exclusion, rather than by naming a
+category that sounds adjacent.
+
+**A twelfth round returned one P1 and two P2s, and none of the three is fixed here. The rounds
+stop at this one.** The P1 is `const { constructor: F } = () => {};` followed by
+`F('return import("interlock")')()` -- the `Function` constructor destructured out, which is a
+`BindingElement` and matches neither of the two spellings the ninth round closed. That is the
+category the sixth round named, arriving for the fifth time, and the reason to stop rather than to
+write a third `constructor` branch: destructuring is a third syntax for the same read, a parameter
+default is a fourth, and any function that returns the value is a fifth. Closing them one at a time
+is the losing game this entry already described, and the paragraph below is where the file says so
+in advance -- an evasion has to be written deliberately, in a shape a reviewer sees, and
+`const { constructor: F }` is written deliberately and visible on the line. So the finding lands
+outside the guarantee that was declared rather than against it, which is what makes stopping here a
+boundary rather than a shrug.
+
+The two P2s are recorded with it, and both are the opposite of the P1 -- a rule being wrong about
+ordinary code rather than admitting clever code:
+
+16. **The global sweep suppresses the wrong half of an export alias.** `export { local as fetch }`
+    names an export and reads no global, but `isShadowedOrDeclared` suppresses an `ExportSpecifier`'s
+    `propertyName` and reports its `name`. It is the exact mirror of the import-alias false positive
+    the eighth round fixed -- the two specifier kinds carry the exported name in opposite halves and
+    share one branch -- and the third false positive in twelve rounds, all three produced by the
+    same rule being tightened repeatedly. Nothing under `src/` exports such a name, so the suite is
+    green.
+17. **The anchor sweep does not peel a non-null assertion.** `baseDir: "/srv"!` wraps the literal in
+    a `NonNullExpression`, which is the same family as the parentheses, `as` and `satisfies` the
+    seventh round taught it to peel and was missed when that list was written. The consequence is the
+    failure the case exists to prevent: the anchor is drive-relative on Windows, so it would be
+    reported by the windows-latest cells instead of by the guard.
+
+All three are recorded in the ledger's `inherited_limitations`, which is where this file keeps what
+it knows it does not catch, and are left to a follow-up. The two P2s are one-line fixes and are
+deferred for the reason the P1 is: each changes which nodes a sweep reports, and a rule tightened
+across twelve rounds wants its own planted case rather than a line appended at the end of a belt.
+
+**Why the rounds stop here rather than at a clean round.** Two clean rounds would not mean more than
+one: the last five findings against the loader sweep were members of a class the language keeps
+generating, so review converges on the *stated boundary* rather than on zero findings. Round twelve
+is where a finding first landed outside that boundary instead of inside it, which is the signal the
+paragraph below was written to be read against.
+
+**Where this stops, and what the check does not claim.** It is not a sandbox and cannot become one.
+A static scan of JavaScript cannot prove a module loads nothing, because the language computes at
+runtime what this file has to decide by reading, and four rounds running found one more value that
+could be made to yield a loader. The claim that *is* made, and that the eleven rounds
+support, is narrower: every route by which a module loads something **without looking like it** is
+refused, so an evasion has to be written on purpose and in a shape a reviewer can see. Accidents are
+stopped outright; determination is made loud. That is also what
+`tests/test_import_boundaries.py` achieves — it simply had fewer chances to be wrong, because Python
+offers fewer ways to reach a module without naming it.
+
+Six limitations are recorded open in the ledger. Two need binding resolution and are shared with the
+Python source; one is this paragraph's, a property of the language rather than of the check; and
+three came from the twelfth round -- the destructured `Function` constructor, which is a member of
+this same class, and two rules that are wrong about ordinary code rather than lenient about clever
+code. The bar applied is the one that matters for a gate: no P1, and every *route* a reviewer named
+either closed or recorded.
+
+No finding ever recurred once closed, and no fix was reverted. What recurred was a *category*, four
+times, which is what a per-spelling denylist guarantees and what the inversion above ended. Every fix
+was reviewed by the round after it.
+
+**What would falsify it.** A way to make a lint suppression countable and reviewable the way
+`approved_non_running` is, which would remove reason 1; or a Biome rule that could be addressed by a
+ledger entry, which would remove reason 3. Reason 2 would go if the other seven claims found a
+natural home elsewhere, which would mean section 8's boundary had stopped being one subject.

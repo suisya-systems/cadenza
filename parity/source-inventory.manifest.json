@@ -63,8 +63,8 @@
       "source": "tests/test_import_boundaries.py",
       "collected": 97,
       "test_functions": 9,
-      "status": "inventoried",
-      "note": "Collected as evidence only. The kickoff (cadenza#8) re-points these nine functions rather than transcribing them: the source asserts that no module under `cadenza` imports interlock, and the equivalent claim about a TypeScript tree is a different scan over a different module graph. The Python file stays green in CI meanwhile, so the boundary it guards is not unguarded during the port."
+      "status": "ported",
+      "note": "Covered by parity/import-boundaries.ledger.json -- the import-boundaries belt. Re-pointed rather than transcribed (cadenza#8): the source asserts that no module under `cadenza` imports interlock, and the equivalent claim about a TypeScript tree is a different scan over a different module graph, so all 97 cases are `adapted` or `waived` and none is `ported`. The Python file stays green in CI meanwhile, so the boundary it guards is not unguarded during the port."
     },
     {
       "path": "parity/source-inventory/test_refs.txt",

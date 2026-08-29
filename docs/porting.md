@@ -277,14 +277,36 @@ nobody would be told.
 | `tests/test_compose.py` | 50 | 39 | **ported** (49 mapped, 1 not-ported) |
 | `tests/test_digest.py` | 14 | 8 | **ported** (14 mapped) |
 | `tests/test_identifiers.py` | 25 | 6 | **ported** (25 mapped) |
-| `tests/test_import_boundaries.py` | 97 | 9 | inventoried |
+| `tests/test_import_boundaries.py` | 97 | 9 | **ported** (64 mapped, 33 waived) |
 | `tests/test_refs.py` | 62 | 6 | **ported** (62 mapped) |
 | `tests/test_resolve.py` | 11 | 11 | **ported** (11 mapped) |
 | `tests/test_toml_loader.py` | 14 | 13 | **ported** (14 mapped) |
-| **Total** | **330** | **127** | 233 ported, 97 inventoried |
+| **Total** | **330** | **127** | 330 ported, 0 inventoried |
 
-*Inventoried* means collected as evidence. It is not a commitment to port; the belt that opens a file
-writes its ledger then.
+Every source file now carries a ledger. *Inventoried* remains a defined status in
+`parity/source-inventory.manifest.json` — collected as evidence, not a commitment to port — because
+a later source file added to the Python suite arrives in that state before a belt opens it.
+
+The last file is the one that is `ported` without a single `ported` case in it.
+`tests/test_import_boundaries.py` asserts the dependency direction of design section 8 over a
+**Python** module graph, and the kickoff (cadenza#8) decided from the start that the equivalent claim
+about this tree is a different scan over a different graph, to be re-pointed and recorded as
+`adapted` rather than silently dropped. So all 97 cases are `adapted` (64) or `waived` (33), and the
+33 are the eight Python modules with no TypeScript counterpart — seven `__init__.py` package
+initialisers and `__about__.py` — appearing across the four per-module functions, plus
+`cadenza.domain`'s own initialiser in the fifth. `parity/import-boundaries.ledger.json` names each
+one. Why the scan is written against the TypeScript compiler API rather than delegated to a lint
+rule, and what was measured before choosing, is `D-0022`.
+
+It is wider than its source in three places, and each is target-only rather than folded into a
+mapped case. A dynamic import whose specifier cannot be read statically **fails closed** instead of
+being silently dropped, which is what the source does with `importlib.import_module(name)`.
+`src/application` is swept for I/O as well as `src/domain`, because design section 8 marks both
+`(no I/O)` and the source's case covers only the second — a disagreement the oracle order settles in
+the document's favour (section 2). And the sweep looks for the I/O Node hands out with no import at
+all — `fetch`, `console`, `process` beyond `env` and `platform` — a surface that cannot exist in
+Python, where reaching the network means importing something, and which an import allowlist would
+therefore have reported nothing about.
 
 The composition belt closed the pilot's one deferral: `test_digest_survives_the_catalog_moving_to_
 another_file` is ported at `test/application/resolve.test.ts` and is still claimed by
