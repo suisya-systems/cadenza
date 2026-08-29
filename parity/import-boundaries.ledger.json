@@ -123,6 +123,10 @@
     {
       "behaviour": "The anchor sweep exempts a call whose callee is named `absolute`, matched by NAME rather than by binding. A test that declared its own `const absolute = (value: string) => value` and wrote `baseDir: absolute(\"/srv\")` would pass.",
       "why": "Establishing that the callee is `test/support.ts`'s helper rather than a local of the same name is binding resolution, which is the same line this file already draws at `isShadowedOrDeclared` and for the same reason: a type checker's job, not a boundary check's. The exemption exists to stop the sweep reporting the one helper that makes an anchor portable, and shadowing it with a function that returns its argument unchanged is a way of writing a POSIX-only anchor that takes more effort than writing one. Raised at review of this belt and left open deliberately; the windows-latest cells remain the first line of defence."
+    },
+    {
+      "behaviour": "The loader sweep refuses every route by which a module loads something without looking like it -- an unapproved bare specifier, a computed specifier, `eval`, `Function`, `require`, `module`, `globalThis`, `global`, `process` beyond its approved members, and `.constructor` -- but it is not a sandbox. A module determined to load interlock can still compute its way there, because JavaScript decides at runtime what this scan must decide by reading.",
+      "why": "A property of the language rather than a gap in the check, and stated so that a green run is not read as more than it is. The source has the same limitation and less exposure to it: Python reaches a module by importing it or by `importlib`, and offers nothing like `Object.constructor`. What the sweep guarantees is that an evasion cannot look like ordinary code -- it has to be written deliberately, in a shape a reviewer sees. Four review rounds were spent finding members of this class (a computed specifier, `createRequire`, `eval`/`Function`, `.constructor`), which is what established that enumerating them ends only by saying where the enumeration stops."
     }
   ],
   "entries": [

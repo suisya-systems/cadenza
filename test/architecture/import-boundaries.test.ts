@@ -204,7 +204,24 @@ const CODE_EVALUATION_GLOBALS = ["eval", "Function"];
  * process object (`process`), or by reaching any of those through the global
  * object (`globalThis`, `global`). `import.meta.resolve` produces a URL and
  * still needs an `import()` to use it, which fails closed as `<computed>`.
+ *
+ * `constructor` is refused with them, as a PROPERTY name rather than a global:
+ * `Object.constructor("return import(...)")()` reaches the `Function`
+ * constructor from any value at all, without ever naming it. Nothing under
+ * `src/` reads `.constructor`.
+ *
+ * **What this is not.** It is not a sandbox, and it cannot become one. A static
+ * scan of JavaScript cannot prove that a module loads nothing, because the
+ * language computes at runtime what this file must decide by reading. What the
+ * table achieves is narrower and worth stating exactly: every route that loads
+ * a module *without looking like it* is refused, so an evasion has to be
+ * written deliberately and in a shape a reviewer can see. Accidents are stopped
+ * outright; determination is made loud. `tests/test_import_boundaries.py` makes
+ * the same trade in a language that offered it fewer chances to be wrong.
  */
+/** The property that reaches the `Function` constructor from any value at all. */
+const CONSTRUCTOR_PROPERTY = "constructor";
+
 const LOADER_ROUTE_GLOBALS = [
   ...CODE_EVALUATION_GLOBALS,
   "globalThis",
@@ -943,6 +960,24 @@ test("no module manufactures a loader or an unapproved dependency", () => {
       scriptKindOf(module),
     );
     const visit = (node: ts.Node): void => {
+      // `.constructor` and `["constructor"]` reach the Function constructor from
+      // any value, naming neither `Function` nor a global, so they are matched
+      // as property names rather than as references.
+      if (ts.isPropertyAccessExpression(node) && node.name.text === CONSTRUCTOR_PROPERTY) {
+        const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
+        offenders.push(`${module}:${line}: .${CONSTRUCTOR_PROPERTY}`);
+      }
+      if (ts.isElementAccessExpression(node)) {
+        const argument = node.argumentExpression;
+        const key =
+          ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument)
+            ? argument.text
+            : null;
+        if (key !== null && (key === CONSTRUCTOR_PROPERTY || LOADER_ROUTE_GLOBALS.includes(key))) {
+          const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
+          offenders.push(`${module}:${line}: ["${key}"]`);
+        }
+      }
       if (ts.isIdentifier(node) && !isShadowedOrDeclared(node)) {
         const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
         if (LOADER_ROUTE_GLOBALS.includes(node.text)) {

@@ -1039,9 +1039,25 @@ syntax read the comment as the directive it describes. That is the same confusio
 `scripts/parity-check.mjs` records about its own sweep, met from the other side, in the file arguing
 for syntax trees.
 
-**Where this stops.** Two limitations are recorded open in the ledger, both requiring binding
-resolution, both shared with the Python source. The bar applied is the one that matters for a gate:
-no P1, and every *route* a reviewer named either closed or recorded.
+**A ninth round found `Object.constructor("return import(...)")()`** -- the `Function` constructor
+reached from any value at all, naming neither `Function` nor a global. `constructor` is refused as a
+property name now, in both the dotted and the bracketed spelling, and bracketed access to any loader
+global goes with it.
+
+**Where this stops, and what the check does not claim.** It is not a sandbox and cannot become one.
+A static scan of JavaScript cannot prove a module loads nothing, because the language computes at
+runtime what this file has to decide by reading, and each of the last four rounds found one more
+value that could be made to yield a loader. The claim that *is* made, and that the nine rounds
+support, is narrower: every route by which a module loads something **without looking like it** is
+refused, so an evasion has to be written on purpose and in a shape a reviewer can see. Accidents are
+stopped outright; determination is made loud. That is also what
+`tests/test_import_boundaries.py` achieves — it simply had fewer chances to be wrong, because Python
+offers fewer ways to reach a module without naming it.
+
+Three limitations are recorded open in the ledger. Two need binding resolution and are shared with
+the Python source; the third is this one, and it is a property of the language rather than of the
+check. The bar applied is the one that matters for a gate: no P1, and every *route* a reviewer named
+either closed or recorded.
 
 No finding ever recurred once closed, and no fix was reverted. What recurred was a *category*, four
 times, which is what a per-spelling denylist guarantees and what the inversion above ended. Every fix
