@@ -44,7 +44,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0011 | The differential oracle, and the one face this pilot implements | accepted |
 | D-0012 | The TypeScript tree lives at the repository root, beside the Python package | accepted |
 | D-0013 | The canonical encoder refuses a lone surrogate rather than escaping it | accepted |
-| D-0014 | G2 and the interlock seam are untouched by the port | accepted |
+| D-0014 | G2 and the interlock seam are untouched by the port | superseded by D-0023 |
 | D-0015 | Value objects are snapshotted and frozen, not merely typed `readonly` | accepted |
 | D-0016 | `smol-toml` is the port's one runtime dependency | accepted |
 | D-0017 | The oracle's second face: composition, over the persisted digest only | accepted |
@@ -432,9 +432,14 @@ design document is where that gets settled first (D-0001).
 
 ## D-0014 — G2 and the interlock seam are untouched by the port
 
-**Status:** accepted — the body below is left as written (an ID is never rewritten), and its
-falsifier is amended by D-0023: interlock#74 landing is *not* a precondition cadenza is waiting on,
-and G2's unfreeze condition is cadenza's to set.
+**Status:** superseded by D-0023
+
+D-0023 restates what this entry decided that still holds — the port neither unfreezes G2 nor opens
+the interlock seam — and replaces its account of *why*. The body below is left as written, per this
+file's rule that an ID is never rewritten, and is a record of what was believed in August 2026. Read
+through D-0023: "pending interlock#74's TypeScript migration" and "interlock#74 landing, which is
+the stated precondition for unfreezing G2" describe a precondition cadenza is **not** waiting on.
+G2's unfreeze condition is cadenza's to set, and is not set yet.
 
 **Decision.** The port does not touch G2 (frozen at cadenza#9 pending interlock#74's TypeScript
 migration) and does not open the interlock seam: `src/cadenza/adapters/interlock/` stays empty on
@@ -1181,7 +1186,7 @@ was implied to be temporary; D-0014 recorded "interlock#74 landing" as "the stat
 unfreezing G2", and cadenza#9 restated the same shape.
 
 None of those conditions can be met. Interlock is the frozen source this successor stack is ported
-from: its last commit is 2026-08-21, its own delegation-contract question (interlock#63) was
+from: its last commit is 2026-08-21 (UTC), its own delegation-contract question (interlock#63) was
 recorded and left unanswered, and interlock#74 is the kickoff for porting it away, not a contract
 that will be settled there. A condition that cannot occur is not a condition; it is an unbounded
 wait wearing one. The test applied across the sweep was: **could a reader — human or agent — take
@@ -1218,11 +1223,17 @@ decisions and no answers to cadenza**. Concretely:
   "yet" and say that whether cadenza takes a control-plane dependency is decided here. Section 9's
   bare `(D-0026)` is also corrected to `(interlock D-0026)`, which is what this file's own citation
   rule requires.
-- **D-0014's body is not rewritten**, per this file's rule that an ID is never rewritten. Its
-  `Status` line now points here, and its falsifier is read through this entry: what D-0014 actually
-  decided — that the TypeScript port neither unfreezes G2 nor opens the interlock seam — is
-  unaffected and still holds. Only its account of *why G2 is frozen* and *what would unfreeze it*
-  is superseded.
+- **D-0014 is superseded by this entry, and its body is not rewritten** — the ID keeps its text, per
+  this file's rule, and gains `Status: superseded by D-0023`. What D-0014 decided is restated here
+  without the upstream precondition, so a reader who lands on D-0014 alone is sent to a live entry
+  rather than left with the old framing: **the TypeScript port does not touch G2 and does not open
+  the interlock seam.** `src/cadenza/adapters/interlock/` stays empty on the Python side and has no
+  TypeScript counterpart, and the Python implementation is retired by its own later PR, not by the
+  PR that introduced the port — removing it earlier would delete the oracle's Python half (D-0011)
+  in the same diff that first relies on it. G2 stays frozen because nobody has decided to start it,
+  and a port is not the change that starts it. What is dropped is D-0014's claim that G2 is "frozen
+  at cadenza#9 pending interlock#74's TypeScript migration" and that interlock#74 landing is "the
+  stated precondition for unfreezing G2"; there is no such precondition.
 - Nothing about the port changes. G2 stays frozen and the seam stays empty on this change; what
   changes is who is understood to hold the condition for lifting either.
 
