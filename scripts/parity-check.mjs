@@ -20,7 +20,12 @@
  *                        exact count per construct per file, so one approved
  *                        example does not license every later skip in that file;
  *                        an approval matching nothing is flagged too, because a
- *                        stale licence to skip is a licence nobody reviewed.
+ *                        stale licence to skip is a licence nobody reviewed, and
+ *                        an approval with no reason is refused outright. The
+ *                        same class covers `runner-alias`, which refuses a
+ *                        reference to `test`/`it`/`describe` that is never
+ *                        called: an alias is what makes an exact count
+ *                        uncountable.
  *  5. **shrinkage**   -- fewer source cases in the inventory than the recorded
  *                        baseline.
  *  6. **totals**      -- the recorded totals must reconcile exactly with the
@@ -164,14 +169,25 @@ function testFiles(directory = join(ROOT, "test")) {
  * deal -- cannot be counted, and a modifier chain is a property-access chain
  * whatever order it was written in.
  *
- * Detection is on the **property-access chain**, not on the call, so
- * `const quarantine = test.skip;` counts too. Only the outermost link of a chain
- * is counted, or `test.skip.concurrent` would be counted twice: once for
+ * Detection is on the **property-access chain**, and only the outermost link of
+ * one is counted, or `test.skip.concurrent` would be counted twice: once for
  * `test.skip` and once for the whole.
+ *
+ * **Aliasing is refused rather than counted**, which is the third hole and the
+ * one an exact count cannot survive. `const quarantine = test.skip;` followed by
+ * three `quarantine(...)` calls is one property access and three disabled tests,
+ * so a single approval would license any number of them; `const { skip } = test;`
+ * is worse, because the chain never appears at all. Counting the registrations
+ * instead would mean resolving arbitrary aliases, which is a type checker's job.
+ * So a reference to `test`, `it` or `describe` that is neither called nor the
+ * start of a property-access chain is reported as `runner-alias` and the gate
+ * goes red. An approval is a licence for a *counted* construct, and this is what
+ * keeps the count countable.
  */
 function nonRunningIn(path, source) {
   const tree = ts.createSourceFile(path, source, ts.ScriptTarget.ES2023, true, ts.ScriptKind.TS);
   const hits = [];
+  const aliases = [];
 
   const lineOf = (node) => tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
 
@@ -190,21 +206,55 @@ function nonRunningIn(path, source) {
     return parts;
   }
 
+  /** Whether `node` is the callee of the call it sits in. */
+  const isCallee = (node) =>
+    node.parent !== undefined &&
+    ts.isCallExpression(node.parent) &&
+    node.parent.expression === node;
+
+  /** Whether `node` is the object half of a longer property-access chain. */
+  const continuesChain = (node) =>
+    node.parent !== undefined &&
+    ts.isPropertyAccessExpression(node.parent) &&
+    node.parent.expression === node;
+
   function visit(node) {
     if (ts.isPropertyAccessExpression(node)) {
       // Only the outermost link: an inner one is part of the same chain.
-      const parent = node.parent;
-      const isInnerLink =
-        parent !== undefined && ts.isPropertyAccessExpression(parent) && parent.expression === node;
-      if (!isInnerLink) {
+      if (!continuesChain(node)) {
         const chain = chainOf(node);
         if (chain !== null && RUNNER_ROOTS.includes(chain[0])) {
-          for (const modifier of RUNNER_MODIFIERS) {
-            if (chain.slice(1).includes(modifier)) {
+          const modifiers = RUNNER_MODIFIERS.filter((modifier) =>
+            chain.slice(1).includes(modifier),
+          );
+          if (modifiers.length > 0 && !isCallee(node)) {
+            aliases.push({ chain: chain.join("."), line: lineOf(node) });
+          } else {
+            for (const modifier of modifiers) {
               hits.push({ construct: `test.${modifier}`, line: lineOf(node) });
             }
           }
         }
+      }
+    }
+    if (ts.isIdentifier(node) && RUNNER_ROOTS.includes(node.text)) {
+      // A bare `test` that is neither called nor the start of a chain is an
+      // alias in the making: `const t = test;` and `const { skip } = test;` both
+      // land here, and neither leaves a chain for the sweep above to find. An
+      // import specifier and a declaration name are how the runner gets into
+      // scope in the first place, and are not references to it.
+      const parent = node.parent;
+      const isBinding =
+        parent !== undefined &&
+        (ts.isImportSpecifier(parent) ||
+          ts.isImportClause(parent) ||
+          ts.isBindingElement(parent) ||
+          ts.isParameter(parent) ||
+          ts.isVariableDeclaration(parent) ||
+          ts.isFunctionDeclaration(parent)) &&
+        parent.name === node;
+      if (!isBinding && !isCallee(node) && !continuesChain(node)) {
+        aliases.push({ chain: node.text, line: lineOf(node) });
       }
     }
     if (ts.isIdentifier(node) && NON_RUNNING_HELPERS.includes(node.text)) {
@@ -228,7 +278,7 @@ function nonRunningIn(path, source) {
   }
 
   visit(tree);
-  return hits;
+  return { hits, aliases };
 }
 
 const collected = collectTargetTests();
@@ -355,6 +405,12 @@ for (const ledgerPath of LEDGERS) {
   }
 
   for (const approval of ledger.target.approved_non_running ?? []) {
+    // An approval is a licence, and a licence with no reason is one nobody
+    // reviewed. Checked here rather than trusted, because the counts alone
+    // would otherwise be enough to authorise a skip.
+    if (!approval.reason) {
+      fail("unexplained", `${ledgerPath}: approved_non_running for ${approval.file} has no reason`);
+    }
     approvedNonRunning.set(approval.file, approval);
   }
 }
@@ -414,12 +470,19 @@ for (const path of testFiles()) {
   // Every occurrence, not merely whether the file has one: two `test.skip(...)`
   // calls on one line are two, and an approval for one must not license the
   // other.
-  for (const hit of nonRunningIn(relativePath, readFileSync(path, "utf8"))) {
+  const { hits, aliases } = nonRunningIn(relativePath, readFileSync(path, "utf8"));
+  for (const hit of hits) {
     const key = `${relativePath}\u0000${hit.construct}`;
     const seen = observed.get(key) ?? { count: 0, lines: [] };
     seen.count += 1;
     seen.lines.push(hit.line);
     observed.set(key, seen);
+  }
+  for (const alias of aliases) {
+    fail(
+      "runner-alias",
+      `${relativePath}:${alias.line} references '${alias.chain}' without calling it; an alias makes the non-running count uncountable, so it is refused rather than approved`,
+    );
   }
 }
 

@@ -86,6 +86,7 @@ seven parameters is seven entries.
 | `duplicate` | One source case claimed twice, or two source cases pointing at one target test. |
 | `unmapped` | A test in a ported file that no entry claims and that is not declared target-only. |
 | `unapproved-skip` | A `skip`, `todo`, `fails` or `xfail` anywhere under `test/` beyond what a ledger approves, counted per construct per file. |
+| `runner-alias` | A reference to `test`, `it` or `describe` that is never called - `const quarantine = test.skip`, `const { skip } = test`. One property access, any number of disabled tests, so an alias is refused rather than counted. |
 | `shrinkage` | Fewer source cases in an inventory than the ledger records. |
 | `totals` | Recorded totals that do not reconcile exactly with the entries. |
 | `unaccounted-file` | A test file no ledger names and `parity/target-only.json` does not declare. |
@@ -97,9 +98,15 @@ file no ledger mentions (`D-0009`).
 The `unapproved-skip` sweep reads each file's **syntax tree** rather than its source text, which is
 the other place cadenza diverges. A text sweep misses a chained modifier — vitest accepts both
 `test.concurrent.skip` and `test.skip.concurrent` — and can be derailed by a comment marker inside a
-string literal. `typescript` is already a devDependency, so the check asks
-`ts.createSourceFile` instead; comments and string literals are not nodes, so the prose in these
-files cannot be counted either.
+string literal. `typescript` is already a devDependency, so the check asks `ts.createSourceFile`
+instead; comments and string literals are not nodes, so the prose in these files cannot be counted
+either.
+
+An **exact count** is only meaningful if every disabled test is countable, which is why `runner-alias`
+refuses an alias outright instead of approving one. `const quarantine = test.skip` followed by three
+`quarantine(...)` calls is one property access and three disabled tests; `const { skip } = test`
+leaves no chain at all. Resolving arbitrary aliases is a type checker's job, and refusing them costs
+nothing that a test suite needs.
 
 `npm run inventory` separately checks the inventory as a whole against
 `parity/source-inventory.manifest.json`: stray files in either direction, lines that are not node ids

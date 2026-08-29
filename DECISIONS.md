@@ -274,6 +274,15 @@ repository, so `scripts/parity-check.mjs` uses `ts.createSourceFile` and asks th
 string literals are not nodes, so the prose in these files -- which discusses `test.skip` at
 length -- cannot be counted either.
 
+**An alias is refused, not approved.** The approvals are *exact counts*, and a count only means
+something if every disabled test is countable. `const quarantine = test.skip` followed by three
+`quarantine(...)` calls is one property access and three disabled tests, so one approval would
+license all of them; `const { skip } = test` leaves no chain to find at all. Resolving arbitrary
+aliases is a type checker's job. So a reference to `test`, `it` or `describe` that is never called is
+reported as `runner-alias` and the gate goes red -- which costs a suite nothing it needs, and keeps
+the count countable. An approval with no reason is refused for the same reason a `not-ported` entry
+with no reason is.
+
 **What would falsify it.** A cadenza test that must be skipped on some hosts. See above: the check
 goes red rather than quiet, which is the outcome this is designed for.
 
