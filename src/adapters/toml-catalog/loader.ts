@@ -102,7 +102,14 @@ function read(path: string, directory: string, layer: string): LayerDocument {
     // a decode failure and NOT a `TOMLDecodeError` -- it escapes `_read`
     // uncaught. `fatal: true` keeps that: Node's default would silently
     // substitute U+FFFD and hand a corrupted catalog to the composer.
-    text = new TextDecoder("utf-8", { fatal: true }).decode(readFileSync(path));
+    //
+    // `ignoreBOM: true` is named backwards and is load-bearing: it means "do
+    // not treat a leading U+FEFF specially", which is what Python's
+    // `bytes.decode("utf-8")` does. `tomllib` then refuses a BOM-prefixed
+    // catalog at line 1, and so does `smol-toml`. Left at the default, the
+    // decoder swallows the BOM and the file PARSES -- a catalog the reference
+    // implementation rejects, silently accepted. Raised by review.
+    text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(readFileSync(path));
   } catch (error) {
     if (error instanceof TypeError) {
       throw error;

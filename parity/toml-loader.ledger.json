@@ -40,9 +40,11 @@
       }
     ],
     "target_only_tests": {
-      "count": 0,
-      "ids": [],
-      "why": "Every test in this file translates a source case. The port's `os.path`/`pathlib` reimplementation has far more surface than these cases touch, and it is asserted in `test/domain/python-path.test.ts`, which is declared target-only in `parity/target-only.json` rather than smuggled into this file: those are claims about the standard library the port had to rebuild, not about `tests/test_toml_loader.py`."
+      "count": 1,
+      "ids": [
+        "test/adapters/toml-loader.test.ts::TomlCatalogSource > a byte-order mark is not swallowed"
+      ],
+      "why": "One test, raised by Codex review. `tomllib` sees the U+FEFF that `bytes.decode(\"utf-8\")` leaves in place and refuses a BOM-prefixed catalog at line 1; `TextDecoder` strips a leading BOM unless `ignoreBOM: true` says otherwise, so the port accepted a file the reference implementation rejects. No source case covers it because in Python there is nothing to cover -- the standard library simply does not strip it. Declared here rather than mapped, because it translates no source case. The port's `os.path`/`pathlib` reimplementation is likewise asserted in `test/domain/python-path.test.ts`, which is declared target-only in `parity/target-only.json`: those are claims about the standard library the port had to rebuild, not about `tests/test_toml_loader.py`."
     },
     "approved_non_running": []
   },
@@ -65,6 +67,10 @@
     {
       "behaviour": "`os.path.abspath` on Windows calls `_getfullpathname`, which consults a per-drive current directory, so `C:relative` resolves against the CWD of drive C rather than the process CWD.",
       "why": "Node exposes no per-drive CWD. The one part of `_getfullpathname` that a catalog can plausibly reach -- a drive-less rooted path such as `\\srv` picking up the current drive -- IS reproduced; the per-drive case is not, and no case in this file uses one."
+    },
+    {
+      "behaviour": "FINDING, raised rather than fixed. On Windows a `local_path` of `/srv/repo` -- rooted but drive-less -- passes `os.path.isabs`, so it is NOT anchored to the layer file's directory, and `os.path.normpath` yields the drive-RELATIVE `\\srv\\repo`. If the layer's `allowed_local_roots` are drive-less in the same way, containment succeeds and `LocalPathSource.path` is stored drive-relative -- which its own docstring calls \"the lexically normalised absolute path\", and which a later process on another drive would resolve somewhere else.",
+      "why": "It is NOT a defect in the port: `src/cadenza/domain/clone_source.py` does exactly the same thing, verified by driving `parse_clone_source` with the `ntpath`/`PureWindowsPath` flavours -- it accepts the same input and stores the same `\\srv\\repo`. Under D-0001 the port agrees with the second and third authorities, and what it disagrees with is the docstring's word \"absolute\" and the intent of design doc section 3.1. docs/porting.md section 2 says a finding is recorded and raised, NOT transcribed and NOT silently repaired: repairing it here would make the port refuse a catalog the specification accepts, on the Windows cell only, with no ported case and no oracle face covering the change. Recorded for the belt that ports `tests/test_clone_source.py` (57 cases, which own `parse_clone_source`) and raised to the 窓口 for a decision on the Python side."
     }
   ],
   "entries": [

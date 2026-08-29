@@ -4,6 +4,7 @@
  * Ported from `tests/test_toml_loader.py`. The mapping, case by case, is
  * `parity/toml-loader.ledger.json`.
  */
+import { Buffer } from "node:buffer";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -124,6 +125,20 @@ describe("TomlCatalogSource", () => {
       expect(caught.message).toContain(nativePath.join(tmpPath, filename));
     },
   );
+
+  test("a byte-order mark is not swallowed", () => {
+    // Target-only, raised by review. `tomllib` sees the U+FEFF that
+    // `bytes.decode("utf-8")` leaves in place and refuses the file at line 1;
+    // `TextDecoder` strips a leading BOM unless told not to, which would make a
+    // catalog the reference implementation rejects parse cleanly here. No source
+    // case covers it because in Python there is nothing to cover.
+    writeFileSync(
+      join(tmpPath, TRACKED_FILENAME),
+      Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(TRACKED_TOML, "utf8")]),
+    );
+    const caught = refusal(CatalogError, () => new TomlCatalogSource(tmpPath).load());
+    expect(caught.message).toMatch(/invalid TOML/);
+  });
 
   test("a directory where the tracked file should be is not mistaken for one", () => {
     mkdirSync(join(tmpPath, TRACKED_FILENAME));

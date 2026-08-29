@@ -44,6 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scripts/parity-check.mjs` no longer reports `runner-alias` for the `test`
   in an unrelated property access such as `/\s/.test(x)`.
 
+### Fixed
+
+- The TOML loader no longer swallows a leading byte-order mark. `TextDecoder`
+  strips one by default, so a BOM-prefixed catalog parsed cleanly here while
+  `tomllib` rejects it at line 1.
+
 ### Dependencies
 
 - `smol-toml` (exact, pinned in the lockfile) - the port's first and only
