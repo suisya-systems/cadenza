@@ -1,0 +1,163 @@
+{
+  "generated_by": "scripts/oracle/dump_compose_digest.py",
+  "python_version": "3.12.3",
+  "case_count": 13,
+  "cases": [
+    {
+      "id": "single-layer",
+      "resolved_project_id": "web",
+      "aliases": [],
+      "base_branch": "main",
+      "source": {
+        "kind": "git_url",
+        "url": "https://example.invalid/org/web.git"
+      },
+      "digest": "sha256:c3241bd91f57d5a6bd69ccb4413a24234c8d85d58990d1eed5b1ee78debfc14d"
+    },
+    {
+      "id": "aliases-sorted-into-the-payload",
+      "resolved_project_id": "web",
+      "aliases": [
+        "site",
+        "frontend"
+      ],
+      "base_branch": "main",
+      "source": {
+        "kind": "git_url",
+        "url": "https://example.invalid/org/web.git"
+      },
+      "digest": "sha256:5f3c756c766139559fd54fffd04b09f312e39511f74ebb16a64397b201f0b253"
+    },
+    {
+      "id": "aliases-sorted-across-punctuation",
+      "resolved_project_id": "web",
+      "aliases": [
+        "z",
+        "a_b",
+        "a-b",
+        "a0b"
+      ],
+      "base_branch": "main",
+      "source": {
+        "kind": "git_url",
+        "url": "https://example.invalid/org/web.git"
+      },
+      "digest": "sha256:c680bf9ac2f08901a22d804e43660762750069f49058fc5fe745a027a2d3f3d3"
+    },
+    {
+      "id": "local-layer-overrides-base-branch",
+      "resolved_project_id": "web",
+      "aliases": [
+        "site"
+      ],
+      "base_branch": "develop",
+      "source": {
+        "kind": "git_url",
+        "url": "https://example.invalid/org/web.git"
+      },
+      "digest": "sha256:e60826b97c6edecd3ad3d05b5dcbbd629ae890aeafe9b0f561d3d2c9581ed0f4"
+    },
+    {
+      "id": "local-layer-replaces-the-source-whole",
+      "resolved_project_id": "web",
+      "aliases": [],
+      "base_branch": "main",
+      "source": {
+        "kind": "new"
+      },
+      "digest": "sha256:d0e4b96258efdb78e9d3b3bee8b9892c75168575f0268d8484d0edaef0c9d740"
+    },
+    {
+      "id": "local-layer-removes-an-alias",
+      "resolved_project_id": "web",
+      "aliases": [
+        "site"
+      ],
+      "base_branch": "main",
+      "source": {
+        "kind": "git_url",
+        "url": "https://example.invalid/org/web.git"
+      },
+      "digest": "sha256:f8164b9818d51de9544eff63d19ec1458af2bef7c34f6cab1ed1791d3c5e15e2"
+    },
+    {
+      "id": "resolved-by-alias",
+      "resolved_project_id": "web",
+      "aliases": [
+        "site"
+      ],
+      "base_branch": "main",
+      "source": {
+        "kind": "git_url",
+        "url": "https://example.invalid/org/web.git"
+      },
+      "digest": "sha256:f8164b9818d51de9544eff63d19ec1458af2bef7c34f6cab1ed1791d3c5e15e2"
+    },
+    {
+      "id": "non-ascii-base-branch",
+      "resolved_project_id": "web",
+      "aliases": [],
+      "base_branch": "主線",
+      "source": {
+        "kind": "git_url",
+        "url": "https://example.invalid/org/web.git"
+      },
+      "digest": "sha256:73eeed1dc2ce4468b0d37d1ba314547f18b64a79387322d5581176af39e5a84d"
+    },
+    {
+      "id": "base-branch-nfc",
+      "resolved_project_id": "web",
+      "aliases": [],
+      "base_branch": "café",
+      "source": {
+        "kind": "git_url",
+        "url": "https://example.invalid/org/web.git"
+      },
+      "digest": "sha256:d172350ee30a24aa708c7249f4184dce0922572a0b5238ae8988e9919d230f90"
+    },
+    {
+      "id": "base-branch-nfd",
+      "resolved_project_id": "web",
+      "aliases": [],
+      "base_branch": "café",
+      "source": {
+        "kind": "git_url",
+        "url": "https://example.invalid/org/web.git"
+      },
+      "digest": "sha256:22134747e8535fb774639de496fed07e080512e9a6a5d9c020da7b83ee115705"
+    },
+    {
+      "id": "survivor-of-a-tombstone",
+      "resolved_project_id": "api",
+      "aliases": [],
+      "base_branch": "main",
+      "source": {
+        "kind": "git_url",
+        "url": "https://example.invalid/org/web.git"
+      },
+      "digest": "sha256:3d922fb932e79603b1bef768f81158afd664ba02db368f567c3e8b44e86b583d"
+    },
+    {
+      "id": "idn-host",
+      "resolved_project_id": "web",
+      "aliases": [],
+      "base_branch": "main",
+      "source": {
+        "kind": "git_url",
+        "url": "https://bücher.example/org/web.git"
+      },
+      "digest": "sha256:85b18730b9bd5c044e09591c1a406e7dd188cc309b06b0ce3392a93093ab2c21"
+    },
+    {
+      "id": "restated-in-both-layers",
+      "resolved_project_id": "web",
+      "aliases": [],
+      "base_branch": "main",
+      "source": {
+        "kind": "git_url",
+        "url": "https://example.invalid/org/web.git"
+      },
+      "digest": "sha256:c3241bd91f57d5a6bd69ccb4413a24234c8d85d58990d1eed5b1ee78debfc14d"
+    }
+  ]
+}

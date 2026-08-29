@@ -84,7 +84,7 @@ seven parameters is seven entries.
 |---|---|
 | `missing` | A source case with no entry, or an entry naming a target test that does not exist. |
 | `duplicate` | One source case claimed twice, or two source cases pointing at one target test. |
-| `unmapped` | A test in a ported file that no entry claims and that is not declared target-only. |
+| `unmapped` | A test in a ported file that no entry claims — in any ledger — and that is not declared target-only. |
 | `unapproved-skip` | A `skip`, `todo`, `fails` or `xfail` anywhere under `test/` beyond what a ledger approves, counted per construct per file. |
 | `runner-alias` | A reference to `test`, `it` or `describe` that is never called - `const quarantine = test.skip`, `const { skip } = test`. One property access, any number of disabled tests, so an alias is refused rather than counted. |
 | `shrinkage` | Fewer source cases in an inventory than the ledger records. |
@@ -94,6 +94,14 @@ seven parameters is seven entries.
 The first six are continuo's, name for name. The seventh is cadenza's addition, because continuo's
 `unmapped` sweep is scoped to each ledger's own target file and therefore sees nothing at all in a
 file no ledger mentions (`D-0009`).
+
+The `unmapped` sweep runs **after every ledger has been read**, not inside the loop that reads them.
+A ledger entry may claim a target test in another belt's file — `tests/test_digest.py`'s "the digest
+survives the catalog moving to another file" is re-pointed at `test/application/resolve.test.ts`,
+because its subject is composition and the machinery it needs did not exist when its own file was
+ported. Swept inside the loop, whether that claim is seen would depend on which ledger the `LEDGERS`
+list happens to name first: one order green, the other a spurious `unmapped`. A gate should not be
+sensitive to the order of a list.
 
 The `unapproved-skip` sweep reads each file's **syntax tree** rather than its source text, which is
 the other place cadenza diverges. A text sweep misses a chained modifier — vitest accepts both
@@ -144,7 +152,7 @@ The oracle makes the other claim:
 > TypeScript implementation produces are the same artefact, compared on every byte, including the
 > bytes nobody wrote a test about.
 
-### 4.1 The implemented face: `config_digest` byte-identity
+### 4.1 The first face: `config_digest` byte-identity
 
 `config_digest` is a **persisted** value (design doc section 4). A run records it; a later audit
 reads a changed digest as "the catalog moved underneath a run that already happened". A digest that
@@ -165,11 +173,13 @@ canonical text, the canonical bytes as hex, and the digest, naming the corpus ro
 A separate case asserts the vector is not vacuous, so a vector regenerated from an empty run cannot
 let the comparison pass while comparing nothing.
 
-### 4.2 Regenerating the vector
+### 4.2 Regenerating the vectors
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/oracle/dump_config_digest.py \
     parity/oracle/config-digest-vector.json
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/oracle/dump_compose_digest.py \
+    parity/oracle/compose-digest-vector.json
 ```
 
 No second checkout and no installed package: the script puts `src/` on `sys.path` itself, so a stale
@@ -202,6 +212,38 @@ Replacing `sort(compareByCodePoint)` with a bare `sort()` in `src/domain/digest.
 `alias-sort-crosses-the-surrogate-boundary`. No test translated from that file can see it, because
 no project in it has an alias the difference applies to.
 
+### 4.5 The second face: composition, over the persisted digest only
+
+`D-0017`. The first face questions the **encoder**, over `Project` values built by hand. A `Project`
+in production is not built by hand: it is composed from ordered layer documents, merged field by
+field, tombstoned, aliased and resolved, and every one of those steps feeds the value the encoder
+hashes. So the second face asks the same question one level up:
+
+> Given the same layer documents, the `config_digest` CPython's `resolve_project` produces and the
+> one the port's `resolveProject` produces are the same string.
+
+`scripts/oracle/dump_compose_digest.py` writes `parity/oracle/compose-digest-vector.json`;
+`test/application/compose-oracle.test.ts` rebuilds the corpus independently in
+`test/oracle/compose-corpus.ts`, asserts the id lists match, and only then compares. It carries its
+own not-vacuous case, for the same reason the first face does.
+
+**It earned its place the same way.** A `parseBaseBranch` that returns `value.normalize("NFC")` —
+which JavaScript makes look like tidying — leaves **all 103 ported tests green, the first face
+included**, and turns this one red on the row `base-branch-nfd`. No ported compose or resolve case
+uses a non-ASCII branch name, and the first face never calls the validator.
+
+**What it deliberately excludes**, and where that coverage lives instead:
+
+| Excluded | Why | Covered by |
+|---|---|---|
+| Refusal messages, `difflib` suggestions | displayed, never persisted | `test/domain/python-semantics.test.ts` |
+| `local_path` sources | normalised form is platform-dependent, so a committed vector would fail the Windows cell for being right | `test/domain/python-path.test.ts`, which asserts **both** flavours on **every** platform |
+
+One boundary is worth reading off the two corpora side by side. The first face has a row named
+`alias-sort-crosses-the-surrogate-boundary` and the second has no counterpart, because an alias like
+that **cannot be composed**: `parse_identifier` admits `^[a-z][a-z0-9_-]{0,63}$` and nothing else. The
+two faces are not redundant — this one runs the validator, and that one deliberately runs past it.
+
 ## 5. The test suite's own rules
 
 - **Randomised order, twice, at two distinct seeds, no retries** (`D-0006`). The shuffle lives in
@@ -232,24 +274,43 @@ nobody would be told.
 | Source file | Node ids | Functions | Status |
 |---|---:|---:|---|
 | `tests/test_clone_source.py` | 57 | 35 | inventoried |
-| `tests/test_compose.py` | 50 | 39 | inventoried |
-| `tests/test_digest.py` | 14 | 8 | **ported** (13 mapped, 1 not-ported) |
+| `tests/test_compose.py` | 50 | 39 | **ported** (49 mapped, 1 not-ported) |
+| `tests/test_digest.py` | 14 | 8 | **ported** (14 mapped) |
 | `tests/test_identifiers.py` | 25 | 6 | inventoried |
 | `tests/test_import_boundaries.py` | 97 | 9 | inventoried |
 | `tests/test_refs.py` | 62 | 6 | inventoried |
-| `tests/test_resolve.py` | 11 | 11 | inventoried |
-| `tests/test_toml_loader.py` | 14 | 13 | inventoried |
-| **Total** | **330** | **127** | |
+| `tests/test_resolve.py` | 11 | 11 | **ported** (11 mapped) |
+| `tests/test_toml_loader.py` | 14 | 13 | **ported** (14 mapped) |
+| **Total** | **330** | **127** | 89 ported, 241 inventoried |
 
 *Inventoried* means collected as evidence. It is not a commitment to port; the belt that opens a file
 writes its ledger then.
 
-Two known traps are recorded here for the belts that will meet them, from the kickoff:
+The composition belt closed the pilot's one deferral: `test_digest_survives_the_catalog_moving_to_
+another_file` is ported at `test/application/resolve.test.ts` and is still claimed by
+`parity/digest.ledger.json`, which is why the `unmapped` sweep runs after every ledger has been read
+rather than while each one is read.
+
+Two known traps were recorded here by the kickoff. The first has now been met; the second has not:
 
 - **The identifier pattern's `\Z`.** `IDENTIFIER_PATTERN` ends `\Z`, not `$`, so `"web\n"` is
   refused. That is deliberate and must survive translation: JavaScript's `$` without the `m` flag
   behaves like `\Z` rather than like Python's `$`, so the naive translation happens to be correct —
-  which is exactly why it needs to be recorded rather than rediscovered.
+  which is exactly why it needs to be recorded rather than rediscovered. **Met** by the composition
+  belt, which needed `parse_identifier` for `compose_catalog`; `src/domain/identifiers.ts` records
+  the reasoning at the pattern, and there is deliberately no `m` flag.
 - **`str.isspace()` against `/\s/`.** The two accept different sets. `_parse_git_url` rejects any
   character for which `str.isspace()` is true, and a translation to `/\s/` would change which URLs
-  are refused. This belongs to the `tests/test_clone_source.py` belt.
+  are refused. The *cases* still belong to the `tests/test_clone_source.py` belt, but the composition
+  belt had to meet the trap early, because `parse_base_branch` asks the same predicate and
+  `compose_catalog` calls it: `isPythonSpace` in `src/domain/python-text.ts` is the explicit set, and
+  the two directions it disagrees with `/\s/` in — U+001C..U+001F and U+0085 on Python's side,
+  U+FEFF on JavaScript's — are asserted in `test/domain/python-semantics.test.ts`.
+
+A third trap was found by this belt rather than predicted, and is recorded for the same reason:
+
+- **`x not in "?."` is a substring test.** `PureWindowsPath.is_absolute` turns on
+  `drv_parts[2] not in '?.'`, and `in` on a Python `str` asks about substrings, not about a set of
+  two characters — so the *empty* piece that `///C:` produces is "in" `'?.'`. Translated as two
+  character comparisons, the port called `///C:` absolute where CPython does not. Any `x in "..."`
+  in the remaining source files wants reading twice (`D-0018`).

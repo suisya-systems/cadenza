@@ -23,6 +23,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   half to prove the committed vector is not a fossil.
 - Pilot port of `tests/test_digest.py` (13 of 14 node ids; the composition case
   is deferred to the belt that ports `test_compose.py`).
+- Composition belt (cadenza#8): `tests/test_compose.py`, `tests/test_resolve.py`
+  and `tests/test_toml_loader.py` ported - 75 node ids, 74 mapped and 1
+  not-portable - together with the TypeScript `composeCatalog`, `resolveProject`
+  and TOML layer loader they exercise. The pilot's deferred digest case is
+  ported with them, so `tests/test_digest.py` is now fully mapped.
+- A second face for the differential oracle (D-0017): the `config_digest` a
+  composed and resolved catalog produces is compared against CPython's over a
+  fixed corpus of layer documents, covering the merge, tombstone and alias rules
+  that feed the digest.
+- Ports of the Python standard-library behaviour the implementation depends on
+  (D-0018): `os.path`/`pathlib`, `urllib.parse.urlsplit`, `difflib` and
+  `str.isspace`, each with its own contract test, checked against CPython 3.12.
+
+### Changed
+
+- `scripts/parity-check.mjs` runs its `unmapped` sweep after reading every
+  ledger, so a ledger entry may claim a target test in another belt's file
+  without the result depending on ledger order.
+- `scripts/parity-check.mjs` no longer reports `runner-alias` for the `test`
+  in an unrelated property access such as `/\s/.test(x)`.
+
+### Fixed
+
+- Exported validation constants are immutable at runtime, not merely typed as
+  such. `ALLOWED_URL_SCHEMES` and `SUPPORTED_SCHEMA_VERSIONS` translate Python
+  `frozenset`s, and a `ReadonlySet` is an ordinary `Set` once compiled; the two
+  `PathFlavour` objects are frozen for the same reason (D-0015).
+- The TOML loader no longer swallows a leading byte-order mark. `TextDecoder`
+  strips one by default, so a BOM-prefixed catalog parsed cleanly here while
+  `tomllib` rejects it at line 1.
+
+### Dependencies
+
+- `smol-toml` (exact, pinned in the lockfile) - the port's first and only
+  runtime dependency, for the TOML layer loader. Rationale and the two known
+  disagreements with `tomllib` are in D-0016.
 
 ## [0.1.0] - 2026-08-21
 

@@ -1,0 +1,167 @@
+{
+  "source": {
+    "repository": "suisya-systems/cadenza",
+    "revision": "a5672f8",
+    "note": "The source is this repository's own Python implementation, not a second checkout. Cadenza is being rewritten in place (cadenza#8): `src/cadenza/` and `tests/` are the specification until a later PR retires them, so every inventory here is collected from the working tree at the recorded revision.",
+    "suite_baseline": {
+      "collected": 330,
+      "passed": 330,
+      "skipped": 0,
+      "xfailed": 0,
+      "reconciliation": "`PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q -p no:cacheprovider` at a5672f8 on CPython 3.12.3: 330 passed. No module is skipped at collection time, so collected == the sum of the eight per-file inventories with nothing left over. See parity/source-inventory.manifest.json."
+    },
+    "file": {
+      "path": "tests/test_resolve.py",
+      "collected": 11,
+      "inventory": "parity/source-inventory/test_resolve.txt",
+      "note": "11 test functions, 11 collected node ids: nothing in this file is parametrized."
+    }
+  },
+  "target": {
+    "test_file": "test/application/resolve.test.ts",
+    "systematic_mappings": [
+      {
+        "from": "`catalog_of(aliases=...)`, a module-level fixture builder",
+        "to": "`catalogOf(aliases)` with the same default of `[\"site\"]`",
+        "why": "A direct translation. The default matters: three cases rely on `web` having exactly one alias and `api` having none.",
+        "affects": "cases 1, 2, 3, 4, 6 and 7"
+      },
+      {
+        "from": "`pytest.raises(ProjectNotFoundError, match=...) as caught` then `in str(caught.value)`",
+        "to": "the `refusal(...)` helper from `test/support.ts`, then `caught.message`",
+        "why": "The same helper the compose ledger records, for the same reason. `ProjectNotFoundError` carries no location, so its `message` is the bare text and `match=` and `toMatch` see the same string.",
+        "affects": "cases 6 and 7"
+      },
+      {
+        "from": "`assert resolved.provenance[\"x\"] == FieldOrigin(layer=..., file=...)`",
+        "to": "`expect(resolved.provenance[\"x\"]).toEqual(fieldOrigin(..., ...))`",
+        "why": "`FieldOrigin` is a frozen object from a factory rather than a frozen dataclass, so equality is structural. `toBe` would be reference equality and would fail on every row.",
+        "affects": "case 5"
+      }
+    ],
+    "target_only_tests": {
+      "count": 0,
+      "ids": [],
+      "why": "Every test in this file translates a source case -- but not every one of them comes from `tests/test_resolve.py`. `the digest survives the catalog moving to another file` translates a case of `tests/test_digest.py`, re-pointed here by the pilot that could not port it, and it is claimed by `parity/digest.ledger.json` rather than declared target-only. That is why `scripts/parity-check.mjs` runs its `unmapped` sweep after reading every ledger rather than while reading each one."
+    },
+    "approved_non_running": []
+  },
+  "totals": {
+    "source_cases": 11,
+    "ported": 9,
+    "adapted": 2,
+    "not_ported": 0,
+    "waivers": 0
+  },
+  "inherited_limitations": [
+    {
+      "behaviour": "The two not-found cases assert that a suggestion appears and that an unrelated name produces none. Neither pins the ORDER of several suggestions, or the exact cutoff, so a `difflib` port that ranked candidates differently would keep both green.",
+      "why": "The source's own shape. It is not left there: `test/domain/python-semantics.test.ts` asserts the tie-break order, the `n` cap and the 0.6 cutoff against values taken from CPython, and it is declared target-only in `parity/target-only.json` rather than smuggled into this file, because those are claims about `difflib` and not about `tests/test_resolve.py`."
+    },
+    {
+      "behaviour": "The suggestion text is the one thing in this belt whose byte-identity with CPython is NOT checked by the differential oracle.",
+      "why": "Deliberate, and agreed with the 窓口 when the second oracle face was approved: the oracle's subject is the PERSISTED value, `resolve_project(...).config_digest`. A refusal message is displayed and never recorded, so a divergence in it costs a confusing sentence rather than a suspect digest -- and a vector of message strings would be a large committed artefact defending the smaller risk."
+    }
+  ],
+  "entries": [
+    {
+      "source_nodeid": "tests/test_resolve.py::test_resolves_by_project_id",
+      "target_id": "test/application/resolve.test.ts::resolve_project > resolves by project id",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the snapshot carries the identity, the source and the base branch.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_resolve.py::test_resolves_by_alias_to_the_same_immutable_identity",
+      "target_id": "test/application/resolve.test.ts::resolve_project > resolves by alias to the same immutable identity",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: an alias is a way in, not a different project, so the two snapshots are equal. Adapted because the source compares two frozen dataclasses with `==` and `ResolvedProject` here is a frozen object, so the comparison is `toEqual` (structural) rather than `toBe` (`Object.is`, which would compare two distinct objects by reference and always fail).",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_resolve.py::test_aliases_travel_with_the_snapshot_as_information",
+      "target_id": "test/application/resolve.test.ts::resolve_project > aliases travel with the snapshot as information",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the aliases travel in DECLARED order, not sorted -- the sort happens inside the digest payload and nowhere else.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_resolve.py::test_snapshot_carries_the_config_digest",
+      "target_id": "test/application/resolve.test.ts::resolve_project > the snapshot carries the config digest",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, both halves: the snapshot's digest is the one `configDigest` computes for the composed project, and it carries the `sha256:` prefix.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_resolve.py::test_snapshot_carries_per_field_provenance",
+      "target_id": "test/application/resolve.test.ts::resolve_project > the snapshot carries per-field provenance",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the overriding layer owns the field it stated and the earlier layer keeps the rest.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_resolve.py::test_an_unknown_name_is_refused_with_the_closest_candidates",
+      "target_id": "test/application/resolve.test.ts::resolve_project > an unknown name is refused with the closest candidates",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a near miss is named. It is only the same assertion because `difflib.get_close_matches` was PORTED rather than approximated -- `SequenceMatcher.ratio` is not edit distance, and a substitute measure would suggest a different set. See `src/domain/python-difflib.ts` and the target-only cases in `test/domain/python-semantics.test.ts`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_resolve.py::test_an_unrelated_name_is_refused_without_inventing_a_candidate",
+      "target_id": "test/application/resolve.test.ts::resolve_project > an unrelated name is refused without inventing a candidate",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: below the 0.6 cutoff nothing is suggested, and the message does not carry the suggestion preamble at all.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_resolve.py::test_a_tombstoned_project_no_longer_resolves",
+      "target_id": "test/application/resolve.test.ts::resolve_project > a tombstoned project no longer resolves",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: removal in composition is removal from the namespace.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_resolve.py::test_not_found_is_not_a_catalog_error",
+      "target_id": "test/application/resolve.test.ts::resolve_project > not found is not a catalog error",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion about the same class relationship. Adapted because `issubclass` has no expression in TypeScript -- a class is a value and a type, and only the value carries a prototype chain -- so the question is asked of an instance with `instanceof`, which walks exactly what `issubclass` walks. It is also the form a caller would actually use to tell \"your catalog is broken\" from \"no such project\", which is what the case is about.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_resolve.py::test_provenance_is_total_over_every_field_of_the_snapshot",
+      "target_id": "test/application/resolve.test.ts::resolve_project > provenance is total over every field of the snapshot",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, and the same three parts: the aliases default to empty, provenance covers all four fields, and the default's origin names the layer that made it. `set(resolved.provenance)` over a mapping's keys becomes `new Set(Object.keys(...))`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_resolve.py::test_a_later_layer_stating_aliases_owns_their_provenance",
+      "target_id": "test/application/resolve.test.ts::resolve_project > a later layer stating aliases owns their provenance",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: stating `aliases` in a later layer moves their provenance and leaves the rest alone. Resolving by the NEW alias is part of the case and is kept.",
+      "source_revision": "a5672f8"
+    }
+  ]
+}

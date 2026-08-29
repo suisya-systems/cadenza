@@ -35,5 +35,8 @@
     "knip": "6.32.2",
     "typescript": "5.8.3",
     "vitest": "4.1.11"
+  },
+  "dependencies": {
+    "smol-toml": "1.8.0"
   }
 }

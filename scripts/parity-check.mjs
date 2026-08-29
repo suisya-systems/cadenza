@@ -80,6 +80,10 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const LEDGERS = [
   // pilot -- the config_digest belt
   "parity/digest.ledger.json",
+  // the composition belt
+  "parity/compose.ledger.json",
+  "parity/resolve.ledger.json",
+  "parity/toml-loader.ledger.json",
 ];
 
 /** Files that carry tests translating no source case. */
@@ -313,6 +317,16 @@ function nonRunningIn(path, source) {
       // import specifier and a declaration name are how the runner gets into
       // scope in the first place, and are not references to it.
       const parent = node.parent;
+      // Nor is the NAME half of somebody else's property access. `/\s/.test(x)`
+      // and `pattern.test(x)` put an identifier called `test` in the tree that
+      // has nothing to do with vitest, and reporting it as an alias is a false
+      // `runner-alias` on ordinary regular-expression code. The chain sweep
+      // above already covers a real `test.skip`, where `test` is the
+      // `expression` half rather than the `name` half.
+      if (parent !== undefined && ts.isPropertyAccessExpression(parent) && parent.name === node) {
+        ts.forEachChild(node, visit);
+        return;
+      }
       const isBinding =
         parent !== undefined &&
         (ts.isImportSpecifier(parent) ||
@@ -355,6 +369,21 @@ function nonRunningIn(path, source) {
 
 const collected = collectTargetTests();
 const claimedTargets = new Map();
+/**
+ * What the `unmapped` sweep needs, one row per ledger.
+ *
+ * The sweep runs **after** every ledger has been read, not inside the loop that
+ * reads them, and the difference is not cosmetic. A ledger entry may claim a
+ * target test in another belt's file -- `tests/test_digest.py`'s
+ * "the digest survives the catalog moving to another file" is re-pointed at
+ * `test/application/resolve.test.ts`, because its subject is composition and the
+ * machinery it needs did not exist when its own file was ported. Swept inside
+ * the loop, whether that claim is seen depends on which ledger `LEDGERS` happens
+ * to list first: the claiming ledger before the owning one is green, the other
+ * order is a spurious `unmapped`. Order of a list is not something a gate should
+ * be sensitive to.
+ */
+const unmappedSweep = [];
 const approvedNonRunning = new Map();
 const ledgerTargetFiles = new Set();
 
@@ -453,17 +482,9 @@ for (const ledgerPath of LEDGERS) {
     );
   }
 
-  // (3): everything the runner collects from a ported file is either claimed by
-  // an entry or declared target-only.
+  // (3) is deferred to a second pass: see `unmappedSweep` below.
   const targetOnly = new Set(ledger.target.target_only_tests.ids);
-  for (const id of collected) {
-    if (!id.startsWith(`${ledger.target.test_file}::`)) {
-      continue;
-    }
-    if (!claimedTargets.has(id) && !targetOnly.has(id)) {
-      fail("unmapped", `${ledgerPath}: target test claimed by no ledger entry: ${id}`);
-    }
-  }
+  unmappedSweep.push({ ledgerPath, testFile: ledger.target.test_file, targetOnly });
   for (const id of targetOnly) {
     if (!collected.includes(id)) {
       fail("missing", `${ledgerPath}: declared target-only test does not exist: ${id}`);
@@ -495,6 +516,19 @@ for (const [id, claim] of claimedTargets) {
       "missing",
       `${claim.ledgerPath}: ${claim.source} maps to a target test that does not exist: ${id}`,
     );
+  }
+}
+
+// (3): everything the runner collects from a ported file is either claimed by an
+// entry -- in ANY ledger -- or declared target-only by that file's own ledger.
+for (const { ledgerPath, testFile, targetOnly } of unmappedSweep) {
+  for (const id of collected) {
+    if (!id.startsWith(`${testFile}::`)) {
+      continue;
+    }
+    if (!claimedTargets.has(id) && !targetOnly.has(id)) {
+      fail("unmapped", `${ledgerPath}: target test claimed by no ledger entry: ${id}`);
+    }
   }
 }
 
