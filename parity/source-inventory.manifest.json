@@ -31,8 +31,8 @@
       "source": "tests/test_clone_source.py",
       "collected": 57,
       "test_functions": 35,
-      "status": "inventoried",
-      "note": "Collected as evidence only. Being in the inventory is not a commitment to port; the belt that opens this file writes its ledger then."
+      "status": "ported",
+      "note": "Covered by parity/clone-source.ledger.json -- the clone-source belt."
     },
     {
       "path": "parity/source-inventory/test_compose.txt",

@@ -1,0 +1,587 @@
+{
+  "source": {
+    "repository": "suisya-systems/cadenza",
+    "revision": "a5672f8",
+    "note": "The source is this repository's own Python implementation, not a second checkout. Cadenza is being rewritten in place (cadenza#8): `src/cadenza/` and `tests/` are the specification until a later PR retires them, so every inventory here is collected from the working tree at the recorded revision.",
+    "suite_baseline": {
+      "collected": 330,
+      "passed": 330,
+      "skipped": 0,
+      "xfailed": 0,
+      "reconciliation": "`PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q -p no:cacheprovider` at a5672f8 on CPython 3.12.3: 330 passed. No module is skipped at collection time, so collected == the sum of the eight per-file inventories with nothing left over. See parity/source-inventory.manifest.json."
+    },
+    "file": {
+      "path": "tests/test_clone_source.py",
+      "collected": 57,
+      "inventory": "parity/source-inventory/test_clone_source.txt",
+      "note": "35 test functions, 57 collected node ids: six functions are parametrized (a non-string kind over 4, an accepted URL over 4, each documented scheme over 3, other userinfo over 3, an embedded password over 2, whitespace/control characters in a URL over 3, NUL/control characters in a path over 3, a field beyond kind over 3, the canonical form over 3, urlsplit's own rejection over 2, a malformed port over 2, a well-formed port over 2)."
+    }
+  },
+  "target": {
+    "test_file": "test/domain/clone-source.test.ts",
+    "systematic_mappings": [
+      {
+        "from": "`parse(table, **kwargs)`, a module-level helper defaulting `base_dir=CATALOG_DIR`, `allowed_local_roots=()`, `location=LOCATION`",
+        "to": "`parse(table, options)` with the same three defaults, `options` an object rather than keyword arguments",
+        "why": "A direct translation; TypeScript has no `**kwargs`, so the optional overrides move into one options object rather than trailing keyword arguments.",
+        "affects": "all fifty-seven cases"
+      },
+      {
+        "from": "`pytest.raises(Kind, match=...) as caught`, then `caught.value` and, for two cases, `str(caught.value)` / `caught.value.location`",
+        "to": "the `refusal(...)` helper from `test/support.ts`, then `caught.message` and `caught.location`",
+        "why": "The same helper the composition belt's ledgers record, for the same reason: `expect(...).toThrow(...)` checks the class or the message but yields no instance, and this file's refusals go on to assert `.location` twice and the raw error text in every other case.",
+        "affects": "the forty-five cases that assert a refusal"
+      },
+      {
+        "from": "`tmp_path` (pytest's per-test filesystem fixture), and in one case `monkeypatch.setenv`",
+        "to": "`CATALOG_DIR` / `ELSEWHERE` (absolute directories from `test/support.ts`) that touch no filesystem, and direct `process.env` mutation restored with `onTestFinished`",
+        "why": "`parseCloneSource` never stats or reads a path (design doc section 3.1 -- it resolves `local_path` lexically, `normalisePath`/`_normalise_path` call `normpath`, never a filesystem-resolving call), so every case that took `tmp_path` needed only an absolute directory, not a real one. The precedent is the composition belt's `parity/compose.ledger.json` systematic mapping for the same substitution. `monkeypatch.setenv`, which has no vitest counterpart, becomes a direct `process.env.HOME`/`process.env.USERPROFILE` assignment registered for cleanup with `onTestFinished` at the point of acquisition (docs/porting.md's testkit rule 1), rather than a file-level `afterEach`.",
+        "affects": "the thirteen local_path cases that took `tmp_path`, all marked `adapted`; see each entry's own reason"
+      },
+      {
+        "from": "pytest's escaped node id spelling for a parametrised case whose value is a control character or an astral/non-ASCII code point -- `[web\\x00repo]`, `[https://exa\\u2100mple.com/r.git]`",
+        "to": "the literal escaped text kept as the `parametrize()` id, with the actual code point only in the case's runtime value",
+        "why": "`docs/porting.md` section 5's target id rule: the id is a byte-stable function of the source id, not of the runtime value, and the source id pytest actually printed is the ASCII-escaped spelling (`--collect-only` never emits a raw control character or an astral code point into a node id).",
+        "affects": "the five cases with a control character or non-ASCII code point in their parametrised value"
+      }
+    ],
+    "target_only_tests": {
+      "count": 0,
+      "ids": [],
+      "why": "Every case in this file translates a source case; nothing here needed a property with no source counterpart."
+    },
+    "approved_non_running": []
+  },
+  "totals": {
+    "source_cases": 57,
+    "ported": 42,
+    "adapted": 15,
+    "not_ported": 0,
+    "waivers": 0
+  },
+  "inherited_limitations": [
+    {
+      "behaviour": "`expanduser` resolves a bare `~` and not `~user`: CPython consults the password database and, where the user is unknown, returns the path unchanged -- the branch this port always takes, because Node has no password database. No case in this file (nor in `tests/test_compose.py`, `tests/test_resolve.py` or `tests/test_toml_loader.py`) uses `~user`.",
+      "why": "Recorded already at `src/domain/python-path.ts` and in `parity/compose.ledger.json`; repeated here because this is the belt whose own file states the `~` case (`test_tilde_is_expanded_against_the_home_directory`) and is therefore the natural place to also state what is deliberately not covered by it."
+    },
+    {
+      "behaviour": "`urlsplit`'s bracketed-host check defers to `ipaddress.ip_address` in CPython and to `node:net`'s `isIP` in `src/domain/python-urlsplit.ts`. The two agree on ordinary addresses and may disagree at the edges -- a scoped or otherwise unusual IPv6 literal. No case in this file reaches that edge; `test_a_url_that_urlsplit_itself_rejects_is_a_typed_refusal`'s bracketed-host case (`https://[::1/repo.git`) is unbalanced, which both implementations refuse the same way, before either would consult the address parser.",
+      "why": "Recorded already in `parity/compose.ledger.json` as an inherited limitation of `src/domain/python-urlsplit.ts`; repeated here because this is the belt whose file is `urlsplit`'s primary caller and closest cover, and the gap survives this belt closing."
+    }
+  ],
+  "entries": [
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_kind_is_required",
+      "target_id": "test/domain/clone-source.test.ts::the tag itself > kind is required",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a clone source table with no 'kind' key is refused, naming the key.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_unknown_kind_is_refused_and_lists_the_known_ones",
+      "target_id": "test/domain/clone-source.test.ts::the tag itself > an unknown kind is refused and lists the known ones",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: an unrecognised kind is refused, naming the value given.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_non_string_kind_is_refused[1]",
+      "target_id": "test/domain/clone-source.test.ts::the tag itself > a non-string kind is refused[1]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a non-string kind is refused regardless of what it actually is. `kind3` (a list in Python) is a JavaScript array; both are neither string nor any of the other three values, which is all the case asks.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_non_string_kind_is_refused[True]",
+      "target_id": "test/domain/clone-source.test.ts::the tag itself > a non-string kind is refused[True]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a non-string kind is refused regardless of what it actually is. `kind3` (a list in Python) is a JavaScript array; both are neither string nor any of the other three values, which is all the case asks.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_non_string_kind_is_refused[None]",
+      "target_id": "test/domain/clone-source.test.ts::the tag itself > a non-string kind is refused[None]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a non-string kind is refused regardless of what it actually is. `kind3` (a list in Python) is a JavaScript array; both are neither string nor any of the other three values, which is all the case asks.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_non_string_kind_is_refused[kind3]",
+      "target_id": "test/domain/clone-source.test.ts::the tag itself > a non-string kind is refused[kind3]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a non-string kind is refused regardless of what it actually is. `kind3` (a list in Python) is a JavaScript array; both are neither string nor any of the other three values, which is all the case asks.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_allowed_schemes_are_exactly_https_and_ssh",
+      "target_id": "test/domain/clone-source.test.ts::git_url > the allowed schemes are exactly https and ssh",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the exported constant is exactly {https, ssh}.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_accepts_authenticated_transports[https://github.com/org/repo.git]",
+      "target_id": "test/domain/clone-source.test.ts::git_url > authenticated transports are accepted[https://github.com/org/repo.git]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: an authenticated transport, including a case-insensitive scheme, is accepted and the URL is kept verbatim.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_accepts_authenticated_transports[ssh://git@github.com/org/repo.git]",
+      "target_id": "test/domain/clone-source.test.ts::git_url > authenticated transports are accepted[ssh://git@github.com/org/repo.git]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: an authenticated transport, including a case-insensitive scheme, is accepted and the URL is kept verbatim.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_accepts_authenticated_transports[ssh://github.com/org/repo.git]",
+      "target_id": "test/domain/clone-source.test.ts::git_url > authenticated transports are accepted[ssh://github.com/org/repo.git]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: an authenticated transport, including a case-insensitive scheme, is accepted and the URL is kept verbatim.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_accepts_authenticated_transports[HTTPS://github.com/org/repo.git]",
+      "target_id": "test/domain/clone-source.test.ts::git_url > authenticated transports are accepted[HTTPS://github.com/org/repo.git]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: an authenticated transport, including a case-insensitive scheme, is accepted and the URL is kept verbatim.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_refuses_each_documented_scheme_with_its_reason[http://github.com/org/repo.git-plaintext]",
+      "target_id": "test/domain/clone-source.test.ts::git_url > each documented scheme is refused with its reason[http://github.com/org/repo.git-plaintext]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: each documented scheme is refused with the reason naming why.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_refuses_each_documented_scheme_with_its_reason[git://github.com/org/repo.git-unauthenticated]",
+      "target_id": "test/domain/clone-source.test.ts::git_url > each documented scheme is refused with its reason[git://github.com/org/repo.git-unauthenticated]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: each documented scheme is refused with the reason naming why.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_refuses_each_documented_scheme_with_its_reason[file:///srv/repos/repo.git-local_path]",
+      "target_id": "test/domain/clone-source.test.ts::git_url > each documented scheme is refused with its reason[file:///srv/repos/repo.git-local_path]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: each documented scheme is refused with the reason naming why.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_refuses_a_scheme_that_is_merely_unknown",
+      "target_id": "test/domain/clone-source.test.ts::git_url > a scheme that is merely unknown is refused",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a scheme that is neither allowed nor specifically refused is refused as merely unknown.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_refuses_scp_style_shorthand_rather_than_rewriting_it",
+      "target_id": "test/domain/clone-source.test.ts::git_url > scp-style shorthand is refused rather than rewritten",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: scp-style shorthand is refused rather than rewritten, so one remote cannot carry two digests.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_bare_git_userinfo_is_the_one_accepted_credential_shape",
+      "target_id": "test/domain/clone-source.test.ts::git_url > bare git@ userinfo is the one accepted credential shape",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the bare 'git@' of an ssh URL is the one accepted userinfo.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_refuses_other_userinfo[ssh://alice@github.com/org/repo.git]",
+      "target_id": "test/domain/clone-source.test.ts::git_url > other userinfo is refused[ssh://alice@github.com/org/repo.git]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: any userinfo other than the bare 'git@' of an ssh URL is refused.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_refuses_other_userinfo[https://git@github.com/org/repo.git]",
+      "target_id": "test/domain/clone-source.test.ts::git_url > other userinfo is refused[https://git@github.com/org/repo.git]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: any userinfo other than the bare 'git@' of an ssh URL is refused.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_refuses_other_userinfo[https://token@github.com/org/repo.git]",
+      "target_id": "test/domain/clone-source.test.ts::git_url > other userinfo is refused[https://token@github.com/org/repo.git]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: any userinfo other than the bare 'git@' of an ssh URL is refused.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_refuses_an_embedded_password[https://alice:s3cret@github.com/org/repo.git]",
+      "target_id": "test/domain/clone-source.test.ts::git_url > an embedded password is refused[https://alice:s3cret@github.com/org/repo.git]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: an embedded password is refused, regardless of scheme.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_refuses_an_embedded_password[ssh://git:s3cret@github.com/org/repo.git]",
+      "target_id": "test/domain/clone-source.test.ts::git_url > an embedded password is refused[ssh://git:s3cret@github.com/org/repo.git]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: an embedded password is refused, regardless of scheme.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_refuses_whitespace_and_control_characters_in_a_url[https://github.com/org/ repo.git]",
+      "target_id": "test/domain/clone-source.test.ts::git_url > whitespace and control characters in a url are refused[https://github.com/org/ repo.git]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: whitespace or a control character anywhere in the URL is refused before the URL is even parsed. `isPythonSpace`/`isControlCharacter` (src/domain/python-text.ts) reproduce `str.isspace()` and the C0/DEL set exactly, which is what keeps this a straight translation rather than an adaptation.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_refuses_whitespace_and_control_characters_in_a_url[https://github.com/org/repo.git\\n]",
+      "target_id": "test/domain/clone-source.test.ts::git_url > whitespace and control characters in a url are refused[https://github.com/org/repo.git\\n]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: whitespace or a control character anywhere in the URL is refused before the URL is even parsed. `isPythonSpace`/`isControlCharacter` (src/domain/python-text.ts) reproduce `str.isspace()` and the C0/DEL set exactly, which is what keeps this a straight translation rather than an adaptation.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_refuses_whitespace_and_control_characters_in_a_url[https://g\\x01.com/r]",
+      "target_id": "test/domain/clone-source.test.ts::git_url > whitespace and control characters in a url are refused[https://g\\x01.com/r]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: whitespace or a control character anywhere in the URL is refused before the URL is even parsed. `isPythonSpace`/`isControlCharacter` (src/domain/python-text.ts) reproduce `str.isspace()` and the C0/DEL set exactly, which is what keeps this a straight translation rather than an adaptation.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_refuses_a_url_with_no_host",
+      "target_id": "test/domain/clone-source.test.ts::git_url > a url with no host is refused",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a URL with no host is refused.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_url_is_required_and_must_be_a_string",
+      "target_id": "test/domain/clone-source.test.ts::git_url > url is required and must be a string",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, both halves: the key is required, and a present non-string value is refused naming its type.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_git_url_rejects_an_unknown_field",
+      "target_id": "test/domain/clone-source.test.ts::git_url > git_url rejects an unknown field",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a field git_url does not accept is refused, naming it.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_relative_path_is_anchored_to_the_declaring_layers_directory",
+      "target_id": "test/domain/clone-source.test.ts::local_path > a relative path is anchored to the declaring layer's directory",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a relative path is anchored to the declaring layer's own directory, never the process CWD. Adapted because the case never touches a filesystem -- `(tmp_path / \"repos\").mkdir()` in the source builds a directory nothing here reads -- so it uses `CATALOG_DIR` from `test/support.ts`, absolute on the running platform for the reason `tests/support.py` records, and the expected path is built with `nativePath.join` rather than a POSIX-shaped literal.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_absolute_path_is_kept_as_is",
+      "target_id": "test/domain/clone-source.test.ts::local_path > an absolute path is kept as-is",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: an already-absolute path is kept as-is regardless of base_dir. Adapted for the same reason as the previous case: no filesystem is touched, so `ELSEWHERE` and `CATALOG_DIR` from `test/support.ts` stand in for `tmp_path`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_tilde_is_expanded_against_the_home_directory",
+      "target_id": "test/domain/clone-source.test.ts::local_path > a tilde is expanded against the home directory",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a leading `~` expands against the home directory before anchoring. Adapted twice over: `monkeypatch.setenv` has no counterpart, so `process.env.HOME`/`process.env.USERPROFILE` are set directly and restored with `onTestFinished` at the point of acquisition (docs/porting.md rule 1); and `tmp_path` stands in for by `ELSEWHERE`, for the reason the previous two cases record. Both HOME and USERPROFILE are set because `ntpath.expanduser` ignores HOME entirely and reads USERPROFILE, so setting only HOME would assert nothing on the Windows cell -- the source's own comment.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_interior_dot_dot_is_collapsed_and_kept_when_it_stays_inside",
+      "target_id": "test/domain/clone-source.test.ts::local_path > an interior dot-dot is collapsed and kept when it stays inside",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: an interior `..` that stays inside the root is collapsed by normalisation and the containment check still passes. Adapted for the `tmp_path` -> `CATALOG_DIR` reason recorded above.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_dot_dot_that_climbs_out_of_every_root_is_refused_naming_the_roots",
+      "target_id": "test/domain/clone-source.test.ts::local_path > a dot-dot that climbs out of every root is refused, naming the roots",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, both halves: a `..` that climbs out of every allowed root is refused, and the refusal names the root. Adapted for the `tmp_path` -> `CATALOG_DIR` reason recorded above.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_a_layer_with_no_roots_may_not_declare_a_local_path",
+      "target_id": "test/domain/clone-source.test.ts::local_path > a layer with no roots may not declare a local_path",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: an empty `allowed_local_roots` refuses a local_path outright rather than implicitly allowing everything (design doc section 3.3). Adapted for the `tmp_path` -> `CATALOG_DIR` reason recorded above.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_a_sibling_of_a_root_does_not_count_as_contained",
+      "target_id": "test/domain/clone-source.test.ts::local_path > a sibling of a root does not count as contained",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a directory that merely shares a path prefix with a root is not contained by it. Adapted for the `tmp_path` -> `CATALOG_DIR` reason recorded above.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_any_of_several_roots_may_contain_the_path",
+      "target_id": "test/domain/clone-source.test.ts::local_path > any of several roots may contain the path",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a path contained by any one of several allowed roots is accepted. Adapted for the `tmp_path` -> `CATALOG_DIR` reason recorded above.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_empty_path_is_refused",
+      "target_id": "test/domain/clone-source.test.ts::local_path > an empty path is refused",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: an empty path is refused. Adapted for the `tmp_path` -> `CATALOG_DIR` reason recorded above.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_nul_and_control_characters_in_a_path_are_refused[web\\x00repo]",
+      "target_id": "test/domain/clone-source.test.ts::local_path > NUL and control characters in a path are refused[web\\x00repo]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a NUL byte or a control character anywhere in the path is refused. Adapted for the `tmp_path` -> `CATALOG_DIR` reason recorded above; the three characters translate as actual code points in the parametrised value, with the id kept as pytest's escaped display spelling so the target id is a byte-stable function of the source id.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_nul_and_control_characters_in_a_path_are_refused[web\\x01]",
+      "target_id": "test/domain/clone-source.test.ts::local_path > NUL and control characters in a path are refused[web\\x01]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a NUL byte or a control character anywhere in the path is refused. Adapted for the `tmp_path` -> `CATALOG_DIR` reason recorded above; the three characters translate as actual code points in the parametrised value, with the id kept as pytest's escaped display spelling so the target id is a byte-stable function of the source id.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_nul_and_control_characters_in_a_path_are_refused[web\\x7f]",
+      "target_id": "test/domain/clone-source.test.ts::local_path > NUL and control characters in a path are refused[web\\x7f]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a NUL byte or a control character anywhere in the path is refused. Adapted for the `tmp_path` -> `CATALOG_DIR` reason recorded above; the three characters translate as actual code points in the parametrised value, with the id kept as pytest's escaped display spelling so the target id is a byte-stable function of the source id.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_path_is_required_and_must_be_a_string",
+      "target_id": "test/domain/clone-source.test.ts::local_path > path is required and must be a string",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, both halves: the key is required, and a present non-string value is refused naming its type. Adapted for the `tmp_path` -> `CATALOG_DIR` reason recorded above.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_local_path_rejects_an_unknown_field",
+      "target_id": "test/domain/clone-source.test.ts::local_path > local_path rejects an unknown field",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a field local_path does not accept is refused, naming it. Adapted for the `tmp_path` -> `CATALOG_DIR` reason recorded above.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_new_takes_no_fields",
+      "target_id": "test/domain/clone-source.test.ts::new > new takes no fields",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a bare {kind: \"new\"} table parses to the no-argument source.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_new_refuses_any_field_beyond_kind[extra0]",
+      "target_id": "test/domain/clone-source.test.ts::new > new refuses any field beyond kind[extra0]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: any field beyond kind is refused for the new source.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_new_refuses_any_field_beyond_kind[extra1]",
+      "target_id": "test/domain/clone-source.test.ts::new > new refuses any field beyond kind[extra1]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: any field beyond kind is refused for the new source.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_new_refuses_any_field_beyond_kind[extra2]",
+      "target_id": "test/domain/clone-source.test.ts::new > new refuses any field beyond kind[extra2]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: any field beyond kind is refused for the new source.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_canonical_form_always_carries_the_tag[source0-expected0]",
+      "target_id": "test/domain/clone-source.test.ts::canonical form > the canonical form always carries the tag[source0-expected0]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `toCanonical` always includes the kind tag alongside the kind-specific fields, for every member of the union.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_canonical_form_always_carries_the_tag[source1-expected1]",
+      "target_id": "test/domain/clone-source.test.ts::canonical form > the canonical form always carries the tag[source1-expected1]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `toCanonical` always includes the kind tag alongside the kind-specific fields, for every member of the union.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_canonical_form_always_carries_the_tag[source2-expected2]",
+      "target_id": "test/domain/clone-source.test.ts::canonical form > the canonical form always carries the tag[source2-expected2]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: `toCanonical` always includes the kind tag alongside the kind-specific fields, for every member of the union.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_sources_are_frozen",
+      "target_id": "test/domain/clone-source.test.ts::canonical form > sources are frozen",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same property -- a source cannot be mutated after construction -- reached by a different mechanism. Python's `FrozenInstanceError` comes from a `@dataclass(frozen=True)`; a `CloneSource` here is a structural interface, so `gitUrlSource` freezes the object it returns with `Object.freeze`, and an ES module's implicit strict mode turns the assignment into a `TypeError` rather than a silent no-op. `# ts-expect-error` marks the assignment as a compile-time error too, so the case pins both halves of the guarantee: the type checker refuses it and the runtime refuses it.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_a_url_that_urlsplit_itself_rejects_is_a_typed_refusal[https://[::1/repo.git]",
+      "target_id": "test/domain/clone-source.test.ts::regressions: refusals that used to escape as untyped errors > a url that urlsplit itself rejects is a typed refusal[https://[::1/repo.git]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, both halves: a URL that the underlying URL parser itself rejects becomes a typed `InvalidCloneSourceError` naming the location, not a bare/untyped error escaping the parser.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_a_url_that_urlsplit_itself_rejects_is_a_typed_refusal[https://exa\\u2100mple.com/r.git]",
+      "target_id": "test/domain/clone-source.test.ts::regressions: refusals that used to escape as untyped errors > a url that urlsplit itself rejects is a typed refusal[https://exa\\u2100mple.com/r.git]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, both halves: a URL that the underlying URL parser itself rejects becomes a typed `InvalidCloneSourceError` naming the location, not a bare/untyped error escaping the parser.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_a_relative_base_dir_cannot_anchor_a_local_path",
+      "target_id": "test/domain/clone-source.test.ts::regressions: refusals that used to escape as untyped errors > a relative base_dir cannot anchor a local_path",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a relative base_dir is refused rather than silently anchoring a local_path relative.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_a_malformed_port_is_refused_at_composition[https://example.invalid:abc/o/r.git]",
+      "target_id": "test/domain/clone-source.test.ts::regressions: refusals that used to escape as untyped errors > a malformed port is refused at composition[https://example.invalid:abc/o/r.git]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a URL with a malformed port is refused as not parseable, at parse time rather than later at clone time.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_a_malformed_port_is_refused_at_composition[https://example.invalid:99999/o/r.git]",
+      "target_id": "test/domain/clone-source.test.ts::regressions: refusals that used to escape as untyped errors > a malformed port is refused at composition[https://example.invalid:99999/o/r.git]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a URL with a malformed port is refused as not parseable, at parse time rather than later at clone time.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_a_well_formed_port_is_accepted[https://example.invalid:443/o/r.git]",
+      "target_id": "test/domain/clone-source.test.ts::regressions: refusals that used to escape as untyped errors > a well-formed port is accepted[https://example.invalid:443/o/r.git]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a well-formed port is accepted and the URL kept verbatim.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_clone_source.py::test_a_well_formed_port_is_accepted[ssh://git@example.invalid:22/o/r.git]",
+      "target_id": "test/domain/clone-source.test.ts::regressions: refusals that used to escape as untyped errors > a well-formed port is accepted[ssh://git@example.invalid:22/o/r.git]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a well-formed port is accepted and the URL kept verbatim.",
+      "source_revision": "a5672f8"
+    }
+  ]
+}

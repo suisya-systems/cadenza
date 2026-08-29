@@ -49,6 +49,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0016 | `smol-toml` is the port's one runtime dependency | accepted |
 | D-0017 | The oracle's second face: composition, over the persisted digest only | accepted |
 | D-0018 | Python's standard library is ported, not approximated | accepted |
+| D-0019 | The clone-source belt: `tmp_path`-only fixtures need no filesystem, and a frozen structural type is proven at both the type checker and the runtime | accepted |
 
 ---
 
@@ -620,4 +621,48 @@ comparisons, the port called `///C:` absolute and CPython does not.
 **What would falsify it.** A platform API that matches the Python one exactly. `node:path` is not
 becoming `os.path`; the more likely case is a future belt needing so little of a module that a
 five-line local helper is honest, and the test that pins it is what makes that judgeable.
+
+---
+
+## D-0019 — The clone-source belt: `tmp_path`-only fixtures need no filesystem, and a frozen structural type is proven at both the type checker and the runtime
+
+**Status:** accepted
+
+**Decision.** `tests/test_clone_source.py`'s 57 node ids are ported at
+`test/domain/clone-source.test.ts`, case by case in `parity/clone-source.ledger.json` (42 `ported`,
+15 `adapted`, 0 `not-ported`, 0 `waived`). `parseCloneSource` itself came over with the composition
+belt (D-0017's ledgers record the gap this closes); this belt is only its own 57 cases.
+
+**Thirteen `tmp_path` cases are `adapted`, and the mapping is the composition belt's own
+precedent, repeated rather than reinvented.** `parseCloneSource` never stats or reads a path —
+`_normalise_path`/`normalisePath` call `normpath`, never a filesystem-resolving call — so every
+case in the source file that took `tmp_path` needed only *some* absolute directory, not a real one.
+`parity/compose.ledger.json` already recorded this exact substitution (`CATALOG_DIR` from
+`test/support.ts`) for its own three `allowed_local_roots` cases; this belt's ledger cites that
+systematic mapping rather than re-deriving it, and extends `test/support.ts` with the `ELSEWHERE`
+export `tests/support.py` also carries, held back until now because nothing imported it (`npm run
+knip`).
+
+**One `monkeypatch.setenv` case has no vitest counterpart and is adapted accordingly.**
+"a tilde is expanded against the home directory" sets `process.env.HOME` and `process.env.USERPROFILE`
+directly and restores both with `onTestFinished`, registered at the point of acquisition rather than
+in a file-level `afterEach` — `docs/porting.md`'s testkit rule 1, applied to environment variables
+rather than to a resource handle. Both variables are set because `ntpath.expanduser` ignores `HOME`
+entirely and reads `USERPROFILE`; setting only `HOME` would assert nothing on the Windows cell, which
+is the source test's own comment.
+
+**"sources are frozen" is adapted because the freezing mechanism itself changed, not the property.**
+Python's `GitUrlSource` is a `@dataclass(frozen=True)`, and a rebinding attempt raises
+`FrozenInstanceError`. `CloneSource` here is a structural interface, not a class with a runtime
+identity, so `gitUrlSource` freezes the object it returns with `Object.freeze`; an ES module is
+implicitly strict, so the rebinding attempt is a `TypeError` rather than a silent no-op. The ported
+case adds a `@ts-expect-error` on the same assignment, which the source case has no way to state:
+the guarantee is pinned at the type checker *and* the runtime, because only the structural type
+needs both — a frozen dataclass's fields are already `Final` in the type checker's eyes.
+
+**What would falsify it.** A future belt whose source cases touch a real filesystem through
+`parse_clone_source` or its port — none does today, which is exactly why the `tmp_path` substitution
+is sound here and would not be if a case ever asserted on `path.exists()` or a symlink.
+
+---
 
