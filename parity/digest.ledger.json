@@ -1,0 +1,206 @@
+{
+  "source": {
+    "repository": "suisya-systems/cadenza",
+    "revision": "a5672f8",
+    "note": "The source is this repository's own Python implementation, not a second checkout. Cadenza is being rewritten in place (cadenza#8): `src/cadenza/` and `tests/` are the specification until a later PR retires them, so every inventory here is collected from the working tree at the recorded revision.",
+    "suite_baseline": {
+      "collected": 330,
+      "passed": 330,
+      "skipped": 0,
+      "xfailed": 0,
+      "reconciliation": "`PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q -p no:cacheprovider` at a5672f8 on CPython 3.12.3: 330 passed. No module is skipped at collection time, so collected == the sum of the eight per-file inventories with nothing left over. See parity/source-inventory.manifest.json."
+    },
+    "file": {
+      "path": "tests/test_digest.py",
+      "collected": 14,
+      "inventory": "parity/source-inventory/test_digest.txt",
+      "note": "8 test functions, 14 collected node ids: `test_digest_changes_when_any_semantic_field_changes` is parametrized over 7 projects. The kickoff (cadenza#8) counts this file as '8 cases' because it counts function definitions; the ledger counts node ids, for the reason recorded in DECISIONS.md D-0010."
+    }
+  },
+  "target": {
+    "test_file": "test/domain/digest.test.ts",
+    "systematic_mappings": [
+      {
+        "from": "`@dataclass(frozen=True)` value objects constructed positionally: `Project(\"web\", aliases, source, branch)`, `GitUrlSource(url=...)`",
+        "to": "readonly interfaces plus factory functions: `project(\"web\", aliases, source, branch)`, `gitUrlSource(url)`",
+        "why": "TypeScript has no frozen dataclass, and the two properties the source relies on are structural typing (which interfaces give) and a positional constructor (which a factory gives). A `class` would add a nominal identity the source does not have and an `instanceof` the digest never asks about.",
+        "affects": "all fourteen cases"
+      },
+      {
+        "from": "`kind` as a `ClassVar` -- not a dataclass field, so absent from equality and present in `to_canonical`",
+        "to": "`kind` as the discriminant property of the union",
+        "why": "The digest observes `to_canonical()` and nothing else, and both spellings put the tag in the payload. The one thing that changes is invisible here: two sources with the same `url` and different classes are unequal in Python by class and in TypeScript by the `kind` field, and the digest reads the field either way. Case 6 is what pins that the tag is in the payload at all.",
+        "affects": "all fourteen cases"
+      },
+      {
+        "from": "snake_case payload keys read off snake_case attributes",
+        "to": "snake_case payload keys read off camelCase fields (`project_id` from `projectId`, `base_branch` from `baseBranch`)",
+        "why": "The digest is a persisted value (design doc section 4): its bytes are a compatibility surface and the field names are not. Renaming a key to match the language's casing would change every digest ever written; renaming a field does not.",
+        "affects": "cases 2 and 4"
+      },
+      {
+        "from": "`sorted(project.aliases)` -- CPython compares strings by code point",
+        "to": "`[...aliases].sort(compareByCodePoint)`",
+        "why": "`Array.prototype.sort`'s default comparator orders by UTF-16 code unit, which disagrees with code-point order for any astral character beside one in U+E000..U+FFFF. No case in this source file reaches that (its aliases are `site`/`frontend`), which is precisely why it is pinned by the differential oracle instead; see `parity/oracle/config-digest-vector.json`, case `alias-sort-crosses-the-surrogate-boundary`.",
+        "affects": "cases 3 and 5"
+      },
+      {
+        "from": "`assert x == y` / `assert x != y`",
+        "to": "`expect(x).toBe(y)` / `expect(x).not.toBe(y)`",
+        "why": "House style, and `toBe` is `Object.is` -- reference equality for objects, value equality for the strings every assertion here compares. `toEqual` is used only where the compared value is a `Set`.",
+        "affects": "all thirteen ported cases"
+      }
+    ],
+    "target_only_tests": {
+      "count": 0,
+      "ids": [],
+      "why": "Every test in this file translates a source case. The properties the port introduced -- code-point collation and the lone-surrogate refusal -- are asserted in `test/domain/canonical-json.test.ts`, which is declared target-only in `parity/target-only.json` rather than smuggled into this file: they are claims about the encoder, not about `tests/test_digest.py`."
+    },
+    "approved_non_running": []
+  },
+  "totals": {
+    "source_cases": 14,
+    "ported": 11,
+    "adapted": 2,
+    "not_ported": 1,
+    "waivers": 0
+  },
+  "inherited_limitations": [
+    {
+      "behaviour": "Every case in this file asserts about a digest computed from a hand-built `Project`. Nothing here proves the digest a *catalog* produces is the same one: composition, resolution and the TOML loader are all upstream of it and none is ported yet.",
+      "why": "The source's own case 8 is the one that closes this, by composing the same catalog from two files and comparing the resolved digests -- and it is the one entry below marked not-ported. The limitation is therefore stated rather than hidden, and it is discharged by the belt that ports `tests/test_compose.py` and `tests/test_resolve.py`, not by anything this pilot can add."
+    },
+    {
+      "behaviour": "`config_digest` is a total function over a `Project`, and no case here builds one the catalog validator would refuse. A `Project` with a control character in its path, or an alias outside the identifier shape, reaches the encoder without ever meeting `parse_clone_source` or `parse_identifier`.",
+      "why": "The source's own shape -- `tests/test_digest.py` builds `Project` directly too. It is not left there: the differential oracle's corpus deliberately runs past what the validator admits, and says so in its own comment, because the cost of finding an encoder divergence after the fact is not one bad run but every digest already written."
+    }
+  ],
+  "entries": [
+    {
+      "source_nodeid": "tests/test_digest.py::test_digest_is_the_sha256_prefix_and_sixty_four_hex_characters",
+      "target_id": "test/domain/digest.test.ts::config_digest > the digest is the sha256 prefix and sixty-four hex characters",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion -- the digest is `sha256:` and exactly sixty-four lowercase hex characters. Adapted because the anchoring had to be reasoned about rather than transcribed: the source uses `re.fullmatch`, and the naive translation `/^...$/` is only equivalent because JavaScript's `$` (without the `m` flag) matches at end of input and, unlike Python's `$`, does NOT match before a trailing newline. Python's own way of spelling that is `\\Z`, which this repository already reaches for deliberately in `IDENTIFIER_PATTERN` so that \"web\\n\" is refused. Getting it wrong would have accepted a digest with a trailing newline.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_digest.py::test_digest_matches_the_documented_encoding",
+      "target_id": "test/domain/digest.test.ts::config_digest > the digest matches the documented encoding",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, and the source's deliberate scrambling of the key order is kept, so the case still pins the sort rather than insertion order. Adapted because the source can reach for an INDEPENDENT encoder -- `json.dumps` from the standard library, which is not the code under test -- and TypeScript has none that agrees with CPython on all four settings at once. The independent answer is therefore written down as a literal, which is strictly stronger: it pins the exact bytes of design doc section 4, where re-deriving them from `canonicalJson` would have agreed with any encoder including a wrong one.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_digest.py::test_alias_order_does_not_change_the_digest",
+      "target_id": "test/domain/digest.test.ts::config_digest > alias order does not change the digest",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: aliases are a display-only list, so reordering one is not a configuration change.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_digest.py::test_payload_excludes_provenance_and_file_paths",
+      "target_id": "test/domain/digest.test.ts::config_digest > the payload excludes provenance and file paths",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, and the same four key names. `set(canonical_payload(BASE))` iterates a dict's keys; `new Set(Object.keys(...))` is the same set, compared with `toEqual` because `toBe` on two Sets is reference equality.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_digest.py::test_digest_changes_when_any_semantic_field_changes[changed0]",
+      "target_id": "test/domain/digest.test.ts::config_digest > the digest changes when any semantic field changes[changed0]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "A different project_id is a different digest. The pytest node id `[changed0]` is preserved by `testkit/parametrize`, so this mapping is a byte-stable function of the source id.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_digest.py::test_digest_changes_when_any_semantic_field_changes[changed1]",
+      "target_id": "test/domain/digest.test.ts::config_digest > the digest changes when any semantic field changes[changed1]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Dropping one alias is a different digest.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_digest.py::test_digest_changes_when_any_semantic_field_changes[changed2]",
+      "target_id": "test/domain/digest.test.ts::config_digest > the digest changes when any semantic field changes[changed2]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Dropping every alias is a different digest.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_digest.py::test_digest_changes_when_any_semantic_field_changes[changed3]",
+      "target_id": "test/domain/digest.test.ts::config_digest > the digest changes when any semantic field changes[changed3]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "A different base_branch is a different digest.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_digest.py::test_digest_changes_when_any_semantic_field_changes[changed4]",
+      "target_id": "test/domain/digest.test.ts::config_digest > the digest changes when any semantic field changes[changed4]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "A different git URL is a different digest.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_digest.py::test_digest_changes_when_any_semantic_field_changes[changed5]",
+      "target_id": "test/domain/digest.test.ts::config_digest > the digest changes when any semantic field changes[changed5]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "A local path where the base had a git URL is a different digest.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_digest.py::test_digest_changes_when_any_semantic_field_changes[changed6]",
+      "target_id": "test/domain/digest.test.ts::config_digest > the digest changes when any semantic field changes[changed6]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "A new-repository source where the base had a git URL is a different digest. This is also the only row whose canonical source object has a single key, which is what makes it a different shape rather than a different value.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_digest.py::test_two_source_kinds_that_share_a_string_value_do_not_share_a_digest",
+      "target_id": "test/domain/digest.test.ts::config_digest > two source kinds that share a string value do not share a digest",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the tag is part of the payload, so \"same string, different kind\" is a different configuration rather than a collision. This is the case that makes the ClassVar-to-discriminant mapping observable, and it passes for the same reason in both languages -- `to_canonical` writes the tag.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_digest.py::test_digest_is_deterministic_across_calls",
+      "target_id": "test/domain/digest.test.ts::config_digest > the digest is deterministic across calls",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: two calls on one project agree.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_digest.py::test_digest_survives_the_catalog_moving_to_another_file",
+      "target_id": null,
+      "disposition": "not-ported",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "Its subject is the COMPOSITION path, not the digest: it composes one catalog from two different files, in two different layers, with two different base directories, and asserts that `resolve_project(...).config_digest` agrees. Porting it here would mean porting `compose_catalog`, `resolve_project`, the TOML layer loader and the layer/tombstone/provenance rules behind them -- 75 further source cases across `tests/test_compose.py` and `tests/test_resolve.py` -- as an uninventoried side effect of a pilot whose stated subject is byte-identity of the digest. Re-pointed at the belt that ports those two files, where it belongs and where the machinery it needs will exist. What is NOT deferred is the property it defends: that provenance and file paths are outside the payload is asserted by case 4 above, on the payload's key set, which is the strongest form of it available without a composer.",
+      "source_revision": "a5672f8"
+    }
+  ]
+}

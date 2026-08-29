@@ -1,0 +1,330 @@
+tests/test_clone_source.py::test_kind_is_required
+tests/test_clone_source.py::test_unknown_kind_is_refused_and_lists_the_known_ones
+tests/test_clone_source.py::test_non_string_kind_is_refused[1]
+tests/test_clone_source.py::test_non_string_kind_is_refused[True]
+tests/test_clone_source.py::test_non_string_kind_is_refused[None]
+tests/test_clone_source.py::test_non_string_kind_is_refused[kind3]
+tests/test_clone_source.py::test_allowed_schemes_are_exactly_https_and_ssh
+tests/test_clone_source.py::test_accepts_authenticated_transports[https://github.com/org/repo.git]
+tests/test_clone_source.py::test_accepts_authenticated_transports[ssh://git@github.com/org/repo.git]
+tests/test_clone_source.py::test_accepts_authenticated_transports[ssh://github.com/org/repo.git]
+tests/test_clone_source.py::test_accepts_authenticated_transports[HTTPS://github.com/org/repo.git]
+tests/test_clone_source.py::test_refuses_each_documented_scheme_with_its_reason[http://github.com/org/repo.git-plaintext]
+tests/test_clone_source.py::test_refuses_each_documented_scheme_with_its_reason[git://github.com/org/repo.git-unauthenticated]
+tests/test_clone_source.py::test_refuses_each_documented_scheme_with_its_reason[file:///srv/repos/repo.git-local_path]
+tests/test_clone_source.py::test_refuses_a_scheme_that_is_merely_unknown
+tests/test_clone_source.py::test_refuses_scp_style_shorthand_rather_than_rewriting_it
+tests/test_clone_source.py::test_bare_git_userinfo_is_the_one_accepted_credential_shape
+tests/test_clone_source.py::test_refuses_other_userinfo[ssh://alice@github.com/org/repo.git]
+tests/test_clone_source.py::test_refuses_other_userinfo[https://git@github.com/org/repo.git]
+tests/test_clone_source.py::test_refuses_other_userinfo[https://token@github.com/org/repo.git]
+tests/test_clone_source.py::test_refuses_an_embedded_password[https://alice:s3cret@github.com/org/repo.git]
+tests/test_clone_source.py::test_refuses_an_embedded_password[ssh://git:s3cret@github.com/org/repo.git]
+tests/test_clone_source.py::test_refuses_whitespace_and_control_characters_in_a_url[https://github.com/org/ repo.git]
+tests/test_clone_source.py::test_refuses_whitespace_and_control_characters_in_a_url[https://github.com/org/repo.git\n]
+tests/test_clone_source.py::test_refuses_whitespace_and_control_characters_in_a_url[https://g\x01.com/r]
+tests/test_clone_source.py::test_refuses_a_url_with_no_host
+tests/test_clone_source.py::test_url_is_required_and_must_be_a_string
+tests/test_clone_source.py::test_git_url_rejects_an_unknown_field
+tests/test_clone_source.py::test_relative_path_is_anchored_to_the_declaring_layers_directory
+tests/test_clone_source.py::test_absolute_path_is_kept_as_is
+tests/test_clone_source.py::test_tilde_is_expanded_against_the_home_directory
+tests/test_clone_source.py::test_interior_dot_dot_is_collapsed_and_kept_when_it_stays_inside
+tests/test_clone_source.py::test_dot_dot_that_climbs_out_of_every_root_is_refused_naming_the_roots
+tests/test_clone_source.py::test_a_layer_with_no_roots_may_not_declare_a_local_path
+tests/test_clone_source.py::test_a_sibling_of_a_root_does_not_count_as_contained
+tests/test_clone_source.py::test_any_of_several_roots_may_contain_the_path
+tests/test_clone_source.py::test_empty_path_is_refused
+tests/test_clone_source.py::test_nul_and_control_characters_in_a_path_are_refused[web\x00repo]
+tests/test_clone_source.py::test_nul_and_control_characters_in_a_path_are_refused[web\x01]
+tests/test_clone_source.py::test_nul_and_control_characters_in_a_path_are_refused[web\x7f]
+tests/test_clone_source.py::test_path_is_required_and_must_be_a_string
+tests/test_clone_source.py::test_local_path_rejects_an_unknown_field
+tests/test_clone_source.py::test_new_takes_no_fields
+tests/test_clone_source.py::test_new_refuses_any_field_beyond_kind[extra0]
+tests/test_clone_source.py::test_new_refuses_any_field_beyond_kind[extra1]
+tests/test_clone_source.py::test_new_refuses_any_field_beyond_kind[extra2]
+tests/test_clone_source.py::test_canonical_form_always_carries_the_tag[source0-expected0]
+tests/test_clone_source.py::test_canonical_form_always_carries_the_tag[source1-expected1]
+tests/test_clone_source.py::test_canonical_form_always_carries_the_tag[source2-expected2]
+tests/test_clone_source.py::test_sources_are_frozen
+tests/test_clone_source.py::test_a_url_that_urlsplit_itself_rejects_is_a_typed_refusal[https://[::1/repo.git]
+tests/test_clone_source.py::test_a_url_that_urlsplit_itself_rejects_is_a_typed_refusal[https://exa\u2100mple.com/r.git]
+tests/test_clone_source.py::test_a_relative_base_dir_cannot_anchor_a_local_path
+tests/test_clone_source.py::test_a_malformed_port_is_refused_at_composition[https://example.invalid:abc/o/r.git]
+tests/test_clone_source.py::test_a_malformed_port_is_refused_at_composition[https://example.invalid:99999/o/r.git]
+tests/test_clone_source.py::test_a_well_formed_port_is_accepted[https://example.invalid:443/o/r.git]
+tests/test_clone_source.py::test_a_well_formed_port_is_accepted[ssh://git@example.invalid:22/o/r.git]
+tests/test_compose.py::test_single_layer_yields_a_project_keyed_by_its_id
+tests/test_compose.py::test_aliases_and_id_share_one_flat_namespace
+tests/test_compose.py::test_empty_document_set_yields_an_empty_catalog
+tests/test_compose.py::test_supported_schema_versions_is_exactly_one
+tests/test_compose.py::test_local_layer_replaces_only_the_fields_it_states
+tests/test_compose.py::test_provenance_names_the_layer_and_file_of_each_field
+tests/test_compose.py::test_source_replaces_whole_rather_than_field_wise
+tests/test_compose.py::test_a_partial_source_override_is_refused_instead_of_inheriting_a_kind
+tests/test_compose.py::test_aliases_replace_whole_so_an_alias_can_be_removed
+tests/test_compose.py::test_local_layer_may_introduce_a_project_the_tracked_layer_does_not_have
+tests/test_compose.py::test_aliases_must_be_a_list_of_identifiers
+tests/test_compose.py::test_the_same_alias_listed_twice_is_refused
+tests/test_compose.py::test_missing_schema_version_is_refused_naming_the_file
+tests/test_compose.py::test_non_integer_schema_version_is_refused[1]
+tests/test_compose.py::test_non_integer_schema_version_is_refused[1.0]
+tests/test_compose.py::test_non_integer_schema_version_is_refused[None]
+tests/test_compose.py::test_non_integer_schema_version_is_refused[version3]
+tests/test_compose.py::test_boolean_schema_version_is_refused_although_bool_is_an_int
+tests/test_compose.py::test_unsupported_schema_version_is_refused_naming_the_file
+tests/test_compose.py::test_each_layer_carries_its_own_schema_version
+tests/test_compose.py::test_unknown_top_level_key_is_refused
+tests/test_compose.py::test_unknown_catalog_key_is_refused
+tests/test_compose.py::test_unknown_project_key_is_refused_naming_the_key_and_the_project
+tests/test_compose.py::test_unknown_source_key_is_refused_naming_the_source_table
+tests/test_compose.py::test_wrongly_shaped_tables_are_refused[data0-'project' must be a table]
+tests/test_compose.py::test_wrongly_shaped_tables_are_refused[data1-'catalog' must be a table]
+tests/test_compose.py::test_wrongly_shaped_tables_are_refused[data2-must be a table]
+tests/test_compose.py::test_wrongly_shaped_tables_are_refused[data3-'source' must be a table]
+tests/test_compose.py::test_wrongly_shaped_tables_are_refused[data4-must be a list of strings]
+tests/test_compose.py::test_a_project_missing_a_required_field_is_refused[table0-has no source]
+tests/test_compose.py::test_a_project_missing_a_required_field_is_refused[table1-has no base_branch]
+tests/test_compose.py::test_a_project_missing_a_required_field_is_refused[table2-has no source]
+tests/test_compose.py::test_a_field_may_be_supplied_by_either_layer
+tests/test_compose.py::test_tombstone_removes_a_tracked_project_and_its_names
+tests/test_compose.py::test_a_tombstone_carrying_a_sibling_field_is_refused
+tests/test_compose.py::test_a_tombstone_naming_an_unknown_project_is_refused
+tests/test_compose.py::test_a_non_boolean_tombstone_is_refused[true]
+tests/test_compose.py::test_a_non_boolean_tombstone_is_refused[1]
+tests/test_compose.py::test_a_non_boolean_tombstone_is_refused[None]
+tests/test_compose.py::test_tombstone_false_is_refused_rather_than_read_as_keep
+tests/test_compose.py::test_a_local_path_is_checked_against_its_own_layers_roots
+tests/test_compose.py::test_a_tracked_layers_roots_do_not_authorise_a_local_layers_path
+tests/test_compose.py::test_a_local_layers_roots_do_not_authorise_a_tracked_layers_path
+tests/test_compose.py::test_an_alias_colliding_with_another_projects_id_is_refused
+tests/test_compose.py::test_two_projects_claiming_the_same_alias_are_refused_naming_both
+tests/test_compose.py::test_a_collision_across_layers_is_refused_naming_the_layers
+tests/test_compose.py::test_the_same_project_id_in_two_layers_merges_rather_than_colliding
+tests/test_compose.py::test_a_tombstoned_projects_name_is_free_for_another_project
+tests/test_compose.py::test_a_project_id_that_is_not_an_identifier_is_refused
+tests/test_compose.py::test_the_composed_mappings_cannot_be_mutated_by_a_caller
+tests/test_digest.py::test_digest_is_the_sha256_prefix_and_sixty_four_hex_characters
+tests/test_digest.py::test_digest_matches_the_documented_encoding
+tests/test_digest.py::test_alias_order_does_not_change_the_digest
+tests/test_digest.py::test_payload_excludes_provenance_and_file_paths
+tests/test_digest.py::test_digest_changes_when_any_semantic_field_changes[changed0]
+tests/test_digest.py::test_digest_changes_when_any_semantic_field_changes[changed1]
+tests/test_digest.py::test_digest_changes_when_any_semantic_field_changes[changed2]
+tests/test_digest.py::test_digest_changes_when_any_semantic_field_changes[changed3]
+tests/test_digest.py::test_digest_changes_when_any_semantic_field_changes[changed4]
+tests/test_digest.py::test_digest_changes_when_any_semantic_field_changes[changed5]
+tests/test_digest.py::test_digest_changes_when_any_semantic_field_changes[changed6]
+tests/test_digest.py::test_two_source_kinds_that_share_a_string_value_do_not_share_a_digest
+tests/test_digest.py::test_digest_is_deterministic_across_calls
+tests/test_digest.py::test_digest_survives_the_catalog_moving_to_another_file
+tests/test_identifiers.py::test_accepts_lowercase_identifier_shapes[a]
+tests/test_identifiers.py::test_accepts_lowercase_identifier_shapes[web]
+tests/test_identifiers.py::test_accepts_lowercase_identifier_shapes[web-app]
+tests/test_identifiers.py::test_accepts_lowercase_identifier_shapes[web_app]
+tests/test_identifiers.py::test_accepts_lowercase_identifier_shapes[web2]
+tests/test_identifiers.py::test_accepts_lowercase_identifier_shapes[abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]
+tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[]
+tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[Web]
+tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[1web]
+tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[-web]
+tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[_web]
+tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[web app]
+tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[web.app]
+tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[web/app]
+tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[web:app]
+tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[web\xe9]
+tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]
+tests/test_identifiers.py::test_refuses_a_trailing_newline
+tests/test_identifiers.py::test_refuses_non_string_values_naming_the_type[123]
+tests/test_identifiers.py::test_refuses_non_string_values_naming_the_type[None]
+tests/test_identifiers.py::test_refuses_non_string_values_naming_the_type[True]
+tests/test_identifiers.py::test_refuses_non_string_values_naming_the_type[value3]
+tests/test_identifiers.py::test_refuses_non_string_values_naming_the_type[value4]
+tests/test_identifiers.py::test_error_names_the_field_and_the_location
+tests/test_identifiers.py::test_identifier_error_is_a_catalog_error
+tests/test_import_boundaries.py::test_the_detector_sees_imports_wherever_they_hide[import interlock-interlock]
+tests/test_import_boundaries.py::test_the_detector_sees_imports_wherever_they_hide[import claude_org_runtime.control_plane as cp-claude_org_runtime.control_plane]
+tests/test_import_boundaries.py::test_the_detector_sees_imports_wherever_they_hide[from cadenza.adapters.toml_catalog import loader-cadenza.adapters.toml_catalog]
+tests/test_import_boundaries.py::test_the_detector_sees_imports_wherever_they_hide[from ..adapters import toml_catalog-cadenza.adapters]
+tests/test_import_boundaries.py::test_the_detector_sees_imports_wherever_they_hide[from . import digest-cadenza.domain.digest]
+tests/test_import_boundaries.py::test_the_detector_sees_imports_wherever_they_hide[def f():\n    import interlock\n-interlock]
+tests/test_import_boundaries.py::test_the_detector_sees_imports_wherever_they_hide[from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    import interlock\n-interlock]
+tests/test_import_boundaries.py::test_the_walk_found_the_package_it_is_supposed_to_guard
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.__about__]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.adapters]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.adapters.claude_code]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.adapters.interlock]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.adapters.toml_catalog]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.adapters.toml_catalog.loader]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.application]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.application.compose]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.application.resolve]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.domain]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.domain.clone_source]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.domain.digest]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.domain.errors]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.domain.identifiers]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.domain.project]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.domain.refs]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.ports]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.ports.catalog_source]
+tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.ports.path_verifier]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.__about__]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.adapters]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.adapters.claude_code]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.adapters.interlock]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.adapters.toml_catalog]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.adapters.toml_catalog.loader]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.application]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.application.compose]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.application.resolve]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.domain]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.domain.clone_source]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.domain.digest]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.domain.errors]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.domain.identifiers]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.domain.project]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.domain.refs]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.ports]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.ports.catalog_source]
+tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.ports.path_verifier]
+tests/test_import_boundaries.py::test_the_reserved_interlock_adapter_seam_exists_and_is_empty
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.__about__]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.adapters]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.adapters.claude_code]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.adapters.interlock]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.adapters.toml_catalog]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.adapters.toml_catalog.loader]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.application]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.application.compose]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.application.resolve]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.domain]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.domain.clone_source]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.domain.digest]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.domain.errors]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.domain.identifiers]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.domain.project]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.domain.refs]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.ports]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.ports.catalog_source]
+tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.ports.path_verifier]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.__about__]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.adapters]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.adapters.claude_code]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.adapters.interlock]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.adapters.toml_catalog]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.adapters.toml_catalog.loader]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.application]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.application.compose]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.application.resolve]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.domain]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.domain.clone_source]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.domain.digest]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.domain.errors]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.domain.identifiers]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.domain.project]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.domain.refs]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.ports]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.ports.catalog_source]
+tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.ports.path_verifier]
+tests/test_import_boundaries.py::test_the_domain_performs_no_io[cadenza.domain]
+tests/test_import_boundaries.py::test_the_domain_performs_no_io[cadenza.domain.clone_source]
+tests/test_import_boundaries.py::test_the_domain_performs_no_io[cadenza.domain.digest]
+tests/test_import_boundaries.py::test_the_domain_performs_no_io[cadenza.domain.errors]
+tests/test_import_boundaries.py::test_the_domain_performs_no_io[cadenza.domain.identifiers]
+tests/test_import_boundaries.py::test_the_domain_performs_no_io[cadenza.domain.project]
+tests/test_import_boundaries.py::test_the_domain_performs_no_io[cadenza.domain.refs]
+tests/test_import_boundaries.py::test_no_test_anchors_a_layer_on_a_posix_only_literal
+tests/test_refs.py::test_accepts_ordinary_branch_names[main]
+tests/test_refs.py::test_accepts_ordinary_branch_names[develop]
+tests/test_refs.py::test_accepts_ordinary_branch_names[feature/g1-registry]
+tests/test_refs.py::test_accepts_ordinary_branch_names[release-1.2.0]
+tests/test_refs.py::test_accepts_ordinary_branch_names[v1.0]
+tests/test_refs.py::test_accepts_ordinary_branch_names[a.b]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[-must not be empty]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[main branch-whitespace or control characters]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[main\tbranch-whitespace or control characters]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[main\nbranch-whitespace or control characters]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[main\x01-whitespace or control characters]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[main\x7f-whitespace or control characters]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[main~1-must not contain any of]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[main^-must not contain any of]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[refs:main-must not contain any of]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[main?-must not contain any of]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[main*-must not contain any of]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[main[0]-must not contain any of]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[main\\branch-must not contain any of]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[main..dev-must not contain '\\.\\.']
+tests/test_refs.py::test_refuses_each_documented_ref_violation[main@{1}-must not contain '@]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[/main-must not start or end with '/']
+tests/test_refs.py::test_refuses_each_documented_ref_violation[main/-must not start or end with '/']
+tests/test_refs.py::test_refuses_each_documented_ref_violation[feature//x-must not contain '//']
+tests/test_refs.py::test_refuses_each_documented_ref_violation[-main-would be read as an option]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[.main-component beginning with]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[feature/.hidden-component beginning with]
+tests/test_refs.py::test_refuses_each_documented_ref_violation[main.lock-must not end with '\\.lock']
+tests/test_refs.py::test_refuses_each_documented_ref_violation[feature/x.lock-must not end with '\\.lock']
+tests/test_refs.py::test_refuses_non_string_values_naming_the_type[1]
+tests/test_refs.py::test_refuses_non_string_values_naming_the_type[None]
+tests/test_refs.py::test_refuses_non_string_values_naming_the_type[True]
+tests/test_refs.py::test_refuses_non_string_values_naming_the_type[value3]
+tests/test_refs.py::test_error_carries_the_location_it_was_given
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[main]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[feat/cadenza-bootstrap]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[release-1.2]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a.b]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[release.]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a.]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[feat/x.]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[x.lock]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[feat/x.lock]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[.hidden]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[feat/.hidden]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a..b]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a b]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a~b]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a^b]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a:b]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a?b]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a*b]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a[b]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a\\b]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a@{b]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[a//b]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[/leading]
+tests/test_refs.py::test_the_validator_refuses_everything_git_refuses[trailing/]
+tests/test_refs.py::test_the_shapes_codex_review_found[release.]
+tests/test_refs.py::test_the_shapes_codex_review_found[a.]
+tests/test_refs.py::test_the_shapes_codex_review_found[feat/x.]
+tests/test_refs.py::test_the_shapes_codex_review_found[@]
+tests/test_resolve.py::test_resolves_by_project_id
+tests/test_resolve.py::test_resolves_by_alias_to_the_same_immutable_identity
+tests/test_resolve.py::test_aliases_travel_with_the_snapshot_as_information
+tests/test_resolve.py::test_snapshot_carries_the_config_digest
+tests/test_resolve.py::test_snapshot_carries_per_field_provenance
+tests/test_resolve.py::test_an_unknown_name_is_refused_with_the_closest_candidates
+tests/test_resolve.py::test_an_unrelated_name_is_refused_without_inventing_a_candidate
+tests/test_resolve.py::test_a_tombstoned_project_no_longer_resolves
+tests/test_resolve.py::test_not_found_is_not_a_catalog_error
+tests/test_resolve.py::test_provenance_is_total_over_every_field_of_the_snapshot
+tests/test_resolve.py::test_a_later_layer_stating_aliases_owns_their_provenance
+tests/test_toml_loader.py::test_filenames_are_the_documented_ones
+tests/test_toml_loader.py::test_the_tracked_file_is_required_and_its_absence_names_the_path
+tests/test_toml_loader.py::test_the_local_file_is_optional
+tests/test_toml_loader.py::test_layers_are_returned_lowest_precedence_first
+tests/test_toml_loader.py::test_each_document_carries_its_origin_and_base_dir
+tests/test_toml_loader.py::test_the_parsed_data_is_handed_over_unvalidated
+tests/test_toml_loader.py::test_a_syntax_error_surfaces_as_a_catalog_error_naming_the_file[projects.toml]
+tests/test_toml_loader.py::test_a_syntax_error_surfaces_as_a_catalog_error_naming_the_file[projects.local.toml]
+tests/test_toml_loader.py::test_a_directory_where_the_tracked_file_should_be_is_not_mistaken_for_one
+tests/test_toml_loader.py::test_the_repository_catalog_loads_and_composes
+tests/test_toml_loader.py::test_a_relative_directory_still_yields_an_absolute_anchor
+tests/test_toml_loader.py::test_layer_document_refuses_a_relative_base_dir
+tests/test_toml_loader.py::test_the_shipped_tracked_catalog_composes
+tests/test_toml_loader.py::test_a_drive_less_path_is_not_absolute_on_windows

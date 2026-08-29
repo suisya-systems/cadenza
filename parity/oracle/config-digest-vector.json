@@ -1,0 +1,98 @@
+{
+  "generated_by": "scripts/oracle/dump_config_digest.py",
+  "source_revision": "the working tree at generation time; see docs/porting.md section 4",
+  "python_version": "3.12.3",
+  "case_count": 15,
+  "cases": [
+    {
+      "id": "ascii-git-url",
+      "canonical_json": "{\"aliases\":[\"frontend\",\"site\"],\"base_branch\":\"main\",\"project_id\":\"web\",\"source\":{\"kind\":\"git_url\",\"url\":\"https://example.invalid/org/web.git\"}}",
+      "canonical_bytes_hex": "7b22616c6961736573223a5b2266726f6e74656e64222c2273697465225d2c22626173655f6272616e6368223a226d61696e222c2270726f6a6563745f6964223a22776562222c22736f75726365223a7b226b696e64223a226769745f75726c222c2275726c223a2268747470733a2f2f6578616d706c652e696e76616c69642f6f72672f7765622e676974227d7d",
+      "digest": "sha256:5f3c756c766139559fd54fffd04b09f312e39511f74ebb16a64397b201f0b253"
+    },
+    {
+      "id": "no-aliases",
+      "canonical_json": "{\"aliases\":[],\"base_branch\":\"main\",\"project_id\":\"web\",\"source\":{\"kind\":\"git_url\",\"url\":\"https://example.invalid/org/web.git\"}}",
+      "canonical_bytes_hex": "7b22616c6961736573223a5b5d2c22626173655f6272616e6368223a226d61696e222c2270726f6a6563745f6964223a22776562222c22736f75726365223a7b226b696e64223a226769745f75726c222c2275726c223a2268747470733a2f2f6578616d706c652e696e76616c69642f6f72672f7765622e676974227d7d",
+      "digest": "sha256:c3241bd91f57d5a6bd69ccb4413a24234c8d85d58990d1eed5b1ee78debfc14d"
+    },
+    {
+      "id": "new-repository",
+      "canonical_json": "{\"aliases\":[\"site\"],\"base_branch\":\"main\",\"project_id\":\"web\",\"source\":{\"kind\":\"new\"}}",
+      "canonical_bytes_hex": "7b22616c6961736573223a5b2273697465225d2c22626173655f6272616e6368223a226d61696e222c2270726f6a6563745f6964223a22776562222c22736f75726365223a7b226b696e64223a226e6577227d7d",
+      "digest": "sha256:b58dfcc34fa34200fe386ca3f294174b89e077594b8a0a0f812533e41a1d8a36"
+    },
+    {
+      "id": "local-path",
+      "canonical_json": "{\"aliases\":[],\"base_branch\":\"main\",\"project_id\":\"web\",\"source\":{\"kind\":\"local_path\",\"path\":\"/srv/web\"}}",
+      "canonical_bytes_hex": "7b22616c6961736573223a5b5d2c22626173655f6272616e6368223a226d61696e222c2270726f6a6563745f6964223a22776562222c22736f75726365223a7b226b696e64223a226c6f63616c5f70617468222c2270617468223a222f7372762f776562227d7d",
+      "digest": "sha256:2dda8706b184efc8edc3157d936c1c4fbd5915ce89ebc878d0506ad95b580948"
+    },
+    {
+      "id": "non-ascii-path",
+      "canonical_json": "{\"aliases\":[],\"base_branch\":\"main\",\"project_id\":\"web\",\"source\":{\"kind\":\"local_path\",\"path\":\"/srv/\u65e5\u672c\u8a9e\"}}",
+      "canonical_bytes_hex": "7b22616c6961736573223a5b5d2c22626173655f6272616e6368223a226d61696e222c2270726f6a6563745f6964223a22776562222c22736f75726365223a7b226b696e64223a226c6f63616c5f70617468222c2270617468223a222f7372762fe697a5e69cace8aa9e227d7d",
+      "digest": "sha256:2193b8ebec95d53755ac981d268eabcc2e44a47f73cb536bf170dea0b344ee34"
+    },
+    {
+      "id": "astral-path",
+      "canonical_json": "{\"aliases\":[],\"base_branch\":\"main\",\"project_id\":\"web\",\"source\":{\"kind\":\"local_path\",\"path\":\"/srv/\ud835\udd4c\ud83d\ude00\"}}",
+      "canonical_bytes_hex": "7b22616c6961736573223a5b5d2c22626173655f6272616e6368223a226d61696e222c2270726f6a6563745f6964223a22776562222c22736f75726365223a7b226b696e64223a226c6f63616c5f70617468222c2270617468223a222f7372762ff09d958cf09f9880227d7d",
+      "digest": "sha256:4c0bf9aab61338315aebfd2bc0ec1eab0add947fbfa617086aeb27fa6bdbc6ef"
+    },
+    {
+      "id": "idn-host-url",
+      "canonical_json": "{\"aliases\":[],\"base_branch\":\"main\",\"project_id\":\"web\",\"source\":{\"kind\":\"git_url\",\"url\":\"https://\u4f8b.invalid/org/web.git\"}}",
+      "canonical_bytes_hex": "7b22616c6961736573223a5b5d2c22626173655f6272616e6368223a226d61696e222c2270726f6a6563745f6964223a22776562222c22736f75726365223a7b226b696e64223a226769745f75726c222c2275726c223a2268747470733a2f2fe4be8b2e696e76616c69642f6f72672f7765622e676974227d7d",
+      "digest": "sha256:fc51392160f9dd2aff7ff0c71baf88440779b8f1426810068dc0d50b6915e856"
+    },
+    {
+      "id": "non-ascii-base-branch",
+      "canonical_json": "{\"aliases\":[],\"base_branch\":\"release/\u30ea\u30ea\u30fc\u30b9\",\"project_id\":\"web\",\"source\":{\"kind\":\"git_url\",\"url\":\"https://example.invalid/org/web.git\"}}",
+      "canonical_bytes_hex": "7b22616c6961736573223a5b5d2c22626173655f6272616e6368223a2272656c656173652fe383aae383aae383bce382b9222c2270726f6a6563745f6964223a22776562222c22736f75726365223a7b226b696e64223a226769745f75726c222c2275726c223a2268747470733a2f2f6578616d706c652e696e76616c69642f6f72672f7765622e676974227d7d",
+      "digest": "sha256:c5ce7ffc0ce2ca80c0b4d66629dfafb27dcdfe4c8c80ed4c5763059091388c9a"
+    },
+    {
+      "id": "combining-marks-path",
+      "canonical_json": "{\"aliases\":[],\"base_branch\":\"main\",\"project_id\":\"web\",\"source\":{\"kind\":\"local_path\",\"path\":\"/srv/caf\u00e9\"}}",
+      "canonical_bytes_hex": "7b22616c6961736573223a5b5d2c22626173655f6272616e6368223a226d61696e222c2270726f6a6563745f6964223a22776562222c22736f75726365223a7b226b696e64223a226c6f63616c5f70617468222c2270617468223a222f7372762f636166c3a9227d7d",
+      "digest": "sha256:f36fce9d2a1299b8dd41a3d0151dc0204fe8d0164a963f1f2ebcd31f35e5424c"
+    },
+    {
+      "id": "combining-marks-path-decomposed",
+      "canonical_json": "{\"aliases\":[],\"base_branch\":\"main\",\"project_id\":\"web\",\"source\":{\"kind\":\"local_path\",\"path\":\"/srv/cafe\u0301\"}}",
+      "canonical_bytes_hex": "7b22616c6961736573223a5b5d2c22626173655f6272616e6368223a226d61696e222c2270726f6a6563745f6964223a22776562222c22736f75726365223a7b226b696e64223a226c6f63616c5f70617468222c2270617468223a222f7372762f63616665cc81227d7d",
+      "digest": "sha256:c2ae1ded56e96f3b1e0ff420b3068bb2341a6198568c4e1b122817278cd51387"
+    },
+    {
+      "id": "escapes-in-path",
+      "canonical_json": "{\"aliases\":[],\"base_branch\":\"main\",\"project_id\":\"web\",\"source\":{\"kind\":\"local_path\",\"path\":\"/srv/\\b\\t\\n\\f\\r\\u0000\\u001f\\\"\\\\\"}}",
+      "canonical_bytes_hex": "7b22616c6961736573223a5b5d2c22626173655f6272616e6368223a226d61696e222c2270726f6a6563745f6964223a22776562222c22736f75726365223a7b226b696e64223a226c6f63616c5f70617468222c2270617468223a222f7372762f5c625c745c6e5c665c725c75303030305c75303031665c225c5c227d7d",
+      "digest": "sha256:4ee95068e871f9db479316a2c4a27cbfa48083c6818280a4a3f8ededf8b39936"
+    },
+    {
+      "id": "del-and-c1-in-path",
+      "canonical_json": "{\"aliases\":[],\"base_branch\":\"main\",\"project_id\":\"web\",\"source\":{\"kind\":\"local_path\",\"path\":\"/srv/\u007f\u0085\"}}",
+      "canonical_bytes_hex": "7b22616c6961736573223a5b5d2c22626173655f6272616e6368223a226d61696e222c2270726f6a6563745f6964223a22776562222c22736f75726365223a7b226b696e64223a226c6f63616c5f70617468222c2270617468223a222f7372762f7fc285227d7d",
+      "digest": "sha256:d52d9b999f0e557f27318893433f2d8bed586c803116a5e803f547d1db28341c"
+    },
+    {
+      "id": "line-and-paragraph-separator-in-path",
+      "canonical_json": "{\"aliases\":[],\"base_branch\":\"main\",\"project_id\":\"web\",\"source\":{\"kind\":\"local_path\",\"path\":\"/srv/\u2028\u2029\"}}",
+      "canonical_bytes_hex": "7b22616c6961736573223a5b5d2c22626173655f6272616e6368223a226d61696e222c2270726f6a6563745f6964223a22776562222c22736f75726365223a7b226b696e64223a226c6f63616c5f70617468222c2270617468223a222f7372762fe280a8e280a9227d7d",
+      "digest": "sha256:db52a22c2415d87bc55e226e41fa7e50232a3822d7cb2cad8a7842dacf2e87e9"
+    },
+    {
+      "id": "alias-sort-crosses-the-surrogate-boundary",
+      "canonical_json": "{\"aliases\":[\"a\",\"\ufffd\",\"\ud800\udc00\"],\"base_branch\":\"main\",\"project_id\":\"web\",\"source\":{\"kind\":\"git_url\",\"url\":\"https://example.invalid/org/web.git\"}}",
+      "canonical_bytes_hex": "7b22616c6961736573223a5b2261222c22efbfbd222c22f0908080225d2c22626173655f6272616e6368223a226d61696e222c2270726f6a6563745f6964223a22776562222c22736f75726365223a7b226b696e64223a226769745f75726c222c2275726c223a2268747470733a2f2f6578616d706c652e696e76616c69642f6f72672f7765622e676974227d7d",
+      "digest": "sha256:2d20e5d227e136a1f053db916d1295e24ecad789edd6154ed1bedd6c51de61ca"
+    },
+    {
+      "id": "alias-sort-is-not-length-first",
+      "canonical_json": "{\"aliases\":[\"a\",\"aa\",\"ab\",\"b\"],\"base_branch\":\"main\",\"project_id\":\"web\",\"source\":{\"kind\":\"git_url\",\"url\":\"https://example.invalid/org/web.git\"}}",
+      "canonical_bytes_hex": "7b22616c6961736573223a5b2261222c226161222c226162222c2262225d2c22626173655f6272616e6368223a226d61696e222c2270726f6a6563745f6964223a22776562222c22736f75726365223a7b226b696e64223a226769745f75726c222c2275726c223a2268747470733a2f2f6578616d706c652e696e76616c69642f6f72672f7765622e676974227d7d",
+      "digest": "sha256:2bba6bbcd0d02a857d9cc82596d86c26979e5de5f8763fa9a4aeb947505a24cb"
+    }
+  ]
+}

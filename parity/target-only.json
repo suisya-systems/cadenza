@@ -1,0 +1,17 @@
+{
+  "note": "Test files that translate no source case. `scripts/parity-check.mjs` requires every collected test to belong to a file that is either a ledger's target file or listed here with a reason, so a whole file of tests cannot sit outside the accounting. A file listed here may not also be a ledger target: a ported file's unmapped tests belong in that ledger's `target_only_tests`, where they are named one by one.",
+  "files": [
+    {
+      "path": "test/domain/canonical-json.test.ts",
+      "why": "The canonical encoder's own contract. `tests/test_digest.py` has nothing to say about code-point collation or lone surrogates because in Python both are true by construction -- `sorted()` compares code points and `str.encode('utf-8')` refuses an unpaired surrogate, with no test written for either. Reimplementing those two facts in a language whose defaults are the other way is what created the surface, so the surface gets assertions. The differential oracle checks the same code against real CPython output and is the stronger check; these cases exist so a failure names which property broke."
+    },
+    {
+      "path": "test/domain/digest-oracle.test.ts",
+      "why": "The differential oracle (docs/porting.md section 4). It makes a claim no ported test can make -- that the artefact CPython produces and the artefact Node produces are the same bytes, on inputs nobody wrote a test about -- so by construction it translates no source case."
+    },
+    {
+      "path": "test/testkit/testkit.contract.test.ts",
+      "why": "The vendored testkit's own contract. `parametrize` is the one piece of machinery the ledger's correctness depends on: if it stopped spelling ids the way pytest does, every mapping in every ledger would still reconcile against the new spelling and nobody would be told."
+    }
+  ]
+}

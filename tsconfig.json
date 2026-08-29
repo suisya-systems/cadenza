@@ -1,0 +1,38 @@
+{
+  // Type-check configuration: covers every TypeScript file in the repository
+  // and emits nothing. There is no build configuration yet, by decision
+  // (DECISIONS.md D-0008): the package is private, ships no dist, and is
+  // consumed only by its own test suite.
+  //
+  // The module settings are a bootstrap decision, not a default (D-0003):
+  // ESM + NodeNext + explicit `.js` suffixes on relative imports. Changing them
+  // after the suite is ported would mean rewriting every import in it.
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+
+    "strict": true,
+    // Not implied by `strict` -- both are enabled deliberately (D-0005).
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "test", "scripts", "vitest.config.ts"]
+}
