@@ -51,15 +51,22 @@ Early. This repository currently contains:
 
 Explicitly **not** here yet:
 
-- **G2 delegation contract** - blocked on interlock settling its own contract.
-  Designing against a moving target would bake in a shape both sides would then
-  have to unpick.
+- **G2 delegation contract** - not designed. The open question is what a
+  delegated run may do, on whose authority, and how that is expressed at the
+  seam to a control plane. Interlock recorded the same question
+  (suisya-systems/interlock#63) and left it unanswered; that reference is where
+  the question came from, not an answer in transit. G2 is held at cadenza#9, and
+  the condition for taking it up is cadenza's to set. It is not set yet:
+  `DECISIONS.md` D-0023 lists the candidate conditions and records that none has
+  been chosen.
 - **any dependency on interlock** - not in `pyproject.toml`, not as an extra.
-  Interlock's control-plane API and SQLite schema are marked throwaway on its
-  own side, so importing them now would turn a deliberate spike into a
-  dependency by inertia. `src/cadenza/adapters/interlock/` reserves the seam and
-  stays empty; `tests/test_import_boundaries.py` fails the build the day
-  anything under `cadenza` imports `claude_org_runtime`.
+  Interlock's control-plane API and SQLite schema are marked throwaway on
+  interlock's own side, and interlock is frozen, so no later stabilisation is
+  coming: adopting them would turn a deliberate spike into a dependency by
+  inertia. `src/cadenza/adapters/interlock/` reserves the seam and stays empty;
+  `tests/test_import_boundaries.py` fails the build the day anything under
+  `cadenza` imports `claude_org_runtime`. Whether cadenza ever takes that
+  dependency is decided here (D-0023).
 
 ## Install
 
