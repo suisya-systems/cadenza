@@ -1186,9 +1186,13 @@ was implied to be temporary; D-0014 recorded "interlock#74 landing" as "the stat
 unfreezing G2", and cadenza#9 restated the same shape.
 
 None of those conditions can be met. Interlock is the frozen source this successor stack is ported
-from: its last commit is 2026-08-21 (UTC), its own delegation-contract question (interlock#63) was
-recorded and left unanswered, and interlock#74 is the kickoff for porting it away, not a contract
-that will be settled there. A condition that cannot occur is not a condition; it is an unbounded
+from: its last commit is 2026-08-21 (UTC), its own delegation-contract question — interlock's open
+issue #63, "Operating-layer delegation contract", opened 2026-08-21 — was recorded and left
+unanswered, and interlock#74 is the kickoff for porting it away, not a contract that will be settled
+there. (Issue numbers in interlock's *git history* are not interlock's: commits inherited from
+`claude-org-runtime`, which interlock forked at `befd309`, carry that repository's numbering, so a
+`Closes #63` dated before the fork is a different issue entirely. Cite interlock issues by title as
+well as by number.) A condition that cannot occur is not a condition; it is an unbounded
 wait wearing one. The test applied across the sweep was: **could a reader — human or agent — take
 this sentence at face value and conclude that waiting is the correct behaviour?** Where the answer
 was yes, the sentence was wrong, not merely imprecise. Continuo reached the same conclusion about

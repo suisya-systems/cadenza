@@ -53,9 +53,9 @@ Explicitly **not** here yet:
 
 - **G2 delegation contract** - not designed. The open question is what a
   delegated run may do, on whose authority, and how that is expressed at the
-  seam to a control plane. Interlock recorded the same question
-  (suisya-systems/interlock#63) and left it unanswered; that reference is where
-  the question came from, not an answer in transit. G2 is held at cadenza#9, and
+  seam to a control plane. Interlock recorded the same question - its open
+  issue #63, "Operating-layer delegation contract" - and left it unanswered;
+  that reference is where the question came from, not an answer in transit. G2 is held at cadenza#9, and
   the condition for taking it up is cadenza's to set. It is not set yet:
   `DECISIONS.md` D-0023 lists the candidate conditions and records that none has
   been chosen.
