@@ -52,7 +52,7 @@
       }
     ],
     "target_only_tests": {
-      "count": 31,
+      "count": 34,
       "ids": [
         "test/architecture/import-boundaries.test.ts::no module imports interlock[src/domain/canonical-json.ts]",
         "test/architecture/import-boundaries.test.ts::no module imports interlock[src/domain/frozen.ts]",
@@ -84,9 +84,12 @@
         "test/architecture/import-boundaries.test.ts::the domain performs no I/O[src/domain/python-path.ts]",
         "test/architecture/import-boundaries.test.ts::the domain performs no I/O[src/domain/python-text.ts]",
         "test/architecture/import-boundaries.test.ts::the domain performs no I/O[src/domain/python-urlsplit.ts]",
-        "test/architecture/import-boundaries.test.ts::the detector also sees the CommonJS routes ESM forbids"
+        "test/architecture/import-boundaries.test.ts::the detector also sees the CommonJS routes ESM forbids",
+        "test/architecture/import-boundaries.test.ts::the application performs no I/O[src/application/compose.ts]",
+        "test/architecture/import-boundaries.test.ts::the application performs no I/O[src/application/resolve.ts]",
+        "test/architecture/import-boundaries.test.ts::no module in a pure layer reaches a global I/O API"
       ],
-      "why": "Thirty-one, in two groups. Thirty are the six TypeScript modules that have no Python counterpart -- `canonical-json`, `frozen` and the four `python-*` standard-library ports (D-0018) -- appearing in the five per-module functions; they are boundary cases with no source case because the modules themselves were created by the port. The last is the detector's `require(...)` and `import x = require(...)` routes: `tsc` refuses both in an ESM module under D-0003, so no source case and no real module exercises them, and machinery nothing asserts is untested surface -- the rule `test/testkit/testkit.contract.test.ts` already records. The handling stays because the sweep should not depend on the module setting staying what it is today."
+      "why": "Thirty-four, in four groups. Thirty are the six TypeScript modules that have no Python counterpart -- `canonical-json`, `frozen` and the four `python-*` standard-library ports (D-0018) -- appearing in the five per-module functions; they are boundary cases with no source case because the modules themselves were created by the port. One is the detector's `require(...)` and `import x = require(...)` routes: `tsc` refuses both in an ESM module under D-0003, so no source case and no real module exercises them, and machinery nothing asserts is untested surface -- the rule `test/testkit/testkit.contract.test.ts` already records. The handling stays because the sweep should not depend on the module setting staying what it is today. Two are `src/application`'s no-I/O cases: design section 8 marks `application/` `(no I/O)` in the same code block that marks `domain/`, and the source parametrises its case over the domain alone -- so under D-0001's oracle order the document's wider claim is the one enforced, and the two extra cases translate no source case because none was written. The last is the global-I/O sweep, a surface the port created rather than inherited: reaching the network in Python means importing something, which is why a denylist over modules was a complete answer there, while Node hands `fetch` to every module for free and `console` writes to a stream nobody imported. An import allowlist would report nothing at all about a domain module that simply called `fetch(url)`."
     },
     "approved_non_running": []
   },
@@ -103,8 +106,8 @@
       "why": "The source has the same hole and in the same place: it matches `keyword.arg != \"base_dir\"`, so a positional third argument to `layer_document` escapes it too. Carried over rather than widened, because widening it is a change to what the case asserts and belongs in the belt that needs it. What is added instead is the non-vacuity assertion the source lacks, which is what would catch the sweep silently matching nothing at all."
     },
     {
-      "behaviour": "The scan reads specifiers, not resolved semantics. A module reached through a specifier built at runtime -- `import(someVariable)` -- is invisible to it.",
-      "why": "The source has the identical limitation for the identical reason: `ast.Import` carries a name, not a computed value, so `importlib.import_module(name)` is invisible there too. Closing it requires resolving arbitrary expressions, which is a type checker's job and not a boundary check's. Neither tree contains such a call today."
+      "behaviour": "The scan reads specifiers, not resolved semantics, so a module reached through a specifier built at runtime -- `import(someVariable)` -- cannot be named. It is NOT ignored: the port records such an edge as `<computed>` and fails closed, so `no module imports interlock` and the no-I/O cases both turn red on it.",
+      "why": "The source has the identical blind spot for the identical reason -- `ast.Import` carries a name, not a computed value, so `importlib.import_module(name)` is invisible there -- but it resolves it the other way, by silently seeing nothing. Failing closed instead was raised at review of this belt and is the one place the port is deliberately stricter than the source: an unreadable edge makes every check below optional, since one variable would let the module graph say whatever its author wanted. Nothing under `src/` computes a specifier today, so the first thing that does has to say why. A no-substitution template -- ``import(`interlock`)`` -- is statically known and is read as the literal it is, rather than being dropped by a scan that only recognised quotes."
     }
   ],
   "entries": [

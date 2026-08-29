@@ -20,10 +20,10 @@
  * nothing and a suite of zero assertions is green. Two things stop that. The
  * walk has its own case below, as the source's does; and, unlike the source,
  * every id this file generates is claimed by the ledger, so a module that stops
- * being discovered takes its four target ids with it and
- * `scripts/parity-check.mjs` reports them `missing`. A new module under `src/`
- * is the same story in reverse: its ids are `unmapped` until somebody accounts
- * for them.
+ * being discovered takes its target ids with it -- five for one in a pure
+ * layer, four elsewhere -- and `scripts/parity-check.mjs` reports them
+ * `missing`. A new module under `src/` is the same story in reverse: its ids
+ * are `unmapped` until somebody accounts for them.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -63,7 +63,20 @@ const FORBIDDEN_BY_LAYER: Readonly<Record<string, readonly string[]>> = {
 };
 
 /**
- * What a domain module may reach outside its own layer, and under exactly which
+ * The layers design section 8 marks `(no I/O)`.
+ *
+ * **Both** of them. The source parametrises its no-I/O case over `cadenza.domain`
+ * alone, and the design document -- the primary oracle, D-0001 -- marks
+ * `application/` the same way in the same code block. Where the document and a
+ * source test disagree like this the document wins and the gap is recorded
+ * rather than transcribed (docs/porting.md section 2), so `src/application` is
+ * swept too. Its two cases are target-only: they translate no source case
+ * because the source never wrote one.
+ */
+const PURE_LAYERS = ["src/domain", "src/application"];
+
+/**
+ * What a module in a pure layer may reach outside it, and under exactly which
  * names.
  *
  * The source states this as a **denylist** -- `socket`, `subprocess`, `shutil`
@@ -80,7 +93,7 @@ const FORBIDDEN_BY_LAYER: Readonly<Record<string, readonly string[]>> = {
  * is a diff to this table with a reason beside it, which is the review the
  * source's `os` allowance got once and could not ask for again.
  */
-const DOMAIN_ALLOWED_BUILTINS: Readonly<Record<string, readonly string[]>> = {
+const PURE_ALLOWED_BUILTINS: Readonly<Record<string, readonly string[]>> = {
   // `hashlib` on the Python side. Hashing is computation, not I/O.
   "node:crypto": ["createHash"],
   // The `os` allowance the source records, narrowed to the one function it was
@@ -90,6 +103,64 @@ const DOMAIN_ALLOWED_BUILTINS: Readonly<Record<string, readonly string[]>> = {
   // source's denylist names first.
   "node:net": ["isIP"],
 };
+
+/**
+ * I/O Node hands to every module without an import, so no allowlist over
+ * specifiers can see it.
+ *
+ * This has no counterpart in the source and could not have one: reaching the
+ * network in Python means importing something, which is why a denylist of
+ * modules was a complete answer there. `console` is here because writing to a
+ * stream is I/O whatever it is for, and because D-0007 governs what cadenza
+ * prints.
+ */
+const FORBIDDEN_GLOBALS = ["fetch", "WebSocket", "EventSource", "XMLHttpRequest", "console"];
+
+/**
+ * The two members of the `process` global a pure layer may read.
+ *
+ * `env` is `expanduser` consulting `$HOME` (`USERPROFILE`, `HOMEPATH` and
+ * `HOMEDRIVE` on the other flavour) -- the one deliberate exception the source
+ * records, in the same words. `platform` chooses a path flavour and touches
+ * nothing. `src/domain/python-path.ts` is the module that needs both.
+ */
+const PROCESS_ALLOWED_MEMBERS = ["env", "platform"];
+
+/**
+ * Whether an identifier is a name being declared or a property being named,
+ * rather than a reference to the global of that name.
+ *
+ * `catalog.fetch` and `{ fetch: ... }` are somebody else's `fetch`. A local
+ * *binding* called `fetch` is treated as a declaration here and shadows the
+ * global for its scope, which this does not follow -- a later reference in that
+ * scope would be reported. Nothing in `src/` declares one, and being told to
+ * rename it is a cheaper failure than the alternative.
+ */
+function isShadowedOrDeclared(node: ts.Identifier): boolean {
+  const parent = node.parent;
+  if (parent === undefined) {
+    return false;
+  }
+  if (ts.isPropertyAccessExpression(parent) && parent.name === node) {
+    return true;
+  }
+  if (ts.isQualifiedName(parent) && parent.right === node) {
+    return true;
+  }
+  return (
+    (ts.isPropertyAssignment(parent) ||
+      ts.isPropertySignature(parent) ||
+      ts.isMethodDeclaration(parent) ||
+      ts.isMethodSignature(parent) ||
+      ts.isVariableDeclaration(parent) ||
+      ts.isParameter(parent) ||
+      ts.isBindingElement(parent) ||
+      ts.isFunctionDeclaration(parent) ||
+      ts.isImportSpecifier(parent) ||
+      ts.isImportClause(parent)) &&
+    parent.name === node
+  );
+}
 
 /**
  * Below this, assume the walk broke rather than that the tree shrank.
@@ -115,6 +186,25 @@ function moduleFiles(directory: string = SRC_ROOT): string[] {
 
 const MODULES = moduleFiles();
 const DOMAIN_MODULES = MODULES.filter((module) => module.startsWith("src/domain/"));
+const APPLICATION_MODULES = MODULES.filter((module) => module.startsWith("src/application/"));
+/** Every module in a layer section 8 marks `(no I/O)`, whichever layer that is. */
+const PURE_LAYER_MODULES = MODULES.filter((module) =>
+  PURE_LAYERS.some((layer) => module.startsWith(`${layer}/`)),
+);
+
+/**
+ * The specifier recorded for a dynamic import whose argument is not a literal.
+ *
+ * `import(name)` is a real edge that no static scan can follow, and dropping it
+ * silently would make every check below optional: one variable and the module
+ * graph says whatever its author wants. So it is recorded as an offender
+ * instead, under a name no package can have. Nothing in `src/` computes a
+ * specifier today, and the first thing that does should have to say why.
+ *
+ * A template with no substitutions -- `import(`interlock`)` -- is NOT this. It
+ * is statically known, so it is read as the literal it is.
+ */
+const COMPUTED_SPECIFIER = "<computed>";
 
 /** One module reached from another, with the names it binds. */
 interface ImportRef {
@@ -222,8 +312,16 @@ function importsIn(source: string, from: string): readonly ImportRef[] {
       const reachesAModule =
         callee.kind === ts.SyntaxKind.ImportKeyword ||
         (ts.isIdentifier(callee) && callee.text === "require");
-      if (reachesAModule && argument !== undefined && ts.isStringLiteral(argument)) {
-        record(argument.text, ["*"]);
+      if (reachesAModule) {
+        // A no-substitution template is a literal with different quotes and is
+        // read as one. Anything else -- a variable, a concatenation, a template
+        // with a hole in it -- cannot be read at all, and fails closed.
+        const literal =
+          argument !== undefined &&
+          (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument))
+            ? argument.text
+            : COMPUTED_SPECIFIER;
+        record(literal, ["*"]);
       }
     }
     ts.forEachChild(node, visit);
@@ -359,10 +457,14 @@ test("the walk found the module graph it is supposed to guard", () => {
 
 const PER_MODULE = MODULES.map((module) => [module, module] as const);
 const PER_DOMAIN_MODULE = DOMAIN_MODULES.map((module) => [module, module] as const);
+const PER_APPLICATION_MODULE = APPLICATION_MODULES.map((module) => [module, module] as const);
 
 parametrize("no module imports interlock", PER_MODULE, (module) => {
+  // A specifier nothing can read is counted here rather than ignored. The
+  // question is whether this module reaches interlock, and `import(name)` is
+  // an edge for which the honest answer is "unknown" -- which is not "no".
   const offenders = importsIn(sourceOf(module), module)
-    .filter((ref) => reachesForbiddenPackage(ref.specifier))
+    .filter((ref) => reachesForbiddenPackage(ref.specifier) || ref.specifier === COMPUTED_SPECIFIER)
     .map((ref) => ref.specifier)
     .sort();
   expect(offenders, `${module} imports ${offenders.join(", ")}`).toEqual([]);
@@ -413,16 +515,14 @@ parametrize("no module says provider-neutral", PER_MODULE, (module) => {
   expect(sourceOf(module)).not.toContain("provider-neutral");
 });
 
-parametrize("the domain performs no I/O", PER_DOMAIN_MODULE, (module) => {
-  // G1 never clones, never touches a network and never reads a working tree.
-  // The allowlist above is the whole of what is permitted, and the reasons are
-  // recorded there.
+/** Everything a pure layer's module reaches that the allowlist does not admit. */
+function impureImportsIn(module: string): string[] {
   const offenders: string[] = [];
   for (const ref of importsIn(sourceOf(module), module)) {
     if (ref.resolved !== null) {
       continue;
     }
-    const allowed = DOMAIN_ALLOWED_BUILTINS[ref.specifier];
+    const allowed = PURE_ALLOWED_BUILTINS[ref.specifier];
     if (allowed === undefined) {
       offenders.push(ref.specifier);
       continue;
@@ -433,7 +533,75 @@ parametrize("the domain performs no I/O", PER_DOMAIN_MODULE, (module) => {
       }
     }
   }
-  expect(offenders.sort(), `${module} reaches ${offenders.join(", ")}`).toEqual([]);
+  return offenders.sort();
+}
+
+parametrize("the domain performs no I/O", PER_DOMAIN_MODULE, (module) => {
+  // G1 never clones, never touches a network and never reads a working tree.
+  // The allowlist above is the whole of what is permitted by import, and the
+  // reasons are recorded there. What it cannot see is the global surface, which
+  // has its own case below.
+  const offenders = impureImportsIn(module);
+  expect(offenders, `${module} reaches ${offenders.join(", ")}`).toEqual([]);
+});
+
+parametrize("the application performs no I/O", PER_APPLICATION_MODULE, (module) => {
+  // Target-only, and not an extension anybody chose here: design section 8
+  // marks `application/` `(no I/O)` in the same code block that marks
+  // `domain/`, and D-0001 makes the document the primary oracle. The source
+  // parametrises its case over the domain alone, which is the narrower claim.
+  const offenders = impureImportsIn(module);
+  expect(offenders, `${module} reaches ${offenders.join(", ")}`).toEqual([]);
+});
+
+test("no module in a pure layer reaches a global I/O API", () => {
+  // Target-only, and a surface the port created rather than inherited. An
+  // import allowlist is a complete answer in Python, where reaching the network
+  // means importing something; Node hands `fetch` to every module for free, and
+  // `console` writes to a stream nobody imported either. So the allowlist above
+  // would report nothing at all about a domain module that simply called
+  // `fetch(url)`. This is the case that does.
+  //
+  // `process` is admitted for exactly the two members the port already depends
+  // on: `process.env`, which is `expanduser` consulting `$HOME` -- the one
+  // deliberate exception the source itself records -- and `process.platform`,
+  // which chooses a path flavour and touches nothing. Every other member, and a
+  // bare `process` that cannot be attributed to one, is a violation.
+  const offenders: string[] = [];
+  for (const module of PURE_LAYER_MODULES) {
+    const tree = ts.createSourceFile(
+      module,
+      sourceOf(module),
+      ts.ScriptTarget.ES2023,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const report = (node: ts.Node, what: string): void => {
+      const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
+      offenders.push(`${module}:${line}: ${what}`);
+    };
+    const visit = (node: ts.Node): void => {
+      if (ts.isIdentifier(node) && !isShadowedOrDeclared(node)) {
+        if (FORBIDDEN_GLOBALS.includes(node.text)) {
+          report(node, node.text);
+        } else if (node.text === "process") {
+          const parent = node.parent;
+          const member =
+            parent !== undefined &&
+            ts.isPropertyAccessExpression(parent) &&
+            parent.expression === node
+              ? parent.name.text
+              : undefined;
+          if (member === undefined || !PROCESS_ALLOWED_MEMBERS.includes(member)) {
+            report(node, `process.${member ?? "<whole object>"}`);
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(tree);
+  }
+  expect(offenders, `these reach I/O without importing it: ${offenders.join(", ")}`).toEqual([]);
 });
 
 // --- the anchors ------------------------------------------------------------

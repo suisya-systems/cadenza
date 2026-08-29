@@ -60,8 +60,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   package initialisers that have no counterpart here. Biome's
   `noRestrictedImports` was measured first and can express the graph half; it
   was not chosen because one `biome-ignore` comment silently waives it and a
-  diagnostic has no target id for a ledger to endorse. With this, all 330 source
-  node ids carry a ledger.
+  diagnostic has no target id for a ledger to endorse. The sweep fails closed on
+  a dynamic import whose specifier cannot be read statically, covers
+  `src/application` as no-I/O because design section 8 says so even though the
+  source test does not, and catches the global I/O Node hands out without an
+  import (`fetch`, `console`, `process` beyond `env` and `platform`). With this,
+  all 330 source node ids carry a ledger.
 
 ### Changed
 

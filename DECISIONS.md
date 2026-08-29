@@ -799,7 +799,7 @@ standalone script. It runs in the ordinary suite -- so under the double-green ru
 six matrix cells -- and additionally as its own named step in the `checks` job, mirroring what
 `tests.yml` already does for the Python half.
 
-Its 95 cases are the target of `parity/import-boundaries.ledger.json`, which endorses all 97 node
+Its 98 cases are the target of `parity/import-boundaries.ledger.json`, which endorses all 97 node
 ids of `tests/test_import_boundaries.py`: 64 `adapted`, 33 `waived`, none `ported`. That is the
 kickoff's own instruction (cadenza#8) rather than a judgement made here -- re-point the file, record
 the result as `adapted`, do not silently drop it.
@@ -859,13 +859,44 @@ and a plain named import), a module named `runtime`, `provider-neutral` in a mod
 expected case red and nothing else; there were no holes. A green suite is not evidence that a
 boundary check guards anything, which is why this paragraph exists.
 
-**What stops it passing vacuously**, which is the failure mode a discovery-driven check invites: 87
-of the 95 cases are generated from a directory walk, and a walk that found nothing would generate
+**What stops it passing vacuously**, which is the failure mode a discovery-driven check invites: 89
+of the 98 cases are generated from a directory walk, and a walk that found nothing would generate
 nothing. Three things, one of them new. The walk has its own case, as the source's does. The
 allowlists fail closed. And -- the one the source could not have -- every generated id is claimed by
 the ledger, so module churn is a red gate rather than a silent change in coverage. Measured: a new
 `src/domain/*.ts` produced five `unmapped` failures, and renaming an existing one produced five
 `missing` plus five `unmapped`.
+
+**Three holes were found at review, and all three are closed.** Recorded because each one is a way
+this check could have been green while guarding less than it claims, and the first is the class the
+whole entry is about:
+
+1. **A dynamic import whose specifier is not a quoted string was dropped silently.**
+   ``import(`interlock`)`` is a no-substitution template -- statically known, and invisible to a
+   scan that only recognised `ts.isStringLiteral`. `import(name)` cannot be read at all. The first
+   is now read as the literal it is; the second is recorded as `<computed>` and **fails closed**,
+   turning `no module imports interlock` and the no-I/O cases red. This is the one place the port is
+   deliberately stricter than its source, which resolves the same blind spot by seeing nothing: an
+   unreadable edge makes every other check optional, because one variable would let the module graph
+   say whatever its author wanted.
+2. **`src/application` was not swept for I/O.** Design section 8 marks `application/` `(no I/O)` in
+   the same code block that marks `domain/`, and the source parametrises its case over the domain
+   alone. Under D-0001 the document is the primary oracle and the narrower source test is the
+   finding, so the two application modules get the same sweep. Their cases are target-only: the
+   claim is the document's, and no source case states it.
+3. **An import allowlist cannot see the global surface.** Node hands `fetch` to every module without
+   an import, and `console` writes to a stream nobody imported either, so a domain module that
+   simply called `fetch(url)` would have been reported by nothing. This has no counterpart in the
+   source and could not have one -- reaching the network in Python means importing something, which
+   is exactly why a denylist over modules was a complete answer there. A target-only case now sweeps
+   both pure layers for `fetch`, `WebSocket`, `EventSource`, `XMLHttpRequest` and `console`, and for
+   any use of `process` beyond `env` and `platform` -- the two `src/domain/python-path.ts` already
+   depends on, `env` being the same `expanduser` allowance the source records in the same words.
+
+Eight further violations were planted to check the three fixes, and each turned the expected case
+red: a template specifier, a computed one, a concatenated one, `node:fs` in `src/application`,
+`fetch()` in the domain, `console.log()` in the application, `process.cwd()`, and a bare `process`.
+`process.env` and `process.platform` stay green where the port already uses them.
 
 **What would falsify it.** A way to make a lint suppression countable and reviewable the way
 `approved_non_running` is, which would remove reason 1; or a Biome rule that could be addressed by a

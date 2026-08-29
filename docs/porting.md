@@ -298,6 +298,16 @@ initialisers and `__about__.py` — appearing across the four per-module functio
 one. Why the scan is written against the TypeScript compiler API rather than delegated to a lint
 rule, and what was measured before choosing, is `D-0022`.
 
+It is wider than its source in three places, and each is target-only rather than folded into a
+mapped case. A dynamic import whose specifier cannot be read statically **fails closed** instead of
+being silently dropped, which is what the source does with `importlib.import_module(name)`.
+`src/application` is swept for I/O as well as `src/domain`, because design section 8 marks both
+`(no I/O)` and the source's case covers only the second — a disagreement the oracle order settles in
+the document's favour (section 2). And the sweep looks for the I/O Node hands out with no import at
+all — `fetch`, `console`, `process` beyond `env` and `platform` — a surface that cannot exist in
+Python, where reaching the network means importing something, and which an import allowlist would
+therefore have reported nothing about.
+
 The composition belt closed the pilot's one deferral: `test_digest_survives_the_catalog_moving_to_
 another_file` is ported at `test/application/resolve.test.ts` and is still claimed by
 `parity/digest.ledger.json`, which is why the `unmapped` sweep runs after every ledger has been read
