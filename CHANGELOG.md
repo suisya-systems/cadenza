@@ -50,6 +50,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   none deferred. The git-parity case (D-0021) runs the real `git` binary via
   `node:child_process`, mirroring the source's own `subprocess` call against
   `git check-ref-format`, rather than a fixed corpus of pre-recorded answers.
+- Import-boundaries belt (cadenza#8, D-0022), the last source file: design
+  section 8's dependency direction is now enforced over the TypeScript module
+  graph by `test/architecture/import-boundaries.test.ts`, which parses every
+  module under `src/` with the TypeScript compiler API rather than importing it
+  - so a re-export, a dynamic `import()` in a function body and a type-only
+  import all count. `tests/test_import_boundaries.py`'s 97 node ids are
+  re-pointed rather than transcribed: 64 adapted, 33 waived for the Python
+  package initialisers that have no counterpart here. Biome's
+  `noRestrictedImports` was measured first and can express the graph half; it
+  was not chosen because one `biome-ignore` comment silently waives it and a
+  diagnostic has no target id for a ledger to endorse. With this, all 330 source
+  node ids carry a ledger.
 
 ### Changed
 

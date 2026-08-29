@@ -52,6 +52,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0019 | The clone-source belt: `tmp_path`-only fixtures need no filesystem, and a frozen structural type is proven at both the type checker and the runtime | accepted |
 | D-0020 | The identifier belt's two predicted traps, settled by measurement | accepted |
 | D-0021 | The git-parity oracle runs the real `git` binary; `match=` becomes a `RegExp` only where a plain substring would look for a character the message never contains | accepted |
+| D-0022 | The import boundary is a test that parses the tree, not a lint rule: measured against Biome, chosen for the ledger | accepted |
 
 ---
 
@@ -784,3 +785,89 @@ exactly the property a frozen snapshot of git's answers on one version would sto
 **What would falsify it.** A CI image or a contributor's machine with no `git` on `PATH` would silently
 skip 24 cases rather than fail the build -- inherited from the source's own `skipif`, recorded in
 `parity/refs.ledger.json`'s `inherited_limitations`, and not this belt's to tighten.
+
+---
+
+## D-0022 — The import boundary is a test that parses the tree, not a lint rule: measured against Biome, chosen for the ledger
+
+**Status:** accepted
+
+**Decision.** The TypeScript half of design section 8's dependency direction is enforced by
+`test/architecture/import-boundaries.test.ts`, a vitest test file that walks `src/` and parses each
+module with `ts.createSourceFile`. It is not a Biome rule, not `dependency-cruiser`, and not a
+standalone script. It runs in the ordinary suite -- so under the double-green rule (D-0006) on all
+six matrix cells -- and additionally as its own named step in the `checks` job, mirroring what
+`tests.yml` already does for the Python half.
+
+Its 95 cases are the target of `parity/import-boundaries.ledger.json`, which endorses all 97 node
+ids of `tests/test_import_boundaries.py`: 64 `adapted`, 33 `waived`, none `ported`. That is the
+kickoff's own instruction (cadenza#8) rather than a judgement made here -- re-point the file, record
+the result as `adapted`, do not silently drop it.
+
+**Biome can do the graph half, and that is not the question. Measured.**
+`noRestrictedImports` has been in Biome since 1.6.0, and 2.5.10 supports both `patterns` (for the
+layer rule) and `allowImportNames` (for the binding-level allowance the domain rule needs). Under an
+`overrides` entry scoped to `src/domain/**`, it reported all three planted violations -- a
+`node:fs` import, `createConnection` from `node:net`, and a `src/domain` -> `src/application` import.
+Capability is not why it was not chosen. Three other things are:
+
+1. **A suppression comment silently waives it, and nothing counts suppressions.** Measured: adding
+   one `// biome-ignore lint/style/noRestrictedImports: shipping a hotfix` line took the run from
+   three errors to two, with no other signal anywhere. The boundary would be removable in the same
+   diff that crosses it. The parity machinery has a whole failure class (`unapproved-skip`) built on
+   the premise that a disabled check needs an approval with a reason and an exact count; a lint
+   suppression is that hole reopened next to it.
+2. **It covers two of the nine source functions.** The other seven are not import-graph claims:
+   module naming, a forbidden word in the text, the reserved seam's state, the walk's own
+   non-vacuity, and the sweep for POSIX-only anchors in the *test* tree. Splitting one file's
+   subject across a lint config and a test file makes the boundary harder to review, which is the
+   thing section 8 says it exists to avoid.
+3. **Decisively: the ledger's unit is a target test id, and a diagnostic has none.** D-0010 makes
+   the unit a node id, and `scripts/parity-check.mjs` reads target ids from `vitest list --json`. A
+   Biome rule produces findings, not collected tests, so 97 source cases would have had nowhere to
+   map and the file could not have been endorsed at all. Anything that enforces this boundary has to
+   be a test for the accounting to reach it.
+
+**What was not measured, stated so nobody reads more into this entry.** `dependency-cruiser` and
+`eslint-plugin-boundaries` were not evaluated: the worker sandbox's npm cache is read-only, so
+nothing could be installed to try. Point 3 applies to both by construction and point 2 applies to
+both as graph-only tools, but the claim here is reasoning, not measurement. Adding either would also
+be a new devDependency for a job `typescript` already does -- it is a devDependency because `tsc`
+type-checks this repository, and `scripts/parity-check.mjs` already parses with it rather than
+sweeping text, for the reason recorded there: a text sweep misses a chained modifier and can be
+derailed by a comment marker inside a string.
+
+**The domain rule is inverted from the source's, deliberately.** `tests/test_import_boundaries.py`
+states a **denylist** -- `socket`, `subprocess`, `shutil`, `sqlite3`, `http.client`,
+`urllib.request` -- with `os` allowed wholesale for `expanduser`. That shape does not survive the
+crossing: `node:net` *is* the socket module the denylist names first, and `isIP` is a pure predicate
+that lives in it, so a denylist either forbids `node:net` and fails on
+`src/domain/python-urlsplit.ts` today or admits `createConnection` along with `isIP`. The port names
+the **bindings** instead -- `node:crypto` for `createHash`, `node:os` for `homedir`, `node:net` for
+`isIP` -- which makes it an allowlist that fails closed: a builtin nobody thought of is a violation
+rather than an omission, and a namespace or default import of an allowed module is refused because
+neither can be checked binding by binding. Widening it is a diff to that table with a reason beside
+it, which is the review the source's `os` allowance got once and cannot ask for again.
+
+**How the check itself was checked.** Fourteen violations were planted one at a time and the tree
+restored between each: domain -> application, ports -> application, application -> adapters,
+`node:fs` in domain, `createConnection` from `node:net`, a namespace import of the *allowed*
+`node:os`, interlock reached five ways (bare side-effect import, scoped `@suisya-systems/interlock`
+in type position, `claude-org-runtime` through a dynamic `import()` in a function body, a re-export,
+and a plain named import), a module named `runtime`, `provider-neutral` in a module's text,
+`src/adapters/interlock/` created, and a POSIX-only `baseDir` literal in a test. Each turned the
+expected case red and nothing else; there were no holes. A green suite is not evidence that a
+boundary check guards anything, which is why this paragraph exists.
+
+**What stops it passing vacuously**, which is the failure mode a discovery-driven check invites: 87
+of the 95 cases are generated from a directory walk, and a walk that found nothing would generate
+nothing. Three things, one of them new. The walk has its own case, as the source's does. The
+allowlists fail closed. And -- the one the source could not have -- every generated id is claimed by
+the ledger, so module churn is a red gate rather than a silent change in coverage. Measured: a new
+`src/domain/*.ts` produced five `unmapped` failures, and renaming an existing one produced five
+`missing` plus five `unmapped`.
+
+**What would falsify it.** A way to make a lint suppression countable and reviewable the way
+`approved_non_running` is, which would remove reason 1; or a Biome rule that could be addressed by a
+ledger entry, which would remove reason 3. Reason 2 would go if the other seven claims found a
+natural home elsewhere, which would mean section 8's boundary had stopped being one subject.

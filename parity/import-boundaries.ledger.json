@@ -1,0 +1,985 @@
+{
+  "source": {
+    "repository": "suisya-systems/cadenza",
+    "revision": "a5672f8",
+    "note": "The source is this repository's own Python implementation, not a second checkout. Cadenza is being rewritten in place (cadenza#8): `src/cadenza/` and `tests/` are the specification until a later PR retires them, so every inventory here is collected from the working tree at the recorded revision.",
+    "suite_baseline": {
+      "collected": 330,
+      "passed": 330,
+      "skipped": 0,
+      "xfailed": 0,
+      "reconciliation": "`PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q -p no:cacheprovider` at a5672f8 on CPython 3.12.3: 330 passed. No module is skipped at collection time, so collected == the sum of the eight per-file inventories with nothing left over. See parity/source-inventory.manifest.json."
+    },
+    "file": {
+      "path": "tests/test_import_boundaries.py",
+      "collected": 97,
+      "inventory": "parity/source-inventory/test_import_boundaries.txt",
+      "note": "9 test functions, 97 collected node ids. Five of the nine are parametrized over the modules the walk finds: four over all 20 Python modules and one over the 7 under `cadenza.domain`, which is 87 of the 97 by itself."
+    }
+  },
+  "target": {
+    "test_file": "test/architecture/import-boundaries.test.ts",
+    "systematic_mappings": [
+      {
+        "from": "`@pytest.mark.parametrize(\"path\", MODULES, ids=module_name)`, over the 20 Python modules `PACKAGE_ROOT.rglob(\"*.py\")` finds",
+        "to": "`parametrize(name, PER_MODULE, ...)` over the 18 TypeScript modules the walk over `src/` finds, with the repo-relative path as the id",
+        "why": "This is the whole of why cadenza#8 re-points this file instead of transcribing it. The two module sets are not the same set with different spellings: 12 Python modules have a TypeScript counterpart, 8 are `__init__.py` package initialisers or `__about__.py` and have none, and 6 TypeScript modules exist that Python never had (`canonical-json`, `frozen`, and the four `python-*` standard-library ports, D-0018). So each of the four per-module functions contributes 12 `adapted` entries and 8 `waived` ones, and the 6 modules with no source case are declared `target_only_tests` rather than left unaccounted.",
+        "affects": "80 of the 97 cases: the four functions parametrized over all 20 modules"
+      },
+      {
+        "from": "a Python module name (`cadenza.domain.digest`)",
+        "to": "a repo-relative TypeScript path (`src/domain/digest.ts`)",
+        "why": "The id has to name the thing the case is about, and in this tree that is a file rather than a dotted module name. Paths are spelled with forward slashes on every platform, and the walk sorts them, so the ids are byte-stable across the ubuntu, macos and windows cells rather than depending on `readdirSync` order or the platform separator.",
+        "affects": "all 87 per-module cases"
+      },
+      {
+        "from": "`imported_modules(path)`, an `ast.walk` collecting `ast.Import` and `ast.ImportFrom` with relative levels resolved",
+        "to": "`importsIn(source, from)`, a `ts.createSourceFile` walk collecting import declarations, `export ... from` re-exports, `import(...)` calls, `require(...)` calls, `import x = require(...)`, and `import(\"...\").X` type nodes, with relative specifiers resolved by path arithmetic",
+        "why": "The source's docstring states the property that matters -- an import nested in a function or under `TYPE_CHECKING` is still an import, and importing the tree would not see either -- and TypeScript has strictly more routes with that property. A re-export has no Python counterpart at all and is how a layer leaks through a barrel, so the sweep covers it. Resolution is path arithmetic rather than a filesystem lookup, because the detector's own cases name modules that do not exist; `tsc` is what checks a specifier resolves, and this only has to agree about which file it resolves to.",
+        "affects": "the 7 detector cases and all 87 per-module cases"
+      },
+      {
+        "from": "`forbidden = {\"socket\", \"urllib.request\", \"subprocess\", \"shutil\", \"sqlite3\", \"http.client\"}`, a denylist, with `os` allowed wholesale",
+        "to": "`DOMAIN_ALLOWED_BUILTINS`, an allowlist naming both the module and the bindings it may contribute: `node:crypto` for `createHash`, `node:os` for `homedir`, `node:net` for `isIP`",
+        "why": "A denylist is the wrong shape here for a reason specific to Node rather than to taste. `node:net` IS the socket module the source's denylist names first, and `isIP` is a pure predicate that happens to live in it, so a denylist either forbids `node:net` and fails on `src/domain/python-urlsplit.ts` today, or admits it and admits `createConnection` with it. Naming the bindings is what separates the two. The allowlist also fails closed, which the denylist does not: a `node:` module nobody thought of is a violation rather than an omission, and a namespace or default import of an allowed module is refused because neither can be checked binding by binding. Measured: a planted `import * as os from \"node:os\"` turns the case red, and so does `createConnection`.",
+        "affects": "the 7 cases of 'the domain performs no I/O'"
+      },
+      {
+        "from": "`FORBIDDEN_TOP_LEVEL = (\"claude_org_runtime\", \"interlock\")`, matched against `name.split(\".\")[0]`",
+        "to": "the normalised package name of a bare specifier, and the unscoped half of a scoped one, matched against `{\"claude-org-runtime\", \"interlock\"}`",
+        "why": "The source's two spellings are Python module names, and the same two dependencies would arrive here written differently: `claude_org_runtime` becomes `claude-org-runtime` on a registry, and either could be scoped as `@suisya-systems/interlock`. Lower-casing and folding `_` to `-`, then checking the unscoped half as well, covers all of those without enumerating them. Measured: `@suisya-systems/interlock` and `claude-org-runtime/control-plane.js` both turn the case red.",
+        "affects": "the 20 cases of 'no module imports interlock'"
+      }
+    ],
+    "target_only_tests": {
+      "count": 31,
+      "ids": [
+        "test/architecture/import-boundaries.test.ts::no module imports interlock[src/domain/canonical-json.ts]",
+        "test/architecture/import-boundaries.test.ts::no module imports interlock[src/domain/frozen.ts]",
+        "test/architecture/import-boundaries.test.ts::no module imports interlock[src/domain/python-difflib.ts]",
+        "test/architecture/import-boundaries.test.ts::no module imports interlock[src/domain/python-path.ts]",
+        "test/architecture/import-boundaries.test.ts::no module imports interlock[src/domain/python-text.ts]",
+        "test/architecture/import-boundaries.test.ts::no module imports interlock[src/domain/python-urlsplit.ts]",
+        "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/domain/canonical-json.ts]",
+        "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/domain/frozen.ts]",
+        "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/domain/python-difflib.ts]",
+        "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/domain/python-path.ts]",
+        "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/domain/python-text.ts]",
+        "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/domain/python-urlsplit.ts]",
+        "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/domain/canonical-json.ts]",
+        "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/domain/frozen.ts]",
+        "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/domain/python-difflib.ts]",
+        "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/domain/python-path.ts]",
+        "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/domain/python-text.ts]",
+        "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/domain/python-urlsplit.ts]",
+        "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/domain/canonical-json.ts]",
+        "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/domain/frozen.ts]",
+        "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/domain/python-difflib.ts]",
+        "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/domain/python-path.ts]",
+        "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/domain/python-text.ts]",
+        "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/domain/python-urlsplit.ts]",
+        "test/architecture/import-boundaries.test.ts::the domain performs no I/O[src/domain/canonical-json.ts]",
+        "test/architecture/import-boundaries.test.ts::the domain performs no I/O[src/domain/frozen.ts]",
+        "test/architecture/import-boundaries.test.ts::the domain performs no I/O[src/domain/python-difflib.ts]",
+        "test/architecture/import-boundaries.test.ts::the domain performs no I/O[src/domain/python-path.ts]",
+        "test/architecture/import-boundaries.test.ts::the domain performs no I/O[src/domain/python-text.ts]",
+        "test/architecture/import-boundaries.test.ts::the domain performs no I/O[src/domain/python-urlsplit.ts]",
+        "test/architecture/import-boundaries.test.ts::the detector also sees the CommonJS routes ESM forbids"
+      ],
+      "why": "Thirty-one, in two groups. Thirty are the six TypeScript modules that have no Python counterpart -- `canonical-json`, `frozen` and the four `python-*` standard-library ports (D-0018) -- appearing in the five per-module functions; they are boundary cases with no source case because the modules themselves were created by the port. The last is the detector's `require(...)` and `import x = require(...)` routes: `tsc` refuses both in an ESM module under D-0003, so no source case and no real module exercises them, and machinery nothing asserts is untested surface -- the rule `test/testkit/testkit.contract.test.ts` already records. The handling stays because the sweep should not depend on the module setting staying what it is today."
+    },
+    "approved_non_running": []
+  },
+  "totals": {
+    "source_cases": 97,
+    "ported": 0,
+    "adapted": 64,
+    "not_ported": 0,
+    "waivers": 33
+  },
+  "inherited_limitations": [
+    {
+      "behaviour": "The POSIX-only-anchor sweep matches a `baseDir` property in an object literal. An anchor passed positionally -- `layerDocument(layer, origin, \"/srv/catalog\", data)` -- is not matched.",
+      "why": "The source has the same hole and in the same place: it matches `keyword.arg != \"base_dir\"`, so a positional third argument to `layer_document` escapes it too. Carried over rather than widened, because widening it is a change to what the case asserts and belongs in the belt that needs it. What is added instead is the non-vacuity assertion the source lacks, which is what would catch the sweep silently matching nothing at all."
+    },
+    {
+      "behaviour": "The scan reads specifiers, not resolved semantics. A module reached through a specifier built at runtime -- `import(someVariable)` -- is invisible to it.",
+      "why": "The source has the identical limitation for the identical reason: `ast.Import` carries a name, not a computed value, so `importlib.import_module(name)` is invisible there too. Closing it requires resolving arbitrary expressions, which is a type checker's job and not a boundary check's. Neither tree contains such a call today."
+    }
+  ],
+  "entries": [
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_the_detector_sees_imports_wherever_they_hide[import interlock-interlock]",
+      "target_id": "test/architecture/import-boundaries.test.ts::the detector sees imports wherever they hide[side-effect-import]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "A bare `import \"interlock\";` binds nothing and still executes the module, which is the TypeScript shape of a plain `import interlock`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_the_detector_sees_imports_wherever_they_hide[import claude_org_runtime.control_plane as cp-claude_org_runtime.control_plane]",
+      "target_id": "test/architecture/import-boundaries.test.ts::the detector sees imports wherever they hide[namespace-import]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "`import * as cp from \"...\"` is the aliased whole-module import the source spells `import ... as cp`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_the_detector_sees_imports_wherever_they_hide[from cadenza.adapters.toml_catalog import loader-cadenza.adapters.toml_catalog]",
+      "target_id": "test/architecture/import-boundaries.test.ts::the detector sees imports wherever they hide[named-import-across-two-layers]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "A named import whose specifier crosses from `src/domain` into `src/adapters`, resolved to the module it names.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_the_detector_sees_imports_wherever_they_hide[from ..adapters import toml_catalog-cadenza.adapters]",
+      "target_id": "test/architecture/import-boundaries.test.ts::the detector sees imports wherever they hide[parent-relative-re-export]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The source's parent-relative import (`from ..adapters`), carried over as `export * from \"../ports/...\"`. Two subjects in one case, deliberately: parent-relative resolution, and the fact that a re-export reaches a module exactly as an import does -- which is how a layer leaks through a barrel and has no Python counterpart to translate.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_the_detector_sees_imports_wherever_they_hide[from . import digest-cadenza.domain.digest]",
+      "target_id": "test/architecture/import-boundaries.test.ts::the detector sees imports wherever they hide[sibling-relative-import]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The source's same-package relative import (`from . import digest`), resolved to the sibling module.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_the_detector_sees_imports_wherever_they_hide[def f():\\n    import interlock\\n-interlock]",
+      "target_id": "test/architecture/import-boundaries.test.ts::the detector sees imports wherever they hide[dynamic-import-in-a-function-body]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "An import inside a function body. In TypeScript that is `await import(...)`, and like the source's case it is invisible to anything that inspects the module after loading it.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_the_detector_sees_imports_wherever_they_hide[from typing import TYPE_CHECKING\\nif TYPE_CHECKING:\\n    import interlock\\n-interlock]",
+      "target_id": "test/architecture/import-boundaries.test.ts::the detector sees imports wherever they hide[type-only-import]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The source's `if TYPE_CHECKING` import, whose defining property is that it never executes. TypeScript has two such routes and the case carries both: `import type { ... } from` and an `import(\"...\").X` type node. Neither survives into the emitted JavaScript.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_the_walk_found_the_package_it_is_supposed_to_guard",
+      "target_id": "test/architecture/import-boundaries.test.ts::the walk found the module graph it is supposed to guard",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same guard against a vacuous pass, over `src/` instead of `src/cadenza/`: the root exists, the walk found at least `MINIMUM_MODULES` (10, the source's own floor), and it found `src/domain/clone-source.ts` by name.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.__about__]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/__about__.py` holds `__version__`. The TypeScript half carries its version in `package.json`, which is not a module and has no imports, so there is nothing here for the scan to walk.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module imports interlock[src/index.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: no specifier reaches interlock or claude_org_runtime, in any spelling. `cadenza` is `src/index.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.adapters]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/adapters/__init__.py`, a package initialiser. TypeScript has no such file: a directory is not a module, and `src/adapters/` carries no barrel. Nothing is lost, because the scan below walks every module that does exist rather than every directory.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.adapters.claude_code]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/adapters/claude_code/__init__.py`, the reserved provider-adapter placeholder (design section 8). Empty on the Python side and absent here, for the reason D-0014 records about the seam beside it: the port does not open a placeholder.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.adapters.interlock]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/adapters/interlock/__init__.py`, the reserved interlock seam. D-0014: it stays empty on the Python side and deliberately has no TypeScript counterpart, so there is no module to walk. That the counterpart is absent is itself asserted, by 'the interlock adapter seam has no TypeScript counterpart'.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.adapters.toml_catalog]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/adapters/toml_catalog/__init__.py`, a package initialiser. The TypeScript adapter is the single module `src/adapters/toml-catalog/loader.ts`, with no barrel beside it.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.adapters.toml_catalog.loader]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module imports interlock[src/adapters/toml-catalog/loader.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: no specifier reaches interlock or claude_org_runtime, in any spelling. `cadenza.adapters.toml_catalog.loader` is `src/adapters/toml-catalog/loader.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.application]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/application/__init__.py`, a package initialiser. `src/application/` carries no barrel; its two modules are walked individually.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.application.compose]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module imports interlock[src/application/compose.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: no specifier reaches interlock or claude_org_runtime, in any spelling. `cadenza.application.compose` is `src/application/compose.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.application.resolve]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module imports interlock[src/application/resolve.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: no specifier reaches interlock or claude_org_runtime, in any spelling. `cadenza.application.resolve` is `src/application/resolve.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.domain]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/domain/__init__.py`, a package initialiser. `src/domain/` carries no barrel; its twelve modules are walked individually.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.domain.clone_source]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module imports interlock[src/domain/clone-source.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: no specifier reaches interlock or claude_org_runtime, in any spelling. `cadenza.domain.clone_source` is `src/domain/clone-source.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.domain.digest]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module imports interlock[src/domain/digest.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: no specifier reaches interlock or claude_org_runtime, in any spelling. `cadenza.domain.digest` is `src/domain/digest.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.domain.errors]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module imports interlock[src/domain/errors.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: no specifier reaches interlock or claude_org_runtime, in any spelling. `cadenza.domain.errors` is `src/domain/errors.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.domain.identifiers]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module imports interlock[src/domain/identifiers.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: no specifier reaches interlock or claude_org_runtime, in any spelling. `cadenza.domain.identifiers` is `src/domain/identifiers.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.domain.project]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module imports interlock[src/domain/project.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: no specifier reaches interlock or claude_org_runtime, in any spelling. `cadenza.domain.project` is `src/domain/project.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.domain.refs]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module imports interlock[src/domain/refs.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: no specifier reaches interlock or claude_org_runtime, in any spelling. `cadenza.domain.refs` is `src/domain/refs.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.ports]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/ports/__init__.py`, a package initialiser. `src/ports/` carries no barrel; its two modules are walked individually.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.ports.catalog_source]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module imports interlock[src/ports/catalog-source.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: no specifier reaches interlock or claude_org_runtime, in any spelling. `cadenza.ports.catalog_source` is `src/ports/catalog-source.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_imports_interlock[cadenza.ports.path_verifier]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module imports interlock[src/ports/path-verifier.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: no specifier reaches interlock or claude_org_runtime, in any spelling. `cadenza.ports.path_verifier` is `src/ports/path-verifier.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.__about__]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/__about__.py` holds `__version__`. The TypeScript half carries its version in `package.json`, which is not a module and has no imports, so there is nothing here for the scan to walk.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza]",
+      "target_id": "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/index.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: `src/adapters` -> `src/application` -> `src/domain`, and `src/ports` is depended on. `cadenza` is `src/index.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.adapters]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/adapters/__init__.py`, a package initialiser. TypeScript has no such file: a directory is not a module, and `src/adapters/` carries no barrel. Nothing is lost, because the scan below walks every module that does exist rather than every directory.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.adapters.claude_code]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/adapters/claude_code/__init__.py`, the reserved provider-adapter placeholder (design section 8). Empty on the Python side and absent here, for the reason D-0014 records about the seam beside it: the port does not open a placeholder.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.adapters.interlock]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/adapters/interlock/__init__.py`, the reserved interlock seam. D-0014: it stays empty on the Python side and deliberately has no TypeScript counterpart, so there is no module to walk. That the counterpart is absent is itself asserted, by 'the interlock adapter seam has no TypeScript counterpart'.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.adapters.toml_catalog]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/adapters/toml_catalog/__init__.py`, a package initialiser. The TypeScript adapter is the single module `src/adapters/toml-catalog/loader.ts`, with no barrel beside it.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.adapters.toml_catalog.loader]",
+      "target_id": "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/adapters/toml-catalog/loader.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: `src/adapters` -> `src/application` -> `src/domain`, and `src/ports` is depended on. `cadenza.adapters.toml_catalog.loader` is `src/adapters/toml-catalog/loader.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.application]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/application/__init__.py`, a package initialiser. `src/application/` carries no barrel; its two modules are walked individually.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.application.compose]",
+      "target_id": "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/application/compose.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: `src/adapters` -> `src/application` -> `src/domain`, and `src/ports` is depended on. `cadenza.application.compose` is `src/application/compose.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.application.resolve]",
+      "target_id": "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/application/resolve.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: `src/adapters` -> `src/application` -> `src/domain`, and `src/ports` is depended on. `cadenza.application.resolve` is `src/application/resolve.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.domain]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/domain/__init__.py`, a package initialiser. `src/domain/` carries no barrel; its twelve modules are walked individually.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.domain.clone_source]",
+      "target_id": "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/domain/clone-source.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: `src/adapters` -> `src/application` -> `src/domain`, and `src/ports` is depended on. `cadenza.domain.clone_source` is `src/domain/clone-source.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.domain.digest]",
+      "target_id": "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/domain/digest.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: `src/adapters` -> `src/application` -> `src/domain`, and `src/ports` is depended on. `cadenza.domain.digest` is `src/domain/digest.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.domain.errors]",
+      "target_id": "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/domain/errors.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: `src/adapters` -> `src/application` -> `src/domain`, and `src/ports` is depended on. `cadenza.domain.errors` is `src/domain/errors.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.domain.identifiers]",
+      "target_id": "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/domain/identifiers.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: `src/adapters` -> `src/application` -> `src/domain`, and `src/ports` is depended on. `cadenza.domain.identifiers` is `src/domain/identifiers.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.domain.project]",
+      "target_id": "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/domain/project.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: `src/adapters` -> `src/application` -> `src/domain`, and `src/ports` is depended on. `cadenza.domain.project` is `src/domain/project.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.domain.refs]",
+      "target_id": "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/domain/refs.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: `src/adapters` -> `src/application` -> `src/domain`, and `src/ports` is depended on. `cadenza.domain.refs` is `src/domain/refs.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.ports]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/ports/__init__.py`, a package initialiser. `src/ports/` carries no barrel; its two modules are walked individually.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.ports.catalog_source]",
+      "target_id": "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/ports/catalog-source.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: `src/adapters` -> `src/application` -> `src/domain`, and `src/ports` is depended on. `cadenza.ports.catalog_source` is `src/ports/catalog-source.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_each_layer_imports_only_inward[cadenza.ports.path_verifier]",
+      "target_id": "test/architecture/import-boundaries.test.ts::each layer imports only inward[src/ports/path-verifier.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's own imports: `src/adapters` -> `src/application` -> `src/domain`, and `src/ports` is depended on. `cadenza.ports.path_verifier` is `src/ports/path-verifier.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_the_reserved_interlock_adapter_seam_exists_and_is_empty",
+      "target_id": "test/architecture/import-boundaries.test.ts::the interlock adapter seam has no TypeScript counterpart",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The claim is inverted because D-0014 inverts it: the seam is reserved on the Python side and deliberately has no TypeScript counterpart, so 'it exists and is empty' becomes 'it does not exist'. The subject is unchanged -- the state of the interlock seam is asserted rather than reviewed, and opening it turns this red. `src/adapters` is asserted to exist first, so a rename cannot make the absence trivially true.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.__about__]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/__about__.py` holds `__version__`. The TypeScript half carries its version in `package.json`, which is not a module and has no imports, so there is nothing here for the scan to walk.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/index.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's path: neither its stem nor any directory above it is `core` or `runtime`. `cadenza` is `src/index.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.adapters]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/adapters/__init__.py`, a package initialiser. TypeScript has no such file: a directory is not a module, and `src/adapters/` carries no barrel. Nothing is lost, because the scan below walks every module that does exist rather than every directory.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.adapters.claude_code]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/adapters/claude_code/__init__.py`, the reserved provider-adapter placeholder (design section 8). Empty on the Python side and absent here, for the reason D-0014 records about the seam beside it: the port does not open a placeholder.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.adapters.interlock]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/adapters/interlock/__init__.py`, the reserved interlock seam. D-0014: it stays empty on the Python side and deliberately has no TypeScript counterpart, so there is no module to walk. That the counterpart is absent is itself asserted, by 'the interlock adapter seam has no TypeScript counterpart'.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.adapters.toml_catalog]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/adapters/toml_catalog/__init__.py`, a package initialiser. The TypeScript adapter is the single module `src/adapters/toml-catalog/loader.ts`, with no barrel beside it.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.adapters.toml_catalog.loader]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/adapters/toml-catalog/loader.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's path: neither its stem nor any directory above it is `core` or `runtime`. `cadenza.adapters.toml_catalog.loader` is `src/adapters/toml-catalog/loader.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.application]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/application/__init__.py`, a package initialiser. `src/application/` carries no barrel; its two modules are walked individually.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.application.compose]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/application/compose.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's path: neither its stem nor any directory above it is `core` or `runtime`. `cadenza.application.compose` is `src/application/compose.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.application.resolve]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/application/resolve.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's path: neither its stem nor any directory above it is `core` or `runtime`. `cadenza.application.resolve` is `src/application/resolve.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.domain]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/domain/__init__.py`, a package initialiser. `src/domain/` carries no barrel; its twelve modules are walked individually.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.domain.clone_source]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/domain/clone-source.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's path: neither its stem nor any directory above it is `core` or `runtime`. `cadenza.domain.clone_source` is `src/domain/clone-source.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.domain.digest]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/domain/digest.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's path: neither its stem nor any directory above it is `core` or `runtime`. `cadenza.domain.digest` is `src/domain/digest.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.domain.errors]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/domain/errors.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's path: neither its stem nor any directory above it is `core` or `runtime`. `cadenza.domain.errors` is `src/domain/errors.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.domain.identifiers]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/domain/identifiers.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's path: neither its stem nor any directory above it is `core` or `runtime`. `cadenza.domain.identifiers` is `src/domain/identifiers.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.domain.project]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/domain/project.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's path: neither its stem nor any directory above it is `core` or `runtime`. `cadenza.domain.project` is `src/domain/project.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.domain.refs]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/domain/refs.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's path: neither its stem nor any directory above it is `core` or `runtime`. `cadenza.domain.refs` is `src/domain/refs.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.ports]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/ports/__init__.py`, a package initialiser. `src/ports/` carries no barrel; its two modules are walked individually.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.ports.catalog_source]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/ports/catalog-source.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's path: neither its stem nor any directory above it is `core` or `runtime`. `cadenza.ports.catalog_source` is `src/ports/catalog-source.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_is_named_core_or_runtime[cadenza.ports.path_verifier]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module is named core or runtime[src/ports/path-verifier.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's path: neither its stem nor any directory above it is `core` or `runtime`. `cadenza.ports.path_verifier` is `src/ports/path-verifier.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.__about__]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/__about__.py` holds `__version__`. The TypeScript half carries its version in `package.json`, which is not a module and has no imports, so there is nothing here for the scan to walk.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/index.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's text. `cadenza` is `src/index.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.adapters]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/adapters/__init__.py`, a package initialiser. TypeScript has no such file: a directory is not a module, and `src/adapters/` carries no barrel. Nothing is lost, because the scan below walks every module that does exist rather than every directory.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.adapters.claude_code]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/adapters/claude_code/__init__.py`, the reserved provider-adapter placeholder (design section 8). Empty on the Python side and absent here, for the reason D-0014 records about the seam beside it: the port does not open a placeholder.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.adapters.interlock]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/adapters/interlock/__init__.py`, the reserved interlock seam. D-0014: it stays empty on the Python side and deliberately has no TypeScript counterpart, so there is no module to walk. That the counterpart is absent is itself asserted, by 'the interlock adapter seam has no TypeScript counterpart'.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.adapters.toml_catalog]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/adapters/toml_catalog/__init__.py`, a package initialiser. The TypeScript adapter is the single module `src/adapters/toml-catalog/loader.ts`, with no barrel beside it.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.adapters.toml_catalog.loader]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/adapters/toml-catalog/loader.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's text. `cadenza.adapters.toml_catalog.loader` is `src/adapters/toml-catalog/loader.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.application]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/application/__init__.py`, a package initialiser. `src/application/` carries no barrel; its two modules are walked individually.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.application.compose]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/application/compose.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's text. `cadenza.application.compose` is `src/application/compose.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.application.resolve]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/application/resolve.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's text. `cadenza.application.resolve` is `src/application/resolve.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.domain]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/domain/__init__.py`, a package initialiser. `src/domain/` carries no barrel; its twelve modules are walked individually.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.domain.clone_source]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/domain/clone-source.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's text. `cadenza.domain.clone_source` is `src/domain/clone-source.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.domain.digest]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/domain/digest.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's text. `cadenza.domain.digest` is `src/domain/digest.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.domain.errors]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/domain/errors.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's text. `cadenza.domain.errors` is `src/domain/errors.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.domain.identifiers]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/domain/identifiers.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's text. `cadenza.domain.identifiers` is `src/domain/identifiers.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.domain.project]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/domain/project.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's text. `cadenza.domain.project` is `src/domain/project.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.domain.refs]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/domain/refs.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's text. `cadenza.domain.refs` is `src/domain/refs.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.ports]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/ports/__init__.py`, a package initialiser. `src/ports/` carries no barrel; its two modules are walked individually.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.ports.catalog_source]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/ports/catalog-source.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's text. `cadenza.ports.catalog_source` is `src/ports/catalog-source.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_module_says_provider_neutral[cadenza.ports.path_verifier]",
+      "target_id": "test/architecture/import-boundaries.test.ts::no module says provider-neutral[src/ports/path-verifier.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript module's text. `cadenza.ports.path_verifier` is `src/ports/path-verifier.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_the_domain_performs_no_io[cadenza.domain]",
+      "target_id": null,
+      "disposition": "waived",
+      "source_status": "passed",
+      "target_status": null,
+      "reason": "`src/cadenza/domain/__init__.py`, a package initialiser. `src/domain/` carries no barrel; its twelve modules are walked individually.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_the_domain_performs_no_io[cadenza.domain.clone_source]",
+      "target_id": "test/architecture/import-boundaries.test.ts::the domain performs no I/O[src/domain/clone-source.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript domain module, stated as an allowlist rather than the source's denylist. See the ledger's systematic mappings: `node:net` is the socket module and `isIP` is a pure predicate inside it, so only naming the bindings separates the two. `cadenza.domain.clone_source` is `src/domain/clone-source.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_the_domain_performs_no_io[cadenza.domain.digest]",
+      "target_id": "test/architecture/import-boundaries.test.ts::the domain performs no I/O[src/domain/digest.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript domain module, stated as an allowlist rather than the source's denylist. See the ledger's systematic mappings: `node:net` is the socket module and `isIP` is a pure predicate inside it, so only naming the bindings separates the two. `cadenza.domain.digest` is `src/domain/digest.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_the_domain_performs_no_io[cadenza.domain.errors]",
+      "target_id": "test/architecture/import-boundaries.test.ts::the domain performs no I/O[src/domain/errors.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript domain module, stated as an allowlist rather than the source's denylist. See the ledger's systematic mappings: `node:net` is the socket module and `isIP` is a pure predicate inside it, so only naming the bindings separates the two. `cadenza.domain.errors` is `src/domain/errors.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_the_domain_performs_no_io[cadenza.domain.identifiers]",
+      "target_id": "test/architecture/import-boundaries.test.ts::the domain performs no I/O[src/domain/identifiers.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript domain module, stated as an allowlist rather than the source's denylist. See the ledger's systematic mappings: `node:net` is the socket module and `isIP` is a pure predicate inside it, so only naming the bindings separates the two. `cadenza.domain.identifiers` is `src/domain/identifiers.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_the_domain_performs_no_io[cadenza.domain.project]",
+      "target_id": "test/architecture/import-boundaries.test.ts::the domain performs no I/O[src/domain/project.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript domain module, stated as an allowlist rather than the source's denylist. See the ledger's systematic mappings: `node:net` is the socket module and `isIP` is a pure predicate inside it, so only naming the bindings separates the two. `cadenza.domain.project` is `src/domain/project.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_the_domain_performs_no_io[cadenza.domain.refs]",
+      "target_id": "test/architecture/import-boundaries.test.ts::the domain performs no I/O[src/domain/refs.ts]",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same claim over the TypeScript domain module, stated as an allowlist rather than the source's denylist. See the ledger's systematic mappings: `node:net` is the socket module and `isIP` is a pure predicate inside it, so only naming the bindings separates the two. `cadenza.domain.refs` is `src/domain/refs.ts` here.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_import_boundaries.py::test_no_test_anchors_a_layer_on_a_posix_only_literal",
+      "target_id": "test/architecture/import-boundaries.test.ts::no test anchors a layer on a posix-only literal",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "The same sweep over `test/**/*.ts` instead of `tests/*.py`, matching the `baseDir` property of an object literal where the source matches the `base_dir=` keyword argument, and unwrapping a single-argument call the way the source unwraps `Path(...)`. One assertion is added that the source does not make: that the sweep found at least one `baseDir` anchor at all, so it cannot pass by having nothing to look at.",
+      "source_revision": "a5672f8"
+    }
+  ]
+}
