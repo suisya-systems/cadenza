@@ -961,10 +961,25 @@ P1.** One is closed, one is recorded open.
     draws at `isShadowedOrDeclared`, and shadowing the helper with an identity function is a longer
     way to write a POSIX-only anchor than writing one.
 
-The four rounds converged rather than circling: no finding recurred, the severities fell
-monotonically (a P1 family, then four P1s, then P2s only, then two P2s), and each round's findings
-were narrower than the last. Item 11 was fixed after the fourth review; items 8 and 9 were fixed
-after the third and reviewed by the fourth.
+**A fifth round, run for the same reason, found two more P2s and no P1. Both closed, both one
+line.** `import { createRequire } from "module"` is the same builtin as `"node:module"` and only the
+prefixed spelling was refused; and `{ ["baseDir"]: "/srv" }` is a `ComputedPropertyName` that sets
+exactly the property `baseDir: "/srv"` does, which the anchor sweep skipped.
+
+**Where this stops, and why here.** Rounds four and five were both P1-clear, and what they returned
+was a tail of *syntactic spellings* of violations already understood -- a file instead of a
+directory, `"module"` instead of `"node:module"`, a computed key instead of a plain one. That tail is
+open-ended: TypeScript has more ways to write any of these, and a sixth round would very likely
+return two more. The check is not converging on a design problem, it is being enumerated against a
+grammar. So the bar applied here is the one that matters for a gate -- no P1, and every *route* a
+reviewer named is closed or recorded -- rather than the unreachable one of a review that returns
+nothing. Two limitations are recorded open in the ledger, both requiring binding resolution, both
+shared with the Python source.
+
+The five rounds converged rather than circling: no finding recurred, the severities fell
+monotonically (a P1 family, then four P1s, then P2s only, then two P2s, then two more), and each
+round's findings were narrower than the last. Every fix was itself reviewed by the round after it,
+except the two one-line fixes from round five.
 
 **What would falsify it.** A way to make a lint suppression countable and reviewable the way
 `approved_non_running` is, which would remove reason 1; or a Biome rule that could be addressed by a

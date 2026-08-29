@@ -58,6 +58,10 @@ const FORBIDDEN_PACKAGES = new Set(["claude-org-runtime", "interlock"]);
 /**
  * Specifiers refused everywhere under `src/`, whatever they are used for.
  *
+ * Both spellings, because Node accepts both: `import { createRequire } from
+ * "module"` is the same builtin as `"node:module"`, and a set holding only the
+ * prefixed form would have refused one of them and admitted the other.
+ *
  * `node:module` manufactures a loader: `createRequire(import.meta.url)` returns
  * a function that loads anything, under whatever name the caller binds it to,
  * and `load("interlock")` is then a real dependency this scan cannot see --
@@ -67,7 +71,7 @@ const FORBIDDEN_PACKAGES = new Set(["claude-org-runtime", "interlock"]);
  * layers already refuse it by allowlist, so this is what covers `src/adapters`
  * and the barrel. Nothing under `src/` imports it.
  */
-const FORBIDDEN_SPECIFIERS = new Set(["node:module"]);
+const FORBIDDEN_SPECIFIERS = new Set(["node:module", "module"]);
 
 /**
  * Inward only: adapters -> application -> domain, and ports is depended on.
@@ -695,6 +699,32 @@ test("no module in a pure layer reaches a global I/O API", () => {
 
 // --- the anchors ------------------------------------------------------------
 
+/**
+ * The name a property is written under, however it is spelled.
+ *
+ * `{ ["baseDir"]: "/srv" }` is a `ComputedPropertyName` and sets exactly the
+ * property `{ baseDir: "/srv" }` does, so a check that recognised only
+ * identifiers and quoted keys would have skipped it and left the failure to the
+ * windows-latest cells. Null for a key that is not statically known, which
+ * cannot be `baseDir` by any reading this sweep could make.
+ */
+function propertyNameOf(name: ts.PropertyName): string | null {
+  if (
+    ts.isIdentifier(name) ||
+    ts.isStringLiteral(name) ||
+    ts.isNoSubstitutionTemplateLiteral(name)
+  ) {
+    return name.text;
+  }
+  if (ts.isComputedPropertyName(name)) {
+    const inner = name.expression;
+    if (ts.isStringLiteral(inner) || ts.isNoSubstitutionTemplateLiteral(inner)) {
+      return inner.text;
+    }
+  }
+  return null;
+}
+
 /** `test/support.ts`'s anchor builder: the one call that makes a path portable. */
 const ANCHOR_BUILDER = "absolute";
 
@@ -784,11 +814,7 @@ test("no test anchors a layer on a posix-only literal", () => {
       ts.ScriptKind.TS,
     );
     const visit = (node: ts.Node): void => {
-      if (
-        ts.isPropertyAssignment(node) &&
-        (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) &&
-        node.name.text === "baseDir"
-      ) {
+      if (ts.isPropertyAssignment(node) && propertyNameOf(node.name) === "baseDir") {
         anchors += 1;
         const literal = posixOnlyLiteral(node.initializer);
         if (literal !== null) {
