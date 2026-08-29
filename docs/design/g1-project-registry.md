@@ -271,11 +271,14 @@ review harder than it needs to be.
 
 ## 9. On interlock
 
-Cadenza is designed to sit on top of interlock, and **does not depend on it
-yet** — not in `pyproject.toml`, not in an extra, not in a comment that says
+Cadenza is designed to sit on top of interlock, and **does not depend on it** —
+not in `pyproject.toml`, not in an extra, not in a comment that says
 "temporarily". Interlock's control-plane API and SQLite schema are marked
-throwaway on its own side (D-0026), so importing them now would convert a
-deliberate spike into a dependency by inertia.
+throwaway on interlock's own side (interlock D-0026), and interlock is frozen,
+so importing them would convert a deliberate spike into a dependency by inertia
+and no later stabilisation is coming to change that. Whether cadenza takes a
+control-plane dependency at all, and against what, is decided here
+(`DECISIONS.md` D-0023) rather than settled elsewhere.
 
 `cadenza/adapters/interlock/` therefore exists and is empty: the seam is
 reserved so that the first real integration is a new file in a place already

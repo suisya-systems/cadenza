@@ -74,6 +74,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without the result depending on ledger order.
 - `scripts/parity-check.mjs` no longer reports `runner-alias` for the `test`
   in an unrelated property access such as `/\s/.test(x)`.
+- Documentation no longer describes interlock as a party with something left to
+  decide (D-0023). `README.md`, `docs/design/g1-project-registry.md` section 9
+  and `docs/repository-policy.md` section 5 stated conditions - G2 "blocked on
+  interlock settling its own contract", and a dependency stance held "yet" -
+  that cannot be met, because interlock is the frozen source this stack is
+  ported from. The questions themselves are kept, marked unanswered; only the
+  framing that made waiting look correct is removed. D-0023 also records three
+  candidate unfreeze conditions for G2, none of them adopted.
 
 ### Fixed
 
