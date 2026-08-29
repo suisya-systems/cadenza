@@ -142,12 +142,13 @@ jobs:
         run: npm run inventory
 
   oracle:
-    # The differential oracle's Python half, re-run against the committed
-    # vector. Without this, the vector is a fossil: the TypeScript suite would
-    # keep agreeing with what CPython said on the day somebody generated it,
-    # including after a change to `src/cadenza/domain/digest.py` moved the
-    # answer. Comparing only `cases` is deliberate -- see the script's --check
-    # branch for why the interpreter version is excluded.
+    # The differential oracle's Python half -- BOTH faces -- re-run against the
+    # committed vectors. Without this, a vector is a fossil: the TypeScript suite
+    # would keep agreeing with what CPython said on the day somebody generated
+    # it, including after a change to `src/cadenza/domain/digest.py` or to the
+    # composition path moved the answer. Comparing only `cases` is deliberate --
+    # see the scripts' --check branch for why the interpreter version is
+    # excluded.
     name: oracle vector is current
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -164,6 +165,8 @@ jobs:
         run: |
           python scripts/oracle/dump_config_digest.py \
             parity/oracle/config-digest-vector.json --check
+          python scripts/oracle/dump_compose_digest.py \
+            parity/oracle/compose-digest-vector.json --check
 
   ts-gate:
     # The single stable check name for the TypeScript half, referenced by

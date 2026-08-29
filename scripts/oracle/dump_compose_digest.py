@@ -43,6 +43,10 @@ Run, from the repository root:
 
     PYTHONDONTWRITEBYTECODE=1 python3 scripts/oracle/dump_compose_digest.py \
         parity/oracle/compose-digest-vector.json
+
+``--check`` regenerates without writing and fails if the committed vector's cases
+have drifted. That is the form CI runs, and it is what stops the vector becoming
+a fossil the TypeScript suite happily agrees with.
 """
 
 from __future__ import annotations
@@ -84,9 +88,7 @@ def git_url_project(url: str = WEB_URL, **extra: Any) -> dict[str, Any]:
 
 def layer(data: dict[str, Any], layer_name: str = "tracked") -> LayerDocument:
     origin = TRACKED_ORIGIN if layer_name == "tracked" else LOCAL_ORIGIN
-    return LayerDocument(
-        layer=layer_name, origin=origin, base_dir=Path(BASE_DIR), data=data
-    )
+    return LayerDocument(layer=layer_name, origin=origin, base_dir=Path(BASE_DIR), data=data)
 
 
 def tracked(projects: dict[str, Any]) -> LayerDocument:
@@ -119,11 +121,7 @@ def corpus() -> list[tuple[str, list[LayerDocument], str]]:
         # A sort that ordered these any other way would change the payload.
         (
             "aliases-sorted-across-punctuation",
-            [
-                tracked(
-                    {"web": git_url_project(aliases=["z", "a_b", "a-b", "a0b"])}
-                )
-            ],
+            [tracked({"web": git_url_project(aliases=["z", "a_b", "a-b", "a0b"])})],
             "web",
         ),
         # NOTE on what is absent here. The first face of this oracle has a case
@@ -206,11 +204,7 @@ def corpus() -> list[tuple[str, list[LayerDocument], str]]:
         # is hashed as written, never as a URL parser would rewrite it.
         (
             "idn-host",
-            [
-                tracked(
-                    {"web": git_url_project(url="https://b\u00fccher.example/org/web.git")}
-                )
-            ],
+            [tracked({"web": git_url_project(url="https://b\u00fccher.example/org/web.git")})],
             "web",
         ),
         # Two layers, one project, every field restated: provenance differs
@@ -227,8 +221,22 @@ def corpus() -> list[tuple[str, list[LayerDocument], str]]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("output", type=Path, help="path to write the vector to")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Dump the CPython side of the composition differential oracle. "
+            "Writes a JSON vector the TypeScript suite compares against."
+        )
+    )
+    parser.add_argument("output", type=Path, help="path of the JSON vector to write")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "do not write; regenerate and exit non-zero if the committed vector's cases "
+            "differ. This is the CI form: a vector that no longer matches what CPython "
+            "says is a vector the TypeScript suite is comparing against a fossil."
+        ),
+    )
     arguments = parser.parse_args()
 
     cases = []
@@ -244,6 +252,34 @@ def main() -> int:
                 "digest": resolved.config_digest,
             }
         )
+
+    if arguments.check:
+        # `cases` only, deliberately, for the reason `dump_config_digest.py`
+        # records: `python_version` names the interpreter that generated the
+        # committed vector and is expected to differ from whichever one CI runs,
+        # so comparing the whole document would turn a Python upgrade into a red
+        # gate with no divergence behind it. What must not drift is what CPython
+        # SAYS, which is `cases`.
+        committed = json.loads(arguments.output.read_text(encoding="utf-8"))
+        if committed.get("cases") == cases and committed.get("case_count") == len(cases):
+            print(f"vector is current ({len(cases)} cases)")
+            return 0
+        print(
+            f"vector is stale: {arguments.output} does not match what this interpreter "
+            f"produces. Regenerate it with the same command without --check.",
+            file=sys.stderr,
+        )
+        committed_ids = [case.get("id") for case in committed.get("cases", [])]
+        current_ids = [case["id"] for case in cases]
+        if committed_ids != current_ids:
+            print(f"  committed ids: {committed_ids}", file=sys.stderr)
+            print(f"  current ids:   {current_ids}", file=sys.stderr)
+        else:
+            for committed_case, current_case in zip(committed["cases"], cases, strict=True):
+                if committed_case != current_case:
+                    print(f"  first differing case: {current_case['id']}", file=sys.stderr)
+                    break
+        return 1
 
     vector = {
         "generated_by": "scripts/oracle/dump_compose_digest.py",
