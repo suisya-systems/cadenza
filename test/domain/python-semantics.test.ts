@@ -161,9 +161,33 @@ describe("urlsplit", () => {
 
   test("a bracketed host must be a real IPv6 literal", () => {
     expect(urlsplit("https://[::1]/x").netloc).toBe("[::1]");
+    expect(urlsplit("ssh://git@[::1]:22/x").netloc).toBe("git@[::1]:22");
     expect(() => urlsplit("https://[::1/x")).toThrow(/Invalid IPv6 URL/);
     expect(() => urlsplit("https://[1.2.3.4]/x")).toThrow(/IPv4 address cannot be in brackets/);
     expect(() => urlsplit("https://[bad]/x")).toThrow(UrlValueError);
+  });
+
+  test("the brackets must also be in the right PLACE", () => {
+    // Raised by review. CPython 3.11 moved these rules out of
+    // `_check_bracketed_host` and into `_check_bracketed_netloc`, and a port
+    // that validated only the text BETWEEN the brackets accepts both of these:
+    // the bracketed part is a perfectly good IPv6 literal sitting in the wrong
+    // place. Nothing may precede the bracket, and nothing may follow the closing
+    // one except a port.
+    expect(() => urlsplit("https://x[::1]/repo.git")).toThrow(/Invalid IPv6 URL/);
+    expect(() => urlsplit("https://[::1]x:80/repo.git")).toThrow(/Invalid IPv6 URL/);
+    expect(() => urlsplit("https://a[b]c/x")).toThrow(/Invalid IPv6 URL/);
+    // A port after the closing bracket is the one thing that may follow it.
+    expect(port(urlsplit("https://[::1]:80/x"))).toBe(80);
+  });
+
+  test("the netloc ends at the earliest of / ? #", () => {
+    // `_splitnetloc` takes the minimum of the three positions, and the split has
+    // to be by UTF-16 index: a code-point index handed to `slice` would cut an
+    // astral character in half and take the netloc with it.
+    expect(urlsplit("https://h?q#f").netloc).toBe("h");
+    expect(urlsplit("https://h#f?q").netloc).toBe("h");
+    expect(urlsplit("https://\u{1f600}h/x").netloc).toBe("\u{1f600}h");
   });
 
   test("a netloc that NFKC would turn into another URL is refused", () => {

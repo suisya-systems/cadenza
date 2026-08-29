@@ -44,6 +44,46 @@ function isAsciiLetter(character: string): boolean {
   return /^[A-Za-z]$/.test(character);
 }
 
+/**
+ * `_check_bracketed_netloc`: WHERE the brackets may appear, not merely what is
+ * inside them.
+ *
+ * CPython's comment on this function is that it "must mirror the splitting done
+ * in `NetlocResultMixins._hostinfo()`", and the mirroring is the whole point:
+ * checking only the text between the brackets accepts `x[::1]` and `[::1]x:80`,
+ * whose bracketed part is a perfectly good IPv6 literal sitting in the wrong
+ * place. CPython refuses both as `Invalid IPv6 URL`, so a port that checked only
+ * the inside would compose clone sources the reference implementation rejects.
+ *
+ * (Found by review. The earlier version of this file extracted the bracketed
+ * host with two `partition`s and validated that alone -- which is what CPython
+ * did before 3.11 moved the placement rules into this function.)
+ */
+function checkBracketedNetloc(netloc: string): void {
+  const at = netloc.lastIndexOf("@");
+  const hostAndPort = at === -1 ? netloc : netloc.slice(at + 1);
+  const open = hostAndPort.indexOf("[");
+  let host: string;
+  if (open !== -1) {
+    // No data is allowed before a bracket.
+    if (open !== 0) {
+      throw new UrlValueError("Invalid IPv6 URL");
+    }
+    const bracketed = hostAndPort.slice(open + 1);
+    const close = bracketed.indexOf("]");
+    host = close === -1 ? bracketed : bracketed.slice(0, close);
+    const rest = close === -1 ? "" : bracketed.slice(close + 1);
+    // No data is allowed after the bracket but before the port delimiter.
+    if (rest !== "" && !rest.startsWith(":")) {
+      throw new UrlValueError("Invalid IPv6 URL");
+    }
+  } else {
+    const colon = hostAndPort.indexOf(":");
+    host = colon === -1 ? hostAndPort : hostAndPort.slice(0, colon);
+  }
+  checkBracketedHost(host);
+}
+
 /** `_check_bracketed_host`: what may appear between `[` and `]`. */
 function checkBracketedHost(host: string): void {
   if (host.startsWith("v")) {
@@ -126,8 +166,18 @@ export function urlsplit(rawUrl: string): SplitResult {
     }
   }
   if (url.slice(0, 2) === "//") {
-    const delimiter = [...url.slice(2)].findIndex((character) => "/?#".includes(character));
-    const end = delimiter === -1 ? url.length : delimiter + 2;
+    // `_splitnetloc`: the EARLIEST of the three delimiters, found by index.
+    // Spelled with `indexOf` rather than by iterating code points, because a
+    // code-point position cannot be handed to `slice`, which counts UTF-16 code
+    // units -- an astral character before the delimiter would cut the netloc in
+    // the wrong place, and in the middle of a surrogate pair at that.
+    let end = url.length;
+    for (const delimiter of "/?#") {
+      const found = url.indexOf(delimiter, 2);
+      if (found >= 0) {
+        end = Math.min(end, found);
+      }
+    }
     netloc = url.slice(2, end);
     const open = netloc.includes("[");
     const close = netloc.includes("]");
@@ -135,7 +185,7 @@ export function urlsplit(rawUrl: string): SplitResult {
       throw new UrlValueError("Invalid IPv6 URL");
     }
     if (open && close) {
-      checkBracketedHost(netloc.slice(netloc.indexOf("[") + 1).split("]")[0] as string);
+      checkBracketedNetloc(netloc);
     }
   }
   checkNetloc(netloc);
