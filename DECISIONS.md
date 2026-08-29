@@ -50,6 +50,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0017 | The oracle's second face: composition, over the persisted digest only | accepted |
 | D-0018 | Python's standard library is ported, not approximated | accepted |
 | D-0019 | The clone-source belt: `tmp_path`-only fixtures need no filesystem, and a frozen structural type is proven at both the type checker and the runtime | accepted |
+| D-0020 | The identifier belt's two predicted traps, settled by measurement | accepted |
 
 ---
 
@@ -666,3 +667,72 @@ is sound here and would not be if a case ever asserted on `path.exists()` or a s
 
 ---
 
+## D-0020 — The identifier belt's two predicted traps, settled by measurement
+
+**Status:** accepted
+
+**Decision.** The kickoff (cadenza#8) predicted two cross-language traps for
+`tests/test_identifiers.py`. Both are settled here by **running both implementations over a corpus
+and diffing the verdicts**, not by reading the two spellings side by side and judging them alike.
+The conclusion of each is recorded below with the measurement that produced it, and the two
+properties the port now depends on are held by target-only cases in
+`test/domain/identifiers.test.ts` rather than by this prose.
+
+**How it was measured.** `parse_identifier` (CPython 3.12.3, from `src/cadenza/`) and
+`parseIdentifier` (the port, compiled from `src/`) were run over the same 3,169 values: every code
+point below U+0300 in four positions (alone, appended, embedded, prepended), the whitespace and
+format controls above it (U+0085, U+1680, U+180E, U+200B, U+2028, U+2029, U+202F, U+205F, U+2060,
+U+3000, U+FEFF), U+FFFD, U+E000, U+FFFF, U+10FFFF and U+1F600, ten trailing-terminator shapes, both
+length boundaries (64 and 65 characters, and a 64-code-point astral value), and the six shapes the
+source file itself uses. Lone surrogates were probed separately, JSON not being able to carry them.
+For each value both sides recorded accept/refuse and, on refusal, the message. `str.isspace()` and
+`/\s/u` were compared over the whole code point space, and CPython's `repr` against the port's over
+the same.
+
+**Trap 1 — `\Z` against `$`. Real, and the naive translation is right for a reason worth
+recording.** `IDENTIFIER_PATTERN` ends `\Z`, so `"web\n"` is refused; Python's `$` would have
+accepted it. JavaScript's `$` **without** the `m` flag anchors at the end of the input, as `\Z`
+does, so the naive `/^[a-z][a-z0-9_-]{0,63}$/` is correct — and it is correct only while the flag
+stays off. Measured: the same source under `m` accepts `web\n`, and also `web\r`, `web\u2028` and
+`web\u2029`, three terminators Python's `$` does not break a line at. So the risk here is not the
+translation that was written; it is the flag a later edit adds for an unrelated reason. That is what
+`carries no flags, because 'm' would restore Python's '$'` pins.
+
+**Trap 2 — `str.isspace()` against `/\s/`. Does not arise in this file, and the reason generalises.**
+`parse_identifier` consults no whitespace predicate at all: its gate is a **positive** character
+class, `[a-z0-9_-]`, so a space is refused for not being in the class rather than for being
+whitespace. The prediction was that a `/\s/` translation would loosen the refusal — which is true of
+the shape `_parse_git_url` and `parse_base_branch` use (refuse anything `isspace()`) and is why
+`isPythonSpace` exists (D-0018), but there is no such shape here to get wrong. The measurement says
+the same thing from the other side: over the corpus the two implementations disagree on
+**zero** accept/refuse verdicts, the six whitespace-disagreement code points (U+001C..U+001F and
+U+0085, whitespace to Python only; U+FEFF, to JavaScript only) included. The case
+`refuses whitespace on both sides of the isspace()/\s disagreement` keeps that true if the gate is
+ever rewritten into a refusal shape.
+
+**What the measurement found that the kickoff did not predict.** Two things, both message-only and
+neither reachable through this file's cases:
+
+- **The refusal text diverges wherever CPython's `repr` escapes a non-ASCII code point.** `repr`
+  decides "printable" from the Unicode character database; `pythonRepr` escapes only the ASCII
+  non-printables. Swept over all 1,112,064 code points: **963,033 differ**, the first at U+0080. The
+  ASCII range is exact, and so is the one non-ASCII value this file tests (U+00E9, which CPython
+  prints as itself). This is the limitation `src/domain/python-text.ts` already states, now with a
+  number attached; it is displayed text and reaches nothing a run persists (D-0017), so it stays
+  documented rather than fixed.
+- **The 64-character bound counts different units and cannot be observed doing so.** `{0,63}` counts
+  UTF-16 code units in JavaScript and code points in Python, so a value with an astral character
+  would be measured differently — but every value the class admits is ASCII, so no such value is
+  ever accepted by either side. Recorded because the next belt to widen a character class inherits
+  the question.
+
+**Why this is a decision and not a note in the ledger.** Both conclusions are of the form "the
+obvious spelling is correct **because** of a property that nothing in the code requires" — an absent
+regex flag, a class that happens to be positive. A ledger entry explains one case to whoever reads
+that case. This says the property out loud, so an edit that removes it is recognisable as removing
+something.
+
+**What would falsify it.** A source file whose identifier gate stops being a positive class; a
+`parse_identifier` that gains a whitespace or normalisation step; or an `m` flag on
+`IDENTIFIER_PATTERN`, which the target-only case turns red. The measurement is pinned to CPython
+3.12.3 and Node 22; a Unicode version change would move the `repr` figure and nothing else here.

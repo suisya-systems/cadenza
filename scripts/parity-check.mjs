@@ -86,6 +86,8 @@ const LEDGERS = [
   "parity/toml-loader.ledger.json",
   // the clone-source belt
   "parity/clone-source.ledger.json",
+  // the identifier belt
+  "parity/identifiers.ledger.json",
 ];
 
 /** Files that carry tests translating no source case. */
