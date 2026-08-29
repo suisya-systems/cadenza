@@ -117,33 +117,71 @@ const UNLAYERED_MODULES = ["src/index.ts"];
 const PURE_LAYERS = ["src/domain", "src/application"];
 
 /**
- * What a module in a pure layer may reach outside it, and under exactly which
- * names.
+ * Every external dependency each layer may have, and under exactly which names.
  *
- * The source states this as a **denylist** -- `socket`, `subprocess`, `shutil`
- * and three more -- with `os` allowed wholesale because `expanduser` consults
- * `$HOME` and stats nothing. A denylist is the wrong shape here for a reason
- * that is specific to Node rather than to taste: `node:net` is the socket
- * module and `isIP` is a pure predicate that happens to live in it, so a
- * denylist either forbids `node:net` and fails today, or admits it and admits
- * `createConnection` with it. Naming the **bindings** is what separates the two.
+ * The source states this as a **denylist** for the domain alone -- `socket`,
+ * `subprocess`, `shutil` and three more -- with `os` allowed wholesale because
+ * `expanduser` consults `$HOME` and stats nothing. Two things are different
+ * here, and both were forced by review rather than chosen up front.
  *
- * So this is an allowlist, and it fails closed: any other bare specifier from a
- * domain module is a violation, and so is a namespace or default import of an
- * allowed one, because neither can be checked binding by binding. Widening it
- * is a diff to this table with a reason beside it, which is the review the
- * source's `os` allowance got once and could not ask for again.
+ * It is an **allowlist**, because a denylist is the wrong shape in Node:
+ * `node:net` IS the socket module the source's denylist names first, and `isIP`
+ * is a pure predicate that happens to live in it, so a denylist either forbids
+ * `node:net` and fails on `src/domain/python-urlsplit.ts` today, or admits
+ * `createConnection` with it. Naming the **bindings** is what separates them.
+ *
+ * And it covers **every** layer, not only the pure ones. That is what finally
+ * closed a category the review found three separate spellings of: a module that
+ * loads something this scan cannot follow. `<computed>`, then
+ * `createRequire` from `node:module`, then `"module"` without the prefix -- each
+ * closed by name, each followed by another name. `node:vm` and
+ * `process.getBuiltinModule` were still open. Enumerating loaders is a losing
+ * game; enumerating what `src/` is actually allowed to import is a table of six
+ * entries that closes all of them at once, including the ones nobody has
+ * thought of.
+ *
+ * It fails closed in the other two directions as well: a namespace or default
+ * import of an allowed module is refused, because neither can be checked
+ * binding by binding, and so is a side-effect import, which binds nothing and
+ * still executes the module.
  */
-const PURE_ALLOWED_BUILTINS: Readonly<Record<string, readonly string[]>> = {
-  // `hashlib` on the Python side. Hashing is computation, not I/O.
-  "node:crypto": ["createHash"],
-  // The `os` allowance the source records, narrowed to the one function it was
-  // granted for: `homedir()` is what `expanduser` consults.
-  "node:os": ["homedir"],
-  // `isIP` is a pure predicate. The rest of `node:net` is the socket module the
-  // source's denylist names first.
-  "node:net": ["isIP"],
+const ALLOWED_EXTERNALS_BY_LAYER: Readonly<
+  Record<string, Readonly<Record<string, readonly string[]>>>
+> = {
+  "src/domain": {
+    // `hashlib` on the Python side. Hashing is computation, not I/O.
+    "node:crypto": ["createHash"],
+    // The `os` allowance the source records, narrowed to the one function it
+    // was granted for: `homedir()` is what `expanduser` consults.
+    "node:os": ["homedir"],
+    // `isIP` is a pure predicate. The rest of `node:net` is the socket module
+    // the source's denylist names first.
+    "node:net": ["isIP"],
+  },
+  // Design section 8 marks `application/` `(no I/O)` beside `domain/`, and it
+  // needs nothing external to be so.
+  "src/application": {},
+  // Ports are protocols. They depend on the domain and on nothing else.
+  "src/ports": {},
+  // The one layer that is allowed I/O, and only this much of it.
+  "src/adapters": {
+    "node:fs": ["readFileSync", "statSync"],
+    "smol-toml": ["parse", "TomlError"],
+  },
 };
+
+/** What the barrel, which is in no layer, may reach: nothing. */
+const ALLOWED_EXTERNALS_UNLAYERED: Readonly<Record<string, readonly string[]>> = {};
+
+/**
+ * Globals that load or execute code from a string.
+ *
+ * The last route that is not an import at all: `eval('import("interlock")')`
+ * and `Function('return import("interlock")')` compile, run, and leave nothing
+ * in the tree for the sweep above to read. Refused everywhere under `src/`,
+ * for the same reason `<computed>` is an offender rather than a skip.
+ */
+const CODE_EVALUATION_GLOBALS = ["eval", "Function"];
 
 /**
  * I/O Node hands to every module without an import, so no allowlist over
@@ -224,15 +262,56 @@ function isShadowedOrDeclared(node: ts.Identifier): boolean {
  */
 const MINIMUM_MODULES = 10;
 
+/**
+ * The extensions a TypeScript module can carry.
+ *
+ * `.ts` alone was a hole: `.mts`, `.cts` and `.tsx` are all valid modules that
+ * NodeNext resolves, and one added under `src/` would have been skipped by this
+ * walk -- receiving no boundary cases and no ledger ids, and free to import
+ * interlock or cross a layer with the gate green. `.d.ts` is deliberately
+ * absent and is caught as unrecognised: a declaration file under `src/` is not
+ * something this port has, and it should be looked at rather than swept.
+ */
+const MODULE_EXTENSIONS = [".ts", ".mts", ".cts", ".tsx"];
+
+/**
+ * The Python half, which lives under `src/` too and is not part of this graph.
+ *
+ * The rewrite happens in place (D-0012): `src/cadenza/` and `src/` coexist
+ * until a later PR retires the first (D-0014). So the TypeScript module graph
+ * is `src/` MINUS this directory, and the walk skips it whole -- its `.py`
+ * files, and the `__pycache__` a local pytest run leaves behind. Nothing is
+ * unguarded meanwhile: `tests/test_import_boundaries.py` enforces exactly these
+ * boundaries over exactly that tree, and stays green in CI until it goes.
+ */
+const PYTHON_PACKAGE = "src/cadenza";
+
+/** Files under `src/` the walk did not recognise as modules. See `moduleFiles`. */
+const unrecognised: string[] = [];
+
+/** A file name without whichever module extension it carries. */
+function stemOf(fileName: string): string {
+  const extension = MODULE_EXTENSIONS.find((candidate) => fileName.endsWith(candidate));
+  return extension === undefined ? fileName : fileName.slice(0, -extension.length);
+}
+
 /** Every TypeScript module under `src/`, repo-relative, sorted. */
 function moduleFiles(directory: string = SRC_ROOT): string[] {
   const found: string[] = [];
   for (const entry of readdirSync(join(ROOT, directory))) {
     const path = `${directory}/${entry}`;
+    if (path === PYTHON_PACKAGE) {
+      continue;
+    }
     if (statSync(join(ROOT, path)).isDirectory()) {
       found.push(...moduleFiles(path));
-    } else if (entry.endsWith(".ts")) {
+    } else if (MODULE_EXTENSIONS.some((extension) => entry.endsWith(extension))) {
       found.push(path);
+    } else {
+      // Not skipped quietly. A file under `src/` that this walk does not
+      // recognise gets no cases and no ledger ids, which is the one way a
+      // module can sit in the tree with nothing said about it at all.
+      unrecognised.push(path);
     }
   }
   return found.sort();
@@ -382,6 +461,26 @@ function importsIn(source: string, from: string): readonly ImportRef[] {
   }
 
   visit(tree);
+
+  // A triple-slash directive is a dependency TypeScript records on the
+  // SourceFile rather than in the tree, so `forEachChild` never reaches it.
+  // A `reference types=` directive naming interlock, and a `reference path=`
+  // one naming a module in another layer, are both real dependencies -- and the
+  // second crosses a layer, which is exactly what this file exists to refuse,
+  // arriving by the one route a tree walk cannot see.
+  //
+  // The directives are spelled without their leading slashes above on purpose:
+  // written out in full, this comment is itself read as a directive by tools
+  // that scan text rather than syntax, and knip reported the repository as
+  // depending on interlock because of it. That is the same text-versus-tree
+  // confusion `scripts/parity-check.mjs` records about its own sweep, met from
+  // the other side.
+  for (const directive of tree.typeReferenceDirectives) {
+    record(directive.fileName, ["*"]);
+  }
+  for (const reference of tree.referencedFiles) {
+    record(reference.fileName, ["*"]);
+  }
   return found;
 }
 
@@ -505,6 +604,12 @@ test("the walk found the module graph it is supposed to guard", () => {
   expect(existsSync(join(ROOT, SRC_ROOT))).toBe(true);
   expect(MODULES.length).toBeGreaterThanOrEqual(MINIMUM_MODULES);
   expect(MODULES).toContain("src/domain/clone-source.ts");
+  // And nothing under `src/` was passed over. A file the walk does not
+  // recognise gets no cases and no ledger ids, so silently skipping one is the
+  // single way a module can sit in this tree with nothing said about it.
+  expect(unrecognised, `unrecognised files under ${SRC_ROOT}/: ${unrecognised.join(", ")}`).toEqual(
+    [],
+  );
 });
 
 // --- the boundaries ---------------------------------------------------------
@@ -579,9 +684,7 @@ test("the interlock adapter seam has no TypeScript counterpart", () => {
   // the gate that should be telling you the interlock seam was opened.
   const seam = MODULES.filter((module) => {
     const segments = module.split("/");
-    return (
-      segments.includes("interlock") || (segments.at(-1) ?? "").replace(/\.ts$/, "") === "interlock"
-    );
+    return segments.includes("interlock") || stemOf(segments.at(-1) ?? "") === "interlock";
   });
   expect(seam, `these open the interlock seam: ${seam.join(", ")}`).toEqual([]);
 });
@@ -590,7 +693,7 @@ parametrize("no module is named core or runtime", PER_MODULE, (module) => {
   // Those names belong to interlock's vocabulary; reusing them makes a boundary
   // review harder than it needs to be (section 8).
   const segments = slash(module).split("/");
-  const stem = (segments.at(-1) ?? "").replace(/\.ts$/, "");
+  const stem = stemOf(segments.at(-1) ?? "");
   const directories = segments.slice(0, -1);
   expect([stem, ...directories]).not.toContain("core");
   expect([stem, ...directories]).not.toContain("runtime");
@@ -601,14 +704,27 @@ parametrize("no module says provider-neutral", PER_MODULE, (module) => {
   expect(sourceOf(module)).not.toContain("provider-neutral");
 });
 
-/** Everything a pure layer's module reaches that the allowlist does not admit. */
-function impureImportsIn(module: string): string[] {
+/** The layer a module sits in, or null for the barrel. */
+function layerOf(module: string): string | null {
+  return Object.keys(ALLOWED_BY_LAYER).find((layer) => module.startsWith(`${layer}/`)) ?? null;
+}
+
+/**
+ * Every external dependency a module has that its own layer does not approve.
+ *
+ * Relative imports are somebody else's question -- `each layer imports only
+ * inward` asks it -- so only bare specifiers are considered here.
+ */
+function unapprovedExternalsIn(module: string): string[] {
+  const layer = layerOf(module);
+  const table =
+    layer === null ? ALLOWED_EXTERNALS_UNLAYERED : (ALLOWED_EXTERNALS_BY_LAYER[layer] ?? {});
   const offenders: string[] = [];
   for (const ref of importsIn(sourceOf(module), module)) {
     if (ref.resolved !== null) {
       continue;
     }
-    const allowed = PURE_ALLOWED_BUILTINS[ref.specifier];
+    const allowed = table[ref.specifier];
     if (allowed === undefined) {
       offenders.push(ref.specifier);
       continue;
@@ -634,7 +750,7 @@ parametrize("the domain performs no I/O", PER_DOMAIN_MODULE, (module) => {
   // The allowlist above is the whole of what is permitted by import, and the
   // reasons are recorded there. What it cannot see is the global surface, which
   // has its own case below.
-  const offenders = impureImportsIn(module);
+  const offenders = unapprovedExternalsIn(module);
   expect(offenders, `${module} reaches ${offenders.join(", ")}`).toEqual([]);
 });
 
@@ -643,7 +759,7 @@ parametrize("the application performs no I/O", PER_APPLICATION_MODULE, (module) 
   // marks `application/` `(no I/O)` in the same code block that marks
   // `domain/`, and D-0001 makes the document the primary oracle. The source
   // parametrises its case over the domain alone, which is the narrower claim.
-  const offenders = impureImportsIn(module);
+  const offenders = unapprovedExternalsIn(module);
   expect(offenders, `${module} reaches ${offenders.join(", ")}`).toEqual([]);
 });
 
@@ -695,6 +811,47 @@ test("no module in a pure layer reaches a global I/O API", () => {
     visit(tree);
   }
   expect(offenders, `these reach I/O without importing it: ${offenders.join(", ")}`).toEqual([]);
+});
+
+test("no module manufactures a loader or an unapproved dependency", () => {
+  // Target-only, and the case that closed a category rather than a spelling.
+  // Review found three separate ways to load something this scan cannot
+  // follow -- a computed specifier, `createRequire` from `node:module`, and the
+  // same builtin spelled `"module"` -- and closing each by name left the next
+  // one open. Two rules close all of them, including `node:vm` and
+  // `process.getBuiltinModule`, which nobody had named yet:
+  //
+  //  1. every bare specifier a module imports must be approved for its layer,
+  //     which the two no-I/O cases already assert for `src/domain` and
+  //     `src/application`; this extends it to `src/adapters` and the barrel.
+  //  2. `eval` and `Function` build code from a string, so they leave nothing
+  //     in the tree for rule 1 to read, and are refused outright.
+  const offenders: string[] = [];
+  for (const module of MODULES) {
+    for (const specifier of unapprovedExternalsIn(module)) {
+      offenders.push(`${module}: ${specifier}`);
+    }
+    const tree = ts.createSourceFile(
+      module,
+      sourceOf(module),
+      ts.ScriptTarget.ES2023,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isIdentifier(node) &&
+        CODE_EVALUATION_GLOBALS.includes(node.text) &&
+        !isShadowedOrDeclared(node)
+      ) {
+        const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
+        offenders.push(`${module}:${line}: ${node.text}`);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(tree);
+  }
+  expect(offenders.sort(), `unapproved: ${offenders.join(", ")}`).toEqual([]);
 });
 
 // --- the anchors ------------------------------------------------------------

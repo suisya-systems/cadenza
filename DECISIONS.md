@@ -966,20 +966,44 @@ line.** `import { createRequire } from "module"` is the same builtin as `"node:m
 prefixed spelling was refused; and `{ ["baseDir"]: "/srv" }` is a `ComputedPropertyName` that sets
 exactly the property `baseDir: "/srv"` does, which the anchor sweep skipped.
 
-**Where this stops, and why here.** Rounds four and five were both P1-clear, and what they returned
-was a tail of *syntactic spellings* of violations already understood -- a file instead of a
-directory, `"module"` instead of `"node:module"`, a computed key instead of a plain one. That tail is
-open-ended: TypeScript has more ways to write any of these, and a sixth round would very likely
-return two more. The check is not converging on a design problem, it is being enumerated against a
-grammar. So the bar applied here is the one that matters for a gate -- no P1, and every *route* a
-reviewer named is closed or recorded -- rather than the unreachable one of a review that returns
-nothing. Two limitations are recorded open in the ledger, both requiring binding resolution, both
-shared with the Python source.
+**A sixth round returned a P1, and it is the finding that changed the design.** Rounds four and five
+had been P1-clear and had returned a tail of *syntactic spellings* -- a file instead of a directory,
+`"module"` instead of `"node:module"`, a computed key instead of a plain one -- which looked like
+grammar enumeration. The sixth named `eval('import("interlock")')`, and that made the pattern legible
+rather than incidental: `<computed>`, then `createRequire` from `node:module`, then `"module"`
+unprefixed, then `eval`/`Function` were **four spellings of one category** -- a module loading
+something this scan cannot follow -- and each had been closed by name, leaving the next one open.
+`node:vm` and `process.getBuiltinModule` were still open and nobody had named them yet.
 
-The five rounds converged rather than circling: no finding recurred, the severities fell
-monotonically (a P1 family, then four P1s, then P2s only, then two P2s, then two more), and each
-round's findings were narrower than the last. Every fix was itself reviewed by the round after it,
-except the two one-line fixes from round five.
+Enumerating loaders is a losing game, so the rule was inverted instead. `ALLOWED_EXTERNALS_BY_LAYER`
+approves **every** bare specifier per layer, not merely for the two pure layers -- six entries, one
+of which is `src/adapters`' `node:fs` and `smol-toml` and two of which are empty -- and `eval` and
+`Function` are refused outright because they build code from a string and leave nothing to read.
+Together those close the whole category at once, the members nobody has thought of included.
+Measured: `node:vm` in the adapter and `smol-toml` in the domain both turn red, and neither was ever
+named in a denylist.
+
+That round's two P2s are closed with it. A triple-slash `reference` directive is recorded on the
+`SourceFile` rather than in the tree, so `forEachChild` never reached one; both directive lists are
+read now, and a `reference path=` into another layer turns the inward case red. And the walk took
+only `.ts`, so a `.mts`, `.cts` or `.tsx` module would have been skipped entirely -- no cases, no
+ledger ids, free to cross a layer. All four extensions are discovered, and a file under `src/` the
+walk does not recognise is now itself a failure rather than a silent skip. `src/cadenza/` is
+excluded by name, because the Python half lives under `src/` too until D-0014 retires it.
+
+**A note the belt earned the hard way.** Writing a `reference types=` directive out in full inside a
+comment made knip report the repository as depending on interlock: a tool scanning text rather than
+syntax read the comment as the directive it describes. That is the same confusion
+`scripts/parity-check.mjs` records about its own sweep, met from the other side, in the file arguing
+for syntax trees.
+
+**Where this stops.** Two limitations are recorded open in the ledger, both requiring binding
+resolution, both shared with the Python source. The bar applied is the one that matters for a gate:
+no P1, and every *route* a reviewer named either closed or recorded.
+
+No finding ever recurred once closed, and no fix was reverted. What recurred was a *category*, four
+times, which is what a per-spelling denylist guarantees and what the inversion above ended. Every fix
+was reviewed by the round after it.
 
 **What would falsify it.** A way to make a lint suppression countable and reviewable the way
 `approved_non_running` is, which would remove reason 1; or a Biome rule that could be addressed by a
