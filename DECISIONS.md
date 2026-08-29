@@ -927,6 +927,29 @@ imported from `src/domain` and from `src/ports`, a new unlayered `src/toplevel.t
 `globalThis.fetch`, `globalThis["process"]`, `import "node:net"` in the domain, and `baseDir` written
 as a template, as `as const`, and parenthesised.
 
+**A third round found three more, and the entry stops there.** Two are closed and one is recorded
+open, which is the honest end state rather than a clean one.
+
+8. **`createRequire` manufactures a loader the scan cannot follow.** `const load =
+   createRequire(import.meta.url); load("interlock")` is valid ESM, and only a callee literally
+   spelled `require` was followed. The pure layers already refused `node:module` by allowlist, so
+   the gap was `src/adapters` and the barrel. Tracking the alias is scope analysis; refusing the one
+   import that can produce it is two lines, and `node:module` is now refused everywhere under
+   `src/`. Measured: the two-line `createRequire` route turns the adapter's case red.
+9. **The anchor sweep unwrapped every call, including the one that fixes the problem.**
+   `absolute("/srv")` was reported for being what `test/support.ts` exists to provide. Unwrapping
+   now skips a call to `absolute` and nothing else, so `nativePath.join("/srv", x)` is still caught.
+10. **An anchor behind a name is still not seen** — `const ROOT = "/srv"` then `baseDir: ROOT`.
+    **Left open**, and recorded in the ledger's `inherited_limitations` rather than fixed: the source
+    has the identical hole for the identical reason (`_posix_only_literal` returns `None` for an
+    `ast.Name`), and following the name means resolving a binding in its scope. The wrappers that
+    *are* peeled were widened past the source precisely because they need no scope analysis. This
+    case is a second line of defence behind `absolute()`; the windows-latest cells are the first.
+
+The three rounds converged rather than circling: no finding recurred, the severities fell (one P1
+family, then four, then none), and each round's findings were narrower than the last. Items 8 and 9
+were fixed after the third review and have not themselves been through one.
+
 **What would falsify it.** A way to make a lint suppression countable and reviewable the way
 `approved_non_running` is, which would remove reason 1; or a Biome rule that could be addressed by a
 ledger entry, which would remove reason 3. Reason 2 would go if the other seven claims found a

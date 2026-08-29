@@ -114,6 +114,10 @@
     {
       "behaviour": "The scan reads specifiers, not resolved semantics, so a module reached through a specifier built at runtime -- `import(someVariable)` -- cannot be named. It is NOT ignored: the port records such an edge as `<computed>` and fails closed, so `no module imports interlock` and the no-I/O cases both turn red on it.",
       "why": "The source has the identical blind spot for the identical reason -- `ast.Import` carries a name, not a computed value, so `importlib.import_module(name)` is invisible there -- but it resolves it the other way, by silently seeing nothing. Failing closed instead was raised at review of this belt and is the one place the port is deliberately stricter than the source: an unreadable edge makes every check below optional, since one variable would let the module graph say whatever its author wanted. Nothing under `src/` computes a specifier today, so the first thing that does has to say why. A no-substitution template -- ``import(`interlock`)`` -- is statically known and is read as the literal it is, rather than being dropped by a scan that only recognised quotes."
+    },
+    {
+      "behaviour": "The POSIX-only-anchor sweep reads the expression written at the `baseDir` property. An anchor reached through a name -- `const ROOT = \"/srv/catalog\";` then `baseDir: ROOT` -- is not resolved, so a POSIX-only literal behind one identifier escapes it.",
+      "why": "The source has the identical hole: `_posix_only_literal` accepts an `ast.Constant`, or a `Path(...)` wrapping one, and returns None for an `ast.Name`. Following the name means resolving a binding in its scope, which is a type checker's job rather than a boundary check's, and the wrappers that ARE unwrapped here (parentheses, `as`, `satisfies`, a call's first argument) were widened past the source precisely because they need no scope analysis. Raised at review of this belt and left open deliberately: the case is a second line of defence behind `test/support.ts`'s `absolute()`, and the windows-latest cells are the first."
     }
   ],
   "entries": [

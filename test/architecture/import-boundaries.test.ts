@@ -56,6 +56,20 @@ const sourceOf = (module: string): string => readFileSync(join(ROOT, module), "u
 const FORBIDDEN_PACKAGES = new Set(["claude-org-runtime", "interlock"]);
 
 /**
+ * Specifiers refused everywhere under `src/`, whatever they are used for.
+ *
+ * `node:module` manufactures a loader: `createRequire(import.meta.url)` returns
+ * a function that loads anything, under whatever name the caller binds it to,
+ * and `load("interlock")` is then a real dependency this scan cannot see --
+ * only a callee literally spelled `require` is followed. Tracking the alias is
+ * scope analysis, which is a type checker's job; refusing the one import that
+ * can produce it is two lines and closes the route at its source. The pure
+ * layers already refuse it by allowlist, so this is what covers `src/adapters`
+ * and the barrel. Nothing under `src/` imports it.
+ */
+const FORBIDDEN_SPECIFIERS = new Set(["node:module"]);
+
+/**
  * Inward only: adapters -> application -> domain, and ports is depended on.
  *
  * Stated as what each layer MAY import rather than what it may not, which is
@@ -500,7 +514,14 @@ parametrize("no module imports interlock", PER_MODULE, (module) => {
   // question is whether this module reaches interlock, and `import(name)` is
   // an edge for which the honest answer is "unknown" -- which is not "no".
   const offenders = importsIn(sourceOf(module), module)
-    .filter((ref) => reachesForbiddenPackage(ref.specifier) || ref.specifier === COMPUTED_SPECIFIER)
+    .filter(
+      (ref) =>
+        reachesForbiddenPackage(ref.specifier) ||
+        ref.specifier === COMPUTED_SPECIFIER ||
+        // Refused for the same reason `<computed>` is: it produces an edge
+        // nothing here can follow, and "unknown" is not "no".
+        FORBIDDEN_SPECIFIERS.has(ref.specifier),
+    )
     .map((ref) => ref.specifier)
     .sort();
   expect(offenders, `${module} imports ${offenders.join(", ")}`).toEqual([]);
@@ -659,6 +680,18 @@ test("no module in a pure layer reaches a global I/O API", () => {
 
 // --- the anchors ------------------------------------------------------------
 
+/** `test/support.ts`'s anchor builder: the one call that makes a path portable. */
+const ANCHOR_BUILDER = "absolute";
+
+/** `f(...)` -> "f", `a.f(...)` -> "f"; null for anything else. */
+function calleeNameOf(call: ts.CallExpression): string | null {
+  const callee = call.expression;
+  if (ts.isIdentifier(callee)) {
+    return callee.text;
+  }
+  return ts.isPropertyAccessExpression(callee) ? callee.name.text : null;
+}
+
 /**
  * The string of a `baseDir: "/x"` or `baseDir: f("/x")` literal, if any.
  *
@@ -681,7 +714,16 @@ function posixOnlyLiteral(node: ts.Expression): string | null {
     ) {
       value = value.expression;
     } else {
-      const first = ts.isCallExpression(value) ? value.arguments[0] : undefined;
+      // A call is unwrapped to its first argument -- `nativePath.join("/srv",
+      // x)` anchors on a POSIX-only literal just as surely as the bare string
+      // does -- EXCEPT a call to the sanctioned builder, whose entire job is to
+      // turn parts into an anchor that is absolute on the running platform.
+      // Unwrapping that one would report `absolute("/srv")` for being what it
+      // was asked to fix.
+      const first =
+        ts.isCallExpression(value) && calleeNameOf(value) !== ANCHOR_BUILDER
+          ? value.arguments[0]
+          : undefined;
       if (first === undefined) {
         break;
       }
