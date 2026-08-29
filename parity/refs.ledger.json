@@ -73,7 +73,7 @@
       "why": "The source's own shape, recorded there as \"the point of the corpus is that git, not this file, says what the answer is\" -- a claim about direction (never more permissive than git), not about coverage. Carried over unchanged rather than widened, because widening the corpus is a decision about the source file's own scope and belongs to whichever belt owns `tests/test_refs.py`, not to this translation."
     },
     {
-      "behaviour": "'the validator refuses everything git refuses' and 'the shapes codex review found' skip -- entirely, not merely report inconclusive -- on a machine with no `git` on `PATH`.",
+      "behaviour": "'the validator refuses everything git refuses' (24 cases) skips -- entirely, not merely report inconclusive -- on a machine with no `git` on `PATH`. 'the shapes codex review found' calls no subprocess and always runs, matching the source, which gives it no `skipif` at all.",
       "why": "The source's own shape: `@pytest.mark.skipif(GIT is None, ...)` does the same. `git` is present in this repository's own CI images and dev containers, so the skip is not expected to fire there; it is inherited rather than tightened because CI's binary environment is not this belt's to decide."
     }
   ],
