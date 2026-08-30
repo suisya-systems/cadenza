@@ -83,7 +83,7 @@ let session = null;
 function sessionOf() {
   if (session === null) {
     const fs = createVirtualFileSystem({ [TSCONFIG]: TSCONFIG_TEXT });
-    session = { api: new API({ cwd: PARSE_DIR, fs }), fs, mounted: null };
+    session = { api: new API({ cwd: PARSE_DIR, fs }), fs, mounted: null, snapshot: null };
   }
   return session;
 }
@@ -118,10 +118,28 @@ export function parseSourceFile(fileName, source) {
   // nothing wrong with any of the others. That failure is silent and green,
   // which is why the assertion below exists rather than a comment saying to be
   // careful.
+  // The previous parse's snapshot is released here rather than left to
+  // `disposeParser`. Each one holds the compiler's program and the trees
+  // decoded from it, so keeping them all would grow memory with the number of
+  // files swept -- a few hundred, over a suite that parses every module and
+  // every test file. Releasing it now, rather than after this parse, is what
+  // makes the tree this function returns safe to walk: a caller reads its tree
+  // before asking for the next one, and no caller holds one across a parse.
+  const previous = state.snapshot;
+
   const snapshot = state.api.updateSnapshot({
     openProjects: [TSCONFIG],
     fileChanges: { changed: [path] },
   });
+  state.snapshot = snapshot;
+
+  // Released only once its successor exists. Releasing it first looks tidier
+  // and silently breaks invalidation: the next snapshot then reports no change
+  // and hands back the previous file's tree. The assertion below caught that,
+  // which is the whole reason it is there.
+  if (previous !== null) {
+    previous.dispose();
+  }
   const project = snapshot.getProject(TSCONFIG);
   const tree = project?.program.getSourceFile(path);
   if (tree === undefined) {
@@ -145,6 +163,9 @@ export function parseSourceFile(fileName, source) {
  */
 export function disposeParser() {
   if (session !== null) {
+    if (session.snapshot !== null) {
+      session.snapshot.dispose();
+    }
     session.api.close();
     session = null;
   }
