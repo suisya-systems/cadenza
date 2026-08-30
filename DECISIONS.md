@@ -1391,8 +1391,8 @@ under which one would open G2.
   (D-0023's own framing), but G2 has no design at all — no authority model, no control-plane seam, no
   stated boundary on what a run may do unattended. Admitting it as ordinary work risks whoever picks
   it up inventing the delegation contract as they implement it, rather than the contract being fixed
-  first and reviewed as a document. The `needs-decision` label and an `AGENTS.md` added alongside this
-  work reduce that risk but do not remove it.
+  first and reviewed as a document. The `needs-decision` label on cadenza#9 reduces that risk by
+  flagging the marker, but does not remove it.
 - **Candidate 2 is a design-before-implementation gate that chains to nothing else.** It replaces an
   unbounded wait with a condition this repository can meet on its own schedule, and it does not make
   G2 depend on any other open question's resolution.
