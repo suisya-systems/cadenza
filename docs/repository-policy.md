@@ -63,9 +63,12 @@ from that tag, with release notes drawn from the changelog entry.
 Runtime dependencies are kept minimal. The `dependency-review` workflow
 reviews any dependency change on pull requests before merge.
 
-interlock is deliberately not a runtime dependency yet, even though cadenza is
+interlock is deliberately not a runtime dependency, even though cadenza is
 designed to sit on top of it. `docs/design/g1-project-registry.md` section 9
 explains why: interlock's control-plane API and SQLite schema are marked
-throwaway on interlock's own side, so depending on them now would turn a
-deliberate spike into a dependency by inertia. `src/cadenza/adapters/interlock/`
-exists as a reserved, empty seam for the first real integration.
+throwaway on interlock's own side and interlock is frozen, so depending on them
+would turn a deliberate spike into a dependency by inertia and nothing there is
+going to stabilise later. `src/cadenza/adapters/interlock/` exists as a
+reserved, empty seam for the first real integration, and taking that step is a
+cadenza decision (`DECISIONS.md` D-0023), not one this repository is waiting on
+someone else to take.
