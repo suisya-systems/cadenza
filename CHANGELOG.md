@@ -98,6 +98,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `smol-toml` (exact, pinned in the lockfile) - the port's first and only
   runtime dependency, for the TOML layer loader. Rationale and the two known
   disagreements with `tomllib` are in D-0016.
+- `typescript` 5.8.3 -> 7.0.2 (supersedes cadenza#12). TypeScript 7 is the Go
+  compiler, and its npm package no longer exports a JavaScript compiler API, so
+  the two checks that read this tree's own sources - `npm run parity` and the
+  import-boundary sweep - lost `ts.createSourceFile`. They now obtain a syntax
+  tree through `scripts/lib/ts-ast.mjs`, which asks the compiler for it and
+  asserts the tree it gets back is the text it asked about. Nothing under `src/`
+  changed: the port type-checks unaltered under 7. See D-0024.
 
 ## [0.1.0] - 2026-08-21
 
