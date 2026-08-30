@@ -66,7 +66,8 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import * as ts from "typescript/unstable/ast";
+import { disposeParser, parseSourceFile } from "./lib/ts-ast.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -189,11 +190,13 @@ function testFiles(directory = join(ROOT, "test")) {
  *     it, and getting both right in one text pass is a lexer.
  *
  * So the lexer is the one already installed: `typescript` is a devDependency
- * because `tsc` type-checks this repository, and `ts.createSourceFile` answers
- * the question exactly. Comments and string literals are not nodes in the tree
- * at all, so prose mentioning `test.skip` -- of which these files have a great
+ * because `tsc` type-checks this repository, and its syntax tree answers the
+ * question exactly. Comments and string literals are not nodes in the tree at
+ * all, so prose mentioning `test.skip` -- of which these files have a great
  * deal -- cannot be counted, and a modifier chain is a property-access chain
- * whatever order it was written in.
+ * whatever order it was written in. Getting that tree is
+ * `scripts/lib/ts-ast.mjs`; under TypeScript 7 that is a question put to the
+ * compiler rather than a call into a library, but the question is the same one.
  *
  * Detection is on the **property-access chain**, and only the outermost link of
  * one is counted, or `test.skip.concurrent` would be counted twice: once for
@@ -218,7 +221,7 @@ function testFiles(directory = join(ROOT, "test")) {
  * import -- which would put every runner behind a property access -- is refused.
  */
 function nonRunningIn(path, source) {
-  const tree = ts.createSourceFile(path, source, ts.ScriptTarget.ES2023, true, ts.ScriptKind.TS);
+  const tree = parseSourceFile(path, source);
   const hits = [];
   const aliases = [];
 
@@ -332,7 +335,7 @@ function nonRunningIn(path, source) {
       // above already covers a real `test.skip`, where `test` is the
       // `expression` half rather than the `name` half.
       if (parent !== undefined && ts.isPropertyAccessExpression(parent) && parent.name === node) {
-        ts.forEachChild(node, visit);
+        node.forEachChild(visit);
         return;
       }
       const isBinding =
@@ -340,7 +343,7 @@ function nonRunningIn(path, source) {
         (ts.isImportSpecifier(parent) ||
           ts.isImportClause(parent) ||
           ts.isBindingElement(parent) ||
-          ts.isParameter(parent) ||
+          ts.isParameterDeclaration(parent) ||
           ts.isVariableDeclaration(parent) ||
           ts.isFunctionDeclaration(parent)) &&
         (parent.name === node ||
@@ -360,7 +363,7 @@ function nonRunningIn(path, source) {
         parent !== undefined &&
         (ts.isFunctionDeclaration(parent) ||
           ts.isImportSpecifier(parent) ||
-          ts.isPropertySignature(parent) ||
+          ts.isPropertySignatureDeclaration(parent) ||
           ts.isVariableDeclaration(parent) ||
           ts.isPropertyAssignment(parent)) &&
         parent.name === node;
@@ -368,7 +371,7 @@ function nonRunningIn(path, source) {
         hits.push({ construct: node.text, line: lineOf(node) });
       }
     }
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   }
 
   visit(tree);
@@ -627,6 +630,10 @@ for (const [relativePath, approval] of approvedNonRunning) {
     }
   }
 }
+
+// The compiler is a child process; without this the script keeps running after
+// it has finished deciding, whether it decided green or red.
+disposeParser();
 
 if (problems.length > 0) {
   process.stderr.write("parity ledger check failed:\n");

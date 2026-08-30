@@ -28,12 +28,18 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
-import { expect, test } from "vitest";
+import * as ts from "typescript/unstable/ast";
+import { afterAll, expect, test } from "vitest";
+
+import { disposeParser, parseSourceFile } from "../../scripts/lib/ts-ast.mjs";
 
 import { parametrize } from "../testkit/parametrize.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+// The parser is a compiler child process, shared by every case below. Vitest
+// would otherwise sit waiting for it after the last assertion has passed.
+afterAll(disposeParser);
 
 /** The tree this file guards. */
 const SRC_ROOT = "src";
@@ -366,7 +372,7 @@ function isShadowedOrDeclared(node: ts.Identifier): boolean {
   }
   return (
     (ts.isPropertyAssignment(parent) ||
-      ts.isPropertySignature(parent) ||
+      ts.isPropertySignatureDeclaration(parent) ||
       // A class member named for a global declares that member; it does not
       // reference the global. `class Layer { module = "domain"; }` was reported
       // as a loader route for the word it spells its own field with.
@@ -375,9 +381,9 @@ function isShadowedOrDeclared(node: ts.Identifier): boolean {
       ts.isSetAccessorDeclaration(parent) ||
       ts.isEnumMember(parent) ||
       ts.isMethodDeclaration(parent) ||
-      ts.isMethodSignature(parent) ||
+      ts.isMethodSignatureDeclaration(parent) ||
       ts.isVariableDeclaration(parent) ||
-      ts.isParameter(parent) ||
+      ts.isParameterDeclaration(parent) ||
       ts.isBindingElement(parent) ||
       ts.isFunctionDeclaration(parent) ||
       ts.isImportSpecifier(parent) ||
@@ -464,19 +470,6 @@ function underPythonPackage(path: string): boolean {
 
 /** Files under `src/` the walk did not recognise as modules. See `moduleFiles`. */
 const unrecognised: string[] = [];
-
-/**
- * The grammar a module's extension implies.
- *
- * `.tsx` is not TypeScript with extra tokens, it is a different grammar, and
- * parsing one as `ScriptKind.TS` yields a tree that is wrong in both
- * directions: a dynamic import inside JSX is not exposed, and JSX text can be
- * read as code that is not there. Every `createSourceFile` in this file asks
- * for the kind rather than assuming one.
- */
-function scriptKindOf(path: string): ts.ScriptKind {
-  return path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
-}
 
 /** A file name without whichever module extension it carries. */
 function stemOf(fileName: string): string {
@@ -582,7 +575,7 @@ function resolveSpecifier(specifier: string, from: string): string | null {
  * would see nothing.
  */
 function importsIn(source: string, from: string): readonly ImportRef[] {
-  const tree = ts.createSourceFile(from, source, ts.ScriptTarget.ES2023, true, scriptKindOf(from));
+  const tree = parseSourceFile(from, source);
   const found: ImportRef[] = [];
 
   const record = (specifier: string, names: readonly string[]): void => {
@@ -665,7 +658,7 @@ function importsIn(source: string, from: string): readonly ImportRef[] {
         record(literal, ["*"]);
       }
     }
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   }
 
   visit(tree);
@@ -987,13 +980,7 @@ test("no module in a pure layer reaches a global I/O API", () => {
   // bare `process` that cannot be attributed to one, is a violation.
   const offenders: string[] = [];
   for (const module of PURE_LAYER_MODULES) {
-    const tree = ts.createSourceFile(
-      module,
-      sourceOf(module),
-      ts.ScriptTarget.ES2023,
-      true,
-      scriptKindOf(module),
-    );
+    const tree = parseSourceFile(module, sourceOf(module));
     const report = (node: ts.Node, what: string): void => {
       const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
       offenders.push(`${module}:${line}: ${what}`);
@@ -1009,7 +996,7 @@ test("no module in a pure layer reaches a global I/O API", () => {
           }
         }
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(tree);
   }
@@ -1034,13 +1021,7 @@ test("no module manufactures a loader or an unapproved dependency", () => {
     for (const specifier of unapprovedExternalsIn(module)) {
       offenders.push(`${module}: ${specifier}`);
     }
-    const tree = ts.createSourceFile(
-      module,
-      sourceOf(module),
-      ts.ScriptTarget.ES2023,
-      true,
-      scriptKindOf(module),
-    );
+    const tree = parseSourceFile(module, sourceOf(module));
     const visit = (node: ts.Node): void => {
       // `.constructor` and `["constructor"]` reach the Function constructor from
       // any value, naming neither `Function` nor a global, so they are matched
@@ -1071,7 +1052,7 @@ test("no module manufactures a loader or an unapproved dependency", () => {
           }
         }
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(tree);
   }
@@ -1136,7 +1117,7 @@ function posixOnlyLiteral(node: ts.Expression): string | null {
     } else if (
       ts.isAsExpression(value) ||
       ts.isSatisfiesExpression(value) ||
-      ts.isTypeAssertionExpression(value)
+      ts.isTypeAssertion(value)
     ) {
       value = value.expression;
     } else {
@@ -1187,13 +1168,7 @@ test("no test anchors a layer on a posix-only literal", () => {
   const offenders: string[] = [];
   let anchors = 0;
   for (const path of testFiles()) {
-    const tree = ts.createSourceFile(
-      path,
-      readFileSync(join(ROOT, path), "utf8"),
-      ts.ScriptTarget.ES2023,
-      true,
-      scriptKindOf(path),
-    );
+    const tree = parseSourceFile(path, readFileSync(join(ROOT, path), "utf8"));
     const visit = (node: ts.Node): void => {
       if (ts.isPropertyAssignment(node) && propertyNameOf(node.name) === "baseDir") {
         anchors += 1;
@@ -1203,7 +1178,7 @@ test("no test anchors a layer on a posix-only literal", () => {
           offenders.push(`${path}:${line}: ${JSON.stringify(literal)}`);
         }
       }
-      ts.forEachChild(node, visit);
+      node.forEachChild(visit);
     };
     visit(tree);
   }
