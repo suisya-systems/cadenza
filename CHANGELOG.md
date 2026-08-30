@@ -35,6 +35,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ports of the Python standard-library behaviour the implementation depends on
   (D-0018): `os.path`/`pathlib`, `urllib.parse.urlsplit`, `difflib` and
   `str.isspace`, each with its own contract test, checked against CPython 3.12.
+- Clone-source belt (cadenza#8, D-0019): `tests/test_clone_source.py` ported -
+  57 node ids, 42 mapped straight and 15 adapted, closing the coverage gap the
+  composition belt left around `parseCloneSource`'s own validation.
+- Identifier belt (cadenza#8): `tests/test_identifiers.py` ported - 25 node
+  ids, all mapped - in `test/domain/identifiers.test.ts`, with
+  `parity/identifiers.ledger.json` accounting for them. The two cross-language
+  traps the kickoff named for this file were settled by running both
+  implementations over a 3,169-value corpus and diffing the verdicts (D-0020):
+  zero accept/refuse disagreements, the `\Z`-versus-`$` anchor and the
+  `str.isspace()`-versus-`/\s/` refusal set each held open by a target-only
+  case.
+- Refs belt (cadenza#8): `tests/test_refs.py` ported - all 62 node ids mapped,
+  none deferred. The git-parity case (D-0021) runs the real `git` binary via
+  `node:child_process`, mirroring the source's own `subprocess` call against
+  `git check-ref-format`, rather than a fixed corpus of pre-recorded answers.
+- Import-boundaries belt (cadenza#8, D-0022), the last source file: design
+  section 8's dependency direction is now enforced over the TypeScript module
+  graph by `test/architecture/import-boundaries.test.ts`, which parses every
+  module under `src/` with the TypeScript compiler API rather than importing it
+  - so a re-export, a dynamic `import()` in a function body and a type-only
+  import all count. `tests/test_import_boundaries.py`'s 97 node ids are
+  re-pointed rather than transcribed: 64 adapted, 33 waived for the Python
+  package initialisers that have no counterpart here. Biome's
+  `noRestrictedImports` was measured first and can express the graph half; it
+  was not chosen because one `biome-ignore` comment silently waives it and a
+  diagnostic has no target id for a ledger to endorse. The sweep fails closed on
+  a dynamic import whose specifier cannot be read statically, covers
+  `src/application` as no-I/O because design section 8 says so even though the
+  source test does not, and catches the global I/O Node hands out without an
+  import (`fetch`, `console`, `process` beyond `env` and `platform`). With this,
+  all 330 source node ids carry a ledger.
 
 ### Changed
 
@@ -43,6 +74,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without the result depending on ledger order.
 - `scripts/parity-check.mjs` no longer reports `runner-alias` for the `test`
   in an unrelated property access such as `/\s/.test(x)`.
+- Documentation no longer describes interlock as a party with something left to
+  decide (D-0023). `README.md`, `docs/design/g1-project-registry.md` section 9
+  and `docs/repository-policy.md` section 5 stated conditions - G2 "blocked on
+  interlock settling its own contract", and a dependency stance held "yet" -
+  that cannot be met, because interlock is the frozen source this stack is
+  ported from. The questions themselves are kept, marked unanswered; only the
+  framing that made waiting look correct is removed. D-0023 also records three
+  candidate unfreeze conditions for G2, none of them adopted.
 
 ### Fixed
 

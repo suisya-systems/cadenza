@@ -44,11 +44,16 @@ so the two spaces can never be read as one. The same applies to
 | D-0011 | The differential oracle, and the one face this pilot implements | accepted |
 | D-0012 | The TypeScript tree lives at the repository root, beside the Python package | accepted |
 | D-0013 | The canonical encoder refuses a lone surrogate rather than escaping it | accepted |
-| D-0014 | G2 and the interlock seam are untouched by the port | accepted |
+| D-0014 | G2 and the interlock seam are untouched by the port | superseded by D-0023 |
 | D-0015 | Value objects are snapshotted and frozen, not merely typed `readonly` | accepted |
 | D-0016 | `smol-toml` is the port's one runtime dependency | accepted |
 | D-0017 | The oracle's second face: composition, over the persisted digest only | accepted |
 | D-0018 | Python's standard library is ported, not approximated | accepted |
+| D-0019 | The clone-source belt: `tmp_path`-only fixtures need no filesystem, and a frozen structural type is proven at both the type checker and the runtime | accepted |
+| D-0020 | The identifier belt's two predicted traps, settled by measurement | accepted |
+| D-0021 | The git-parity oracle runs the real `git` binary; `match=` becomes a `RegExp` only where a plain substring would look for a character the message never contains | accepted |
+| D-0022 | The import boundary is a test that parses the tree, not a lint rule: measured against Biome, chosen for the ledger | accepted |
+| D-0023 | interlock is a frozen source, not a decision-maker: cadenza's open questions are settled at cadenza's own human gate | accepted |
 
 ---
 
@@ -427,7 +432,14 @@ design document is where that gets settled first (D-0001).
 
 ## D-0014 — G2 and the interlock seam are untouched by the port
 
-**Status:** accepted
+**Status:** superseded by D-0023
+
+D-0023 restates what this entry decided that still holds — the port neither unfreezes G2 nor opens
+the interlock seam — and replaces its account of *why*. The body below is left as written, per this
+file's rule that an ID is never rewritten, and is a record of what was believed in August 2026. Read
+through D-0023: "pending interlock#74's TypeScript migration" and "interlock#74 landing, which is
+the stated precondition for unfreezing G2" describe a precondition cadenza is **not** waiting on.
+G2's unfreeze condition is cadenza's to set, and is not set yet.
 
 **Decision.** The port does not touch G2 (frozen at cadenza#9 pending interlock#74's TypeScript
 migration) and does not open the interlock seam: `src/cadenza/adapters/interlock/` stays empty on
@@ -621,3 +633,656 @@ comparisons, the port called `///C:` absolute and CPython does not.
 becoming `os.path`; the more likely case is a future belt needing so little of a module that a
 five-line local helper is honest, and the test that pins it is what makes that judgeable.
 
+---
+
+## D-0019 — The clone-source belt: `tmp_path`-only fixtures need no filesystem, and a frozen structural type is proven at both the type checker and the runtime
+
+**Status:** accepted
+
+**Decision.** `tests/test_clone_source.py`'s 57 node ids are ported at
+`test/domain/clone-source.test.ts`, case by case in `parity/clone-source.ledger.json` (42 `ported`,
+15 `adapted`, 0 `not-ported`, 0 `waived`). `parseCloneSource` itself came over with the composition
+belt (D-0017's ledgers record the gap this closes); this belt is only its own 57 cases.
+
+**Thirteen `tmp_path` cases are `adapted`, and the mapping is the composition belt's own
+precedent, repeated rather than reinvented.** `parseCloneSource` never stats or reads a path —
+`_normalise_path`/`normalisePath` call `normpath`, never a filesystem-resolving call — so every
+case in the source file that took `tmp_path` needed only *some* absolute directory, not a real one.
+`parity/compose.ledger.json` already recorded this exact substitution (`CATALOG_DIR` from
+`test/support.ts`) for its own three `allowed_local_roots` cases; this belt's ledger cites that
+systematic mapping rather than re-deriving it, and extends `test/support.ts` with the `ELSEWHERE`
+export `tests/support.py` also carries, held back until now because nothing imported it (`npm run
+knip`).
+
+**One `monkeypatch.setenv` case has no vitest counterpart and is adapted accordingly.**
+"a tilde is expanded against the home directory" sets `process.env.HOME` and `process.env.USERPROFILE`
+directly and restores both with `onTestFinished`, registered at the point of acquisition rather than
+in a file-level `afterEach` — `docs/porting.md`'s testkit rule 1, applied to environment variables
+rather than to a resource handle. Both variables are set because `ntpath.expanduser` ignores `HOME`
+entirely and reads `USERPROFILE`; setting only `HOME` would assert nothing on the Windows cell, which
+is the source test's own comment.
+
+**"sources are frozen" is adapted because the freezing mechanism itself changed, not the property.**
+Python's `GitUrlSource` is a `@dataclass(frozen=True)`, and a rebinding attempt raises
+`FrozenInstanceError`. `CloneSource` here is a structural interface, not a class with a runtime
+identity, so `gitUrlSource` freezes the object it returns with `Object.freeze`; an ES module is
+implicitly strict, so the rebinding attempt is a `TypeError` rather than a silent no-op. The ported
+case adds a `@ts-expect-error` on the same assignment, which the source case has no way to state:
+the guarantee is pinned at the type checker *and* the runtime, because only the structural type
+needs both — a frozen dataclass's fields are already `Final` in the type checker's eyes.
+
+**What would falsify it.** A future belt whose source cases touch a real filesystem through
+`parse_clone_source` or its port — none does today, which is exactly why the `tmp_path` substitution
+is sound here and would not be if a case ever asserted on `path.exists()` or a symlink.
+
+---
+
+## D-0020 — The identifier belt's two predicted traps, settled by measurement
+
+**Status:** accepted
+
+**Decision.** The kickoff (cadenza#8) predicted two cross-language traps for
+`tests/test_identifiers.py`. Both are settled here by **running both implementations over a corpus
+and diffing the verdicts**, not by reading the two spellings side by side and judging them alike.
+The conclusion of each is recorded below with the measurement that produced it, and the two
+properties the port now depends on are held by target-only cases in
+`test/domain/identifiers.test.ts` rather than by this prose.
+
+**How it was measured.** `parse_identifier` (CPython 3.12.3, from `src/cadenza/`) and
+`parseIdentifier` (the port, compiled from `src/`) were run over the same 3,169 values: every code
+point below U+0300 in four positions (alone, appended, embedded, prepended), the whitespace and
+format controls above it (U+0085, U+1680, U+180E, U+200B, U+2028, U+2029, U+202F, U+205F, U+2060,
+U+3000, U+FEFF), U+FFFD, U+E000, U+FFFF, U+10FFFF and U+1F600, ten trailing-terminator shapes, both
+length boundaries (64 and 65 characters, and a 64-code-point astral value), and the six shapes the
+source file itself uses. Lone surrogates were probed separately, JSON not being able to carry them.
+For each value both sides recorded accept/refuse and, on refusal, the message. `str.isspace()` and
+`/\s/u` were compared over the whole code point space, and CPython's `repr` against the port's over
+the same.
+
+**Trap 1 — `\Z` against `$`. Real, and the naive translation is right for a reason worth
+recording.** `IDENTIFIER_PATTERN` ends `\Z`, so `"web\n"` is refused; Python's `$` would have
+accepted it. JavaScript's `$` **without** the `m` flag anchors at the end of the input, as `\Z`
+does, so the naive `/^[a-z][a-z0-9_-]{0,63}$/` is correct — and it is correct only while the flag
+stays off. Measured: the same source under `m` accepts `web\n`, and also `web\r`, `web\u2028` and
+`web\u2029`, three terminators Python's `$` does not break a line at. So the risk here is not the
+translation that was written; it is the flag a later edit adds for an unrelated reason. That is what
+`carries no flags, because 'm' would restore Python's '$'` pins.
+
+**Trap 2 — `str.isspace()` against `/\s/`. Does not arise in this file, and the reason generalises.**
+`parse_identifier` consults no whitespace predicate at all: its gate is a **positive** character
+class, `[a-z0-9_-]`, so a space is refused for not being in the class rather than for being
+whitespace. The prediction was that a `/\s/` translation would loosen the refusal — which is true of
+the shape `_parse_git_url` and `parse_base_branch` use (refuse anything `isspace()`) and is why
+`isPythonSpace` exists (D-0018), but there is no such shape here to get wrong. The measurement says
+the same thing from the other side: over the corpus the two implementations disagree on
+**zero** accept/refuse verdicts, the six whitespace-disagreement code points (U+001C..U+001F and
+U+0085, whitespace to Python only; U+FEFF, to JavaScript only) included. The case
+`refuses whitespace on both sides of the isspace()/\s disagreement` keeps that true if the gate is
+ever rewritten into a refusal shape.
+
+**What the measurement found that the kickoff did not predict.** Two things, both message-only and
+neither reachable through this file's cases:
+
+- **The refusal text diverges wherever CPython's `repr` escapes a non-ASCII code point.** `repr`
+  decides "printable" from the Unicode character database; `pythonRepr` escapes only the ASCII
+  non-printables. Swept over all 1,112,064 code points: **963,033 differ**, the first at U+0080. The
+  ASCII range is exact, and so is the one non-ASCII value this file tests (U+00E9, which CPython
+  prints as itself). This is the limitation `src/domain/python-text.ts` already states, now with a
+  number attached; it is displayed text and reaches nothing a run persists (D-0017), so it stays
+  documented rather than fixed.
+- **The 64-character bound counts different units and cannot be observed doing so.** `{0,63}` counts
+  UTF-16 code units in JavaScript and code points in Python, so a value with an astral character
+  would be measured differently — but every value the class admits is ASCII, so no such value is
+  ever accepted by either side. Recorded because the next belt to widen a character class inherits
+  the question.
+
+**Why this is a decision and not a note in the ledger.** Both conclusions are of the form "the
+obvious spelling is correct **because** of a property that nothing in the code requires" — an absent
+regex flag, a class that happens to be positive. A ledger entry explains one case to whoever reads
+that case. This says the property out loud, so an edit that removes it is recognisable as removing
+something.
+
+**What would falsify it.** A source file whose identifier gate stops being a positive class; a
+`parse_identifier` that gains a whitespace or normalisation step; or an `m` flag on
+`IDENTIFIER_PATTERN`, which the target-only case turns red. The measurement is pinned to CPython
+3.12.3 and Node 22; a Unicode version change would move the `repr` figure and nothing else here.
+
+---
+
+## D-0021 — The git-parity oracle runs the real `git` binary; `match=` becomes a `RegExp` only where a plain substring would look for a character the message never contains
+
+**Status:** accepted
+
+**Decision.** `tests/test_refs.py::test_the_validator_refuses_everything_git_refuses` -- the case
+the design doc names by name as the reason `parse_base_branch`'s rule list is checked against `git
+check-ref-format` rather than a second copy of the rules -- is ported as a real subprocess call, not
+a fixed corpus of pre-recorded answers. `test/domain/refs.test.ts` spawns `git --version` once to
+decide whether the suite has `git` on `PATH` at all, and `git check-ref-format refs/heads/<name>` per
+corpus row, using `node:child_process.execFileSync`. No dependency was added: `execFileSync` is
+`node:child_process`, already reachable everywhere Node runs, and never goes through a shell. Where
+`git` is absent, the 24 cases are skipped as a group (`test.skipIf`, approved once in
+`parity/refs.ledger.json` because the check that counts non-running constructs reads the syntax tree
+and this is one call site inside a loop, not 24).
+
+Second, and considered while porting the file's other parametrized case
+(`test_refuses_each_documented_ref_violation`, 23 rows): pytest's `match=` is `re.search` against
+`str(exc)`, and the naive translation is `expect(...).toThrow(pattern)`. For every row but two, the
+source pattern carries no regex metacharacter and a plain string (`.includes()`) is the same check.
+Two rows -- `r"must not contain '\.\.'"` and `r"must not end with '\.lock'"` -- are regexes whose only
+metacharacter is an escaped, **literal** dot: `\.` matches the same one character `.` does here, so a
+plain substring of the *rendered* text (`"must not contain '..'"`, no backslash -- confirmed against
+`pythonRepr`'s actual output) is an equally correct translation, and a mismatched substring fails
+`toThrow` loudly rather than passing vacuously either way. There is no silent-pass hazard in either
+choice. What is NOT equivalent is transcribing the regex **source** verbatim into a plain string --
+`"must not contain '\\.\\.'"`, backslashes and all -- and handing that to `toThrow`: `.includes()`
+then looks for a backslash character the message never contains, and the two dots it does contain are
+never checked at all. That transcription is close enough to what copying `r"...\.\.. "` out of the
+Python source looks like to write by reflex, which is why this belt used a `RegExp` built from the
+same characters for these two rows instead of reasoning about which characters survive the switch:
+a `RegExp` and its source string mean the same thing in both languages, so there is nothing to get
+backwards. The rule for later belts: a `match=` pattern with a regex metacharacter is carried over as
+a `RegExp`, not re-derived as a substring by hand.
+
+**Why not a fixed vector, the way the two digest oracles use one.** Those two compare a **persisted**
+value against a committed vector so a regenerated vector re-proves it was measured against real
+CPython (docs/porting.md section 4). `git check-ref-format`'s answer is not persisted anywhere and
+is not migrating away from Python -- both the Python suite and this one ask the *installed* `git`
+the same question at run time, and the property under test ("never more permissive than git") is
+exactly the property a frozen snapshot of git's answers on one version would stop checking.
+
+**What would falsify it.** A CI image or a contributor's machine with no `git` on `PATH` would silently
+skip 24 cases rather than fail the build -- inherited from the source's own `skipif`, recorded in
+`parity/refs.ledger.json`'s `inherited_limitations`, and not this belt's to tighten.
+
+---
+
+## D-0022 — The import boundary is a test that parses the tree, not a lint rule: measured against Biome, chosen for the ledger
+
+**Status:** accepted
+
+**Decision.** The TypeScript half of design section 8's dependency direction is enforced by
+`test/architecture/import-boundaries.test.ts`, a vitest test file that walks `src/` and parses each
+module with `ts.createSourceFile`. It is not a Biome rule, not `dependency-cruiser`, and not a
+standalone script. It runs in the ordinary suite -- so under the double-green rule (D-0006) on all
+six matrix cells -- and additionally as its own named step in the `checks` job, mirroring what
+`tests.yml` already does for the Python half.
+
+Its 98 cases are the target of `parity/import-boundaries.ledger.json`, which endorses all 97 node
+ids of `tests/test_import_boundaries.py`: 64 `adapted`, 33 `waived`, none `ported`. That is the
+kickoff's own instruction (cadenza#8) rather than a judgement made here -- re-point the file, record
+the result as `adapted`, do not silently drop it.
+
+**Biome can do the graph half, and that is not the question. Measured.**
+`noRestrictedImports` has been in Biome since 1.6.0, and 2.5.10 supports both `patterns` (for the
+layer rule) and `allowImportNames` (for the binding-level allowance the domain rule needs). Under an
+`overrides` entry scoped to `src/domain/**`, it reported all three planted violations -- a
+`node:fs` import, `createConnection` from `node:net`, and a `src/domain` -> `src/application` import.
+Capability is not why it was not chosen. Three other things are:
+
+1. **A suppression comment silently waives it, and nothing counts suppressions.** Measured: adding
+   one `// biome-ignore lint/style/noRestrictedImports: shipping a hotfix` line took the run from
+   three errors to two, with no other signal anywhere. The boundary would be removable in the same
+   diff that crosses it. The parity machinery has a whole failure class (`unapproved-skip`) built on
+   the premise that a disabled check needs an approval with a reason and an exact count; a lint
+   suppression is that hole reopened next to it.
+2. **It covers two of the nine source functions.** The other seven are not import-graph claims:
+   module naming, a forbidden word in the text, the reserved seam's state, the walk's own
+   non-vacuity, and the sweep for POSIX-only anchors in the *test* tree. Splitting one file's
+   subject across a lint config and a test file makes the boundary harder to review, which is the
+   thing section 8 says it exists to avoid.
+3. **Decisively: the ledger's unit is a target test id, and a diagnostic has none.** D-0010 makes
+   the unit a node id, and `scripts/parity-check.mjs` reads target ids from `vitest list --json`. A
+   Biome rule produces findings, not collected tests, so 97 source cases would have had nowhere to
+   map and the file could not have been endorsed at all. Anything that enforces this boundary has to
+   be a test for the accounting to reach it.
+
+**What was not measured, stated so nobody reads more into this entry.** `dependency-cruiser` and
+`eslint-plugin-boundaries` were not evaluated: the worker sandbox's npm cache is read-only, so
+nothing could be installed to try. Point 3 applies to both by construction and point 2 applies to
+both as graph-only tools, but the claim here is reasoning, not measurement. Adding either would also
+be a new devDependency for a job `typescript` already does -- it is a devDependency because `tsc`
+type-checks this repository, and `scripts/parity-check.mjs` already parses with it rather than
+sweeping text, for the reason recorded there: a text sweep misses a chained modifier and can be
+derailed by a comment marker inside a string.
+
+**The domain rule is inverted from the source's, deliberately.** `tests/test_import_boundaries.py`
+states a **denylist** -- `socket`, `subprocess`, `shutil`, `sqlite3`, `http.client`,
+`urllib.request` -- with `os` allowed wholesale for `expanduser`. That shape does not survive the
+crossing: `node:net` *is* the socket module the denylist names first, and `isIP` is a pure predicate
+that lives in it, so a denylist either forbids `node:net` and fails on
+`src/domain/python-urlsplit.ts` today or admits `createConnection` along with `isIP`. The port names
+the **bindings** instead -- `node:crypto` for `createHash`, `node:os` for `homedir`, `node:net` for
+`isIP` -- which makes it an allowlist that fails closed: a builtin nobody thought of is a violation
+rather than an omission, and a namespace or default import of an allowed module is refused because
+neither can be checked binding by binding. Widening it is a diff to that table with a reason beside
+it, which is the review the source's `os` allowance got once and cannot ask for again.
+
+**How the check itself was checked.** Fourteen violations were planted one at a time and the tree
+restored between each: domain -> application, ports -> application, application -> adapters,
+`node:fs` in domain, `createConnection` from `node:net`, a namespace import of the *allowed*
+`node:os`, interlock reached five ways (bare side-effect import, scoped `@suisya-systems/interlock`
+in type position, `claude-org-runtime` through a dynamic `import()` in a function body, a re-export,
+and a plain named import), a module named `runtime`, `provider-neutral` in a module's text,
+`src/adapters/interlock/` created, and a POSIX-only `baseDir` literal in a test. Each turned the
+expected case red and nothing else; there were no holes. A green suite is not evidence that a
+boundary check guards anything, which is why this paragraph exists.
+
+**What stops it passing vacuously**, which is the failure mode a discovery-driven check invites: 89
+of the 98 cases are generated from a directory walk, and a walk that found nothing would generate
+nothing. Three things, one of them new. The walk has its own case, as the source's does. The
+allowlists fail closed. And -- the one the source could not have -- every generated id is claimed by
+the ledger, so module churn is a red gate rather than a silent change in coverage. Measured: a new
+`src/domain/*.ts` produced five `unmapped` failures, and renaming an existing one produced five
+`missing` plus five `unmapped`.
+
+**Three holes were found at review, and all three are closed.** Recorded because each one is a way
+this check could have been green while guarding less than it claims, and the first is the class the
+whole entry is about:
+
+1. **A dynamic import whose specifier is not a quoted string was dropped silently.**
+   ``import(`interlock`)`` is a no-substitution template -- statically known, and invisible to a
+   scan that only recognised `ts.isStringLiteral`. `import(name)` cannot be read at all. The first
+   is now read as the literal it is; the second is recorded as `<computed>` and **fails closed**,
+   turning `no module imports interlock` and the no-I/O cases red. This is the one place the port is
+   deliberately stricter than its source, which resolves the same blind spot by seeing nothing: an
+   unreadable edge makes every other check optional, because one variable would let the module graph
+   say whatever its author wanted.
+2. **`src/application` was not swept for I/O.** Design section 8 marks `application/` `(no I/O)` in
+   the same code block that marks `domain/`, and the source parametrises its case over the domain
+   alone. Under D-0001 the document is the primary oracle and the narrower source test is the
+   finding, so the two application modules get the same sweep. Their cases are target-only: the
+   claim is the document's, and no source case states it.
+3. **An import allowlist cannot see the global surface.** Node hands `fetch` to every module without
+   an import, and `console` writes to a stream nobody imported either, so a domain module that
+   simply called `fetch(url)` would have been reported by nothing. This has no counterpart in the
+   source and could not have one -- reaching the network in Python means importing something, which
+   is exactly why a denylist over modules was a complete answer there. A target-only case now sweeps
+   both pure layers for `fetch`, `WebSocket`, `EventSource`, `XMLHttpRequest` and `console`, and for
+   any use of `process` beyond `env` and `platform` -- the two `src/domain/python-path.ts` already
+   depends on, `env` being the same `expanduser` allowance the source records in the same words.
+
+Eight further violations were planted to check the three fixes, and each turned the expected case
+red: a template specifier, a computed one, a concatenated one, `node:fs` in `src/application`,
+`fetch()` in the domain, `console.log()` in the application, `process.cwd()`, and a bare `process`.
+`process.env` and `process.platform` stay green where the port already uses them.
+
+**A second review round found four more, all of the same family: a rule that answered "allowed"
+for a shape nobody had thought of.** Each is closed, and the pattern is worth naming because three
+of the four were denylists.
+
+4. **The layer rule was a denylist and the port has a barrel.** `src/index.ts` is in no layer and
+   re-exports across all of them, so a domain module importing `../index.js` matched no forbidden
+   prefix and reached `src/application` through the re-export. `ALLOWED_BY_LAYER` now names what
+   each layer *may* import, and `UNLAYERED_MODULES` names the one module allowed to belong to no
+   layer -- so a new top-level module under `src/` fails until it is classified, rather than
+   inheriting the barrel's exemption by accident.
+5. **`globalThis.fetch(url)` slipped past the global sweep**, because `fetch` there is the *name*
+   half of a property access and the sweep suppresses those -- correctly, since `catalog.fetch` is
+   somebody else's property. `globalThis` and `global` are refused outright instead, which closes
+   the property route and the `globalThis["fetch"]` element-access route in one line.
+6. **A side-effect import of an allowlisted builtin bound nothing, so nothing was checked.**
+   `import "node:net";` executes the module and produces an empty binding list, which the
+   binding-level loop iterated zero times and passed. An allowance granted for `isIP` is not an
+   allowance for that, and an empty binding list is now an offender.
+7. **The POSIX-anchor sweep recognised only quotes.** ``baseDir: `/srv` ``, `"/srv" as const` and
+   `("/srv")` have the same runtime value and are not `StringLiteral` nodes, so all three escaped
+   the guard and would have failed on the windows-latest cells instead -- the exact failure the
+   case exists to prevent. Parentheses, `as`, `satisfies` and angle-bracket assertions are peeled
+   first, and a no-substitution template is read as the literal it is.
+
+Nine more violations were planted for these four and each turned the expected case red: `../index.js`
+imported from `src/domain` and from `src/ports`, a new unlayered `src/toplevel.ts`,
+`globalThis.fetch`, `globalThis["process"]`, `import "node:net"` in the domain, and `baseDir` written
+as a template, as `as const`, and parenthesised.
+
+**A third round found three more, and the entry stops there.** Two are closed and one is recorded
+open, which is the honest end state rather than a clean one.
+
+8. **`createRequire` manufactures a loader the scan cannot follow.** `const load =
+   createRequire(import.meta.url); load("interlock")` is valid ESM, and only a callee literally
+   spelled `require` was followed. The pure layers already refused `node:module` by allowlist, so
+   the gap was `src/adapters` and the barrel. Tracking the alias is scope analysis; refusing the one
+   import that can produce it is two lines, and `node:module` is now refused everywhere under
+   `src/`. Measured: the two-line `createRequire` route turns the adapter's case red.
+9. **The anchor sweep unwrapped every call, including the one that fixes the problem.**
+   `absolute("/srv")` was reported for being what `test/support.ts` exists to provide. Unwrapping
+   now skips a call to `absolute` and nothing else, so `nativePath.join("/srv", x)` is still caught.
+10. **An anchor behind a name is still not seen** — `const ROOT = "/srv"` then `baseDir: ROOT`.
+    **Left open**, and recorded in the ledger's `inherited_limitations` rather than fixed: the source
+    has the identical hole for the identical reason (`_posix_only_literal` returns `None` for an
+    `ast.Name`), and following the name means resolving a binding in its scope. The wrappers that
+    *are* peeled were widened past the source precisely because they need no scope analysis. This
+    case is a second line of defence behind `absolute()`; the windows-latest cells are the first.
+
+**A fourth round, run because items 8 and 9 changed behaviour after the third, found two P2s and no
+P1.** One is closed, one is recorded open.
+
+11. **The seam check asked about a directory, and a file is the other shape.** `src/adapters/
+    interlock.ts` is the same seam spelled differently, and an `existsSync` on one extensionless
+    path stayed green for it. The question is asked of `MODULES` now, so no module anywhere under
+    `src/` may be called `interlock` — as a directory it sits in or as its own name. The ledger
+    would have noticed such a file too, by the four target ids it adds, but a gate reporting
+    "unaccounted target test" is not the gate that should be reporting an opened interlock seam.
+12. **The anchor sweep's `absolute` exemption matches a name, not a binding.** A test declaring its
+    own `const absolute = (value: string) => value` would be exempted. **Left open**, recorded in
+    the ledger's `inherited_limitations`: resolving the binding is the same line this file already
+    draws at `isShadowedOrDeclared`, and shadowing the helper with an identity function is a longer
+    way to write a POSIX-only anchor than writing one.
+
+**A fifth round, run for the same reason, found two more P2s and no P1. Both closed, both one
+line.** `import { createRequire } from "module"` is the same builtin as `"node:module"` and only the
+prefixed spelling was refused; and `{ ["baseDir"]: "/srv" }` is a `ComputedPropertyName` that sets
+exactly the property `baseDir: "/srv"` does, which the anchor sweep skipped.
+
+**A sixth round returned a P1, and it is the finding that changed the design.** Rounds four and five
+had been P1-clear and had returned a tail of *syntactic spellings* -- a file instead of a directory,
+`"module"` instead of `"node:module"`, a computed key instead of a plain one -- which looked like
+grammar enumeration. The sixth named `eval('import("interlock")')`, and that made the pattern legible
+rather than incidental: `<computed>`, then `createRequire` from `node:module`, then `"module"`
+unprefixed, then `eval`/`Function` were **four spellings of one category** -- a module loading
+something this scan cannot follow -- and each had been closed by name, leaving the next one open.
+`node:vm` and `process.getBuiltinModule` were still open and nobody had named them yet.
+
+Enumerating loaders is a losing game, so the rule was inverted instead. `ALLOWED_EXTERNALS_BY_LAYER`
+approves **every** bare specifier per layer, not merely for the two pure layers -- six entries, one
+of which is `src/adapters`' `node:fs` and `smol-toml` and two of which are empty -- and `eval` and
+`Function` are refused outright because they build code from a string and leave nothing to read.
+Together those close the import half of the category at once, the members nobody has thought of
+included. Measured: `node:vm` in the adapter and `smol-toml` in the domain both turn red, and neither
+was ever named in a denylist. The non-import half took one more round -- see below.
+
+That round's two P2s are closed with it. A triple-slash `reference` directive is recorded on the
+`SourceFile` rather than in the tree, so `forEachChild` never reached one; both directive lists are
+read now, and a `reference path=` into another layer turns the inward case red. And the walk took
+only `.ts`, so a `.mts`, `.cts` or `.tsx` module would have been skipped entirely -- no cases, no
+ledger ids, free to cross a layer. All four extensions are discovered, and a file under `src/` the
+walk does not recognise is now itself a failure rather than a silent skip. `src/cadenza/` was
+excluded by name at this point, because the Python half lives under `src/` too until D-0014 retires
+it -- an exclusion the tenth round showed was drawn one level too wide.
+
+**A seventh round returned one P1, and it was against that paragraph's own claim.**
+`process.getBuiltinModule("module").createRequire(import.meta.url)("interlock")` still worked in
+`src/adapters` and in the barrel, because the `process` rule had been written for the pure layers
+only -- while the text above said the route was closed. The rule now applies in every layer, and
+`LOADER_ROUTE_GLOBALS` states the complete set in one place: `eval` and `Function` build code from a
+string; `globalThis` and `global` reach those as properties, where a name-based sweep sees somebody
+else's property; and `process` is admitted for named members and refused otherwise.
+
+Making it uniform immediately found the layer that legitimately needs more: `src/adapters` is the
+layer permitted I/O, and its `os.path.abspath` port consults `process.cwd()`. So the allowance is
+per-layer -- `env` and `platform` everywhere, `cwd` in the adapters and nowhere else -- which is the
+same shape every other rule in this file converged on, arrived at from the opposite direction.
+
+With the per-layer import allowlist beside it, the set is now closed rather than enumerated: a module
+reaches another by importing it (approved per layer), by building code from a string, by taking a
+builtin off `process`, or by reaching any of those through the global object. `import.meta.resolve`
+produces a URL and still needs an `import()`, which fails closed as `<computed>`.
+
+**An eighth round found the last loader route, and a false positive the earlier ones had hidden.**
+`require` and `module` are loaders in their own right and both survive an alias: `const load =
+require; load("interlock")` leaves no call with a callee named `require`, and
+`module.require("interlock")` leaves none either. Both are refused as references now -- the same
+answer `scripts/parity-check.mjs` gives an aliased test runner, for the same reason, that an alias is
+what makes an enumeration uncountable.
+
+The other three were about reading the tree correctly rather than about boundaries:
+
+- **`.tsx` is a different grammar, not TypeScript with extra tokens.** Parsed as `ScriptKind.TS` it
+  is wrong in both directions -- a dynamic import inside JSX is not exposed, and JSX text can be read
+  as code that is not there. Every `createSourceFile` here now asks `scriptKindOf`. Measured: a
+  `.tsx` module with `import("interlock")` inside JSX is invisible before the fix and red after.
+- **`.d.ts` ends with `.ts`**, so a declaration file was discovered as an ordinary module, and
+  `stemOf("interlock.d.ts")` gave `interlock.d` -- meaning a declaration counterpart of the reserved
+  seam would have walked past the case guarding it. Declarations are matched first and reported as
+  unrecognised.
+- **A false positive, and the only one in eight rounds.** `import { fetch as loadRecord } from
+  "./record.js"` visits `fetch` as the specifier's *property* name while `parent.name` is
+  `loadRecord`, so `isShadowedOrDeclared` did not exclude it and an ordinary relative import was
+  reported as global network I/O. Worth recording next to the rest: every other finding was a check
+  that admitted too much, and a rule tightened seven times running is exactly where the opposite
+  error hides.
+
+**A note the belt earned the hard way.** Writing a `reference types=` directive out in full inside a
+comment made knip report the repository as depending on interlock: a tool scanning text rather than
+syntax read the comment as the directive it describes. That is the same confusion
+`scripts/parity-check.mjs` records about its own sweep, met from the other side, in the file arguing
+for syntax trees.
+
+**A ninth round found `Object.constructor("return import(...)")()`** -- the `Function` constructor
+reached from any value at all, naming neither `Function` nor a global. `constructor` is refused as a
+property name now, in both the dotted and the bracketed spelling, and bracketed access to any loader
+global goes with it.
+
+**A tenth round found three P1s, all of one shape: a branch that stopped asking.** None is a new
+loader spelling -- the ninth round was the last of those -- and all three are places where a rule
+returned "nothing to say" about a region it was responsible for.
+
+13. **The walk skipped `src/cadenza/` whole, and it was the one place nothing looked.** `tsconfig.json`
+    type-checks every TypeScript file under `src/`, so `src/cadenza/domain/runtime.ts` would have been
+    compiled and free to import anything, while `tests/test_import_boundaries.py` walks `*.py` and
+    would not have seen it either. Excluding a *directory* was the error; excluding the *Python files*
+    is the rule that was meant. The walk descends now, ignores `.py`, `.pyc`, `.pyi` and `.pyo` under
+    that directory alone, and reports anything else there as unrecognised. Measured: an empty
+    `src/cadenza/domain/runtime.ts` turns the walk's own case red and nothing else. The eleventh
+    round narrowed the ignore list further -- see below.
+14. **A module augmentation reached a module and was not recorded.** `declare module
+    "../application/compose.js" { ... }` inside an external module is not a namespace declaration:
+    the compiler resolves that specifier exactly as an import does and merges the declarations into
+    the module it names. So it is a real dependency, and it was the one spelling of one that
+    `importsIn` never read -- while `import type` from the same file, saying less, was refused.
+    String-named module declarations are recorded as `*` now. Measured: the augmentation above,
+    placed in `src/domain/digest.ts`, turns the inward case red.
+15. **Being in no layer exempted the barrel from the inward check entirely.** The case confirmed the
+    module was allowed to be unlayered and then returned, so every relative import `src/index.ts`
+    writes went unread -- and nothing else read them, because `unapprovedExternalsIn` considers bare
+    specifiers only, by design, on the grounds that relative ones are this case's question. `export
+    { absolute } from "../test/support.js"` therefore reached out of the package past both checks.
+    The `UNLAYERED_MODULES` assertion stays and the case no longer returns: an unlayered module is
+    checked against `ALLOWED_FOR_UNLAYERED`, the four layer roots, which is the barrel's job and
+    nothing more. Measured: that re-export turns `src/index.ts`'s case red.
+
+Three P2s went with them. `localStorage`, `sessionStorage` and `indexedDB` join `FORBIDDEN_GLOBALS`
+for the reason `fetch` is there -- the list says what a pure layer may not reach, not what today's
+runtime happens to offer it. `tsconfig.json` now includes `src` as a directory and `knip.json`
+matches all four module extensions, closing the gap the eighth round opened: the walk accepted
+`.mts`, `.cts` and `.tsx`, and a glob for `.ts` alone would have type-checked none of them. And
+`isShadowedOrDeclared` was extended to class members and enum members -- `class Layer { module =
+"domain"; }` was reported as a loader route for the word it names its own field with, the second
+false positive in ten rounds and, like the first, produced by a rule tightened repeatedly.
+
+**An eleventh round returned one P1, against the fix above rather than against a new route.** The
+ignore list item 13 introduced covered `.pyi` and `.pyo` as well, and `.pyi` is a *source* file with
+imports in it: `tests/test_import_boundaries.py` walks `rglob("*.py")` and does not match a stub
+either, so `src/cadenza/domain/stub.pyi` importing interlock would have been read by neither scan --
+the identical hole, one extension smaller, recreated by the line that closed it. The list is now
+exactly what the Python scan does read: `.py`, and the `.pyc` compiled from one. `.pyo` went with
+`.pyi` because Python 3 does not produce one, so ignoring it swallows a file nobody can account for
+and buys nothing. Measured: a `.pyi` under `src/cadenza/` turns the walk's own case red and nothing
+else, and the Python suite stays at 330.
+
+That is the shape worth naming, because it is the second time it has happened: an *exclusion* is a
+claim about what something else is already checking, and it is wrong exactly when that claim is
+untrue. Item 13 was the directory version of it and this is the extension version. The rule the file
+now follows is to exclude by pointing at the scan that covers the exclusion, rather than by naming a
+category that sounds adjacent.
+
+**A twelfth round returned one P1 and two P2s, and none of the three is fixed here. The rounds
+stop at this one.** The P1 is `const { constructor: F } = () => {};` followed by
+`F('return import("interlock")')()` -- the `Function` constructor destructured out, which is a
+`BindingElement` and matches neither of the two spellings the ninth round closed. That is the
+category the sixth round named, arriving for the fifth time, and the reason to stop rather than to
+write a third `constructor` branch: destructuring is a third syntax for the same read, a parameter
+default is a fourth, and any function that returns the value is a fifth. Closing them one at a time
+is the losing game this entry already described, and the paragraph below is where the file says so
+in advance -- an evasion has to be written deliberately, in a shape a reviewer sees, and
+`const { constructor: F }` is written deliberately and visible on the line. So the finding lands
+outside the guarantee that was declared rather than against it, which is what makes stopping here a
+boundary rather than a shrug.
+
+The two P2s are recorded with it, and both are the opposite of the P1 -- a rule being wrong about
+ordinary code rather than admitting clever code:
+
+16. **The global sweep suppresses the wrong half of an export alias.** `export { local as fetch }`
+    names an export and reads no global, but `isShadowedOrDeclared` suppresses an `ExportSpecifier`'s
+    `propertyName` and reports its `name`. It is the exact mirror of the import-alias false positive
+    the eighth round fixed -- the two specifier kinds carry the exported name in opposite halves and
+    share one branch -- and the third false positive in twelve rounds, all three produced by the
+    same rule being tightened repeatedly. Nothing under `src/` exports such a name, so the suite is
+    green.
+17. **The anchor sweep does not peel a non-null assertion.** `baseDir: "/srv"!` wraps the literal in
+    a `NonNullExpression`, which is the same family as the parentheses, `as` and `satisfies` the
+    seventh round taught it to peel and was missed when that list was written. The consequence is the
+    failure the case exists to prevent: the anchor is drive-relative on Windows, so it would be
+    reported by the windows-latest cells instead of by the guard.
+
+All three are recorded in the ledger's `inherited_limitations`, which is where this file keeps what
+it knows it does not catch, and are left to a follow-up. The two P2s are one-line fixes and are
+deferred for the reason the P1 is: each changes which nodes a sweep reports, and a rule tightened
+across twelve rounds wants its own planted case rather than a line appended at the end of a belt.
+
+**Why the rounds stop here rather than at a clean round.** Two clean rounds would not mean more than
+one: the last five findings against the loader sweep were members of a class the language keeps
+generating, so review converges on the *stated boundary* rather than on zero findings. Round twelve
+is where a finding first landed outside that boundary instead of inside it, which is the signal the
+paragraph below was written to be read against.
+
+**Where this stops, and what the check does not claim.** It is not a sandbox and cannot become one.
+A static scan of JavaScript cannot prove a module loads nothing, because the language computes at
+runtime what this file has to decide by reading, and four rounds running found one more value that
+could be made to yield a loader. The claim that *is* made, and that the eleven rounds
+support, is narrower: every route by which a module loads something **without looking like it** is
+refused, so an evasion has to be written on purpose and in a shape a reviewer can see. Accidents are
+stopped outright; determination is made loud. That is also what
+`tests/test_import_boundaries.py` achieves — it simply had fewer chances to be wrong, because Python
+offers fewer ways to reach a module without naming it.
+
+Six limitations are recorded open in the ledger. Two need binding resolution and are shared with the
+Python source; one is this paragraph's, a property of the language rather than of the check; and
+three came from the twelfth round -- the destructured `Function` constructor, which is a member of
+this same class, and two rules that are wrong about ordinary code rather than lenient about clever
+code. The bar applied is the one that matters for a gate: no P1, and every *route* a reviewer named
+either closed or recorded.
+
+No finding ever recurred once closed, and no fix was reverted. What recurred was a *category*, four
+times, which is what a per-spelling denylist guarantees and what the inversion above ended. Every fix
+was reviewed by the round after it.
+
+**What would falsify it.** A way to make a lint suppression countable and reviewable the way
+`approved_non_running` is, which would remove reason 1; or a Biome rule that could be addressed by a
+ledger entry, which would remove reason 3. Reason 2 would go if the other seven claims found a
+natural home elsewhere, which would mean section 8's boundary had stopped being one subject.
+
+---
+
+## D-0023 — interlock is a frozen source, not a decision-maker: cadenza's open questions are settled at cadenza's own human gate
+
+**Status:** accepted
+
+**Context.** Several documents in this repository described interlock as an active party with
+something still to decide. `README.md` held G2 as "blocked on interlock settling its own contract";
+`docs/design/g1-project-registry.md` section 9 and `docs/repository-policy.md` section 5 said
+cadenza does not depend on interlock "yet", with the reason resting on a state of interlock's that
+was implied to be temporary; D-0014 recorded "interlock#74 landing" as "the stated precondition for
+unfreezing G2", and cadenza#9 restated the same shape.
+
+None of those conditions can be met. Interlock is the frozen source this successor stack is ported
+from: its last commit is 2026-08-21 (UTC), its own delegation-contract question — interlock's open
+issue #63, "Operating-layer delegation contract", opened 2026-08-21 — was recorded and left
+unanswered, and interlock#74 is the kickoff for porting it away, not a contract that will be settled
+there. (Issue numbers in interlock's *git history* are not interlock's: commits inherited from
+`claude-org-runtime`, which interlock forked at `befd309`, carry that repository's numbering, so a
+`Closes #63` dated before the fork is a different issue entirely. Cite interlock issues by title as
+well as by number.) A condition that cannot occur is not a condition; it is an unbounded
+wait wearing one. The test applied across the sweep was: **could a reader — human or agent — take
+this sentence at face value and conclude that waiting is the correct behaviour?** Where the answer
+was yes, the sentence was wrong, not merely imprecise. Continuo reached the same conclusion about
+the same upstream on the same date (continuo D-0036), from its own evidence.
+
+**Decision.** interlock is the **frozen source** of this stack. It supplies design lineage, prior
+reasoning, the questions that were asked, and — for continuo — test cases. It supplies **no
+decisions and no answers to cadenza**. Concretely:
+
+1. **No cadenza status, gate or document is "blocked upstream", "pending upstream", or held until
+   interlock settles anything.** There is no upstream process left to be pending on. Where such a
+   phrase appears it is rewritten, not annotated.
+2. **An interlock issue number cited here names a question interlock left unanswered, or a record of
+   what was decided there before the freeze.** The citation stays — it is the record of what was
+   asked and where it came from — but its status is *unanswered*, never *open pending upstream*, and
+   never a precondition.
+3. **If cadenza needs one of those questions answered, cadenza answers it**, at this repository's
+   human gate, as a `D-` entry, on cadenza's own terms. Declining to answer stays legitimate: this
+   entry does not force G2's unfreeze condition, or the shape of the delegation contract, to be
+   settled now. What it forbids is recording the decline as *waiting*.
+4. **The human gate on this repository is the only decision-making body over cadenza.** "Undecided"
+   means undecided *here*.
+
+**Consequences.**
+
+- `README.md`'s "explicitly not here yet" list no longer holds G2 behind an interlock-side contract
+  question. The question itself is kept in full — what a delegated run may do, on whose authority,
+  and how that is expressed at the seam to a control plane — together with the interlock#63
+  citation, marked unanswered. The interlock dependency bullet states the reason as a settled fact
+  about a frozen repository rather than as a temporary condition.
+- `docs/design/g1-project-registry.md` section 9 and `docs/repository-policy.md` section 5 drop
+  "yet" and say that whether cadenza takes a control-plane dependency is decided here. Section 9's
+  bare `(D-0026)` is also corrected to `(interlock D-0026)`, which is what this file's own citation
+  rule requires.
+- **D-0014 is superseded by this entry, and its body is not rewritten** — the ID keeps its text, per
+  this file's rule, and gains `Status: superseded by D-0023`. What D-0014 decided is restated here
+  without the upstream precondition, so a reader who lands on D-0014 alone is sent to a live entry
+  rather than left with the old framing: **the TypeScript port does not touch G2 and does not open
+  the interlock seam.** `src/cadenza/adapters/interlock/` stays empty on the Python side and has no
+  TypeScript counterpart, and the Python implementation is retired by its own later PR, not by the
+  PR that introduced the port — removing it earlier would delete the oracle's Python half (D-0011)
+  in the same diff that first relies on it. G2 stays frozen because nobody has decided to start it,
+  and a port is not the change that starts it. What is dropped is D-0014's claim that G2 is "frozen
+  at cadenza#9 pending interlock#74's TypeScript migration" and that interlock#74 landing is "the
+  stated precondition for unfreezing G2"; there is no such precondition.
+- Nothing about the port changes. G2 stays frozen and the seam stays empty on this change; what
+  changes is who is understood to hold the condition for lifting either.
+
+**The unfreeze condition for G2 is not chosen by this entry.** It records the candidates so the next
+reader argues about the choice rather than rediscovering that the old condition was unreachable.
+Three, none adopted:
+
+1. **Gate on G1's TypeScript port.** G2 opens when the port is complete and `src/cadenza/` is
+   retired (D-0014's second half). Concrete, already tracked, and close: as of this entry the belts
+   have reached 330 of 330 collected node ids. It says nothing about whether the delegation contract
+   is *ready to be designed*, only that the language question is behind us.
+2. **Gate on a design decision taken here.** G2 opens when a `D-` entry in this file fixes what a
+   delegation contract must express — the authority model, the seam to a control plane, and what a
+   run may do without asking. This is the condition that matches the actual reason G2 was deferred
+   (designing against an undefined seam), with the difference that the definition is cadenza's to
+   write rather than someone else's to supply.
+3. **Lift the freeze and gate the work instead.** G2 stops being frozen; work on it is admitted the
+   way any other work is, behind the human gate and the review policy, with cadenza#9 closed and
+   replaced by an ordinary design issue. This treats the freeze as having been a stand-in for "no
+   one has decided to start", which is what it now is once the upstream condition is removed.
+
+They are not exclusive: 1 and 2 compose as a conjunction, and 3 is what remains if neither is judged
+worth stating. The choice is a human-gate decision and is expected to be taken against the
+successor-stack sequencing work running in parallel; whichever is taken should be a new `D-` entry
+that names this one.
+
+**Where the candidates are recorded, and why here rather than in `README.md`.** `README.md` states
+what is true of the repository now; a list of options nobody has chosen is not that, and would
+either rot or read as a plan. This file is the place that already carries undecided reasoning with a
+falsifier attached, and the one a later `D-` entry can supersede by ID.
+
+**Rejected alternative: leave the text and correct the reading in a convention.** Rejected because
+the failure mode is a reader forming a false belief from the document in front of them; every new
+agent starts from the text, and a convention held elsewhere is not in that path.
+
+**Rejected alternative: delete the interlock citations.** Rejected because they carry real
+information — what was asked, and why it went unanswered. Deleting them trades one wrong reading
+("someone will answer this") for another ("nobody ever noticed this").
+
+**What would falsify it.** interlock being un-frozen with someone answering its open questions,
+which would restore the premise and make this entry worth revisiting. Short of that: a reader found
+treating a cadenza freeze or an empty seam as an external blocker despite this sweep, which would
+mean the rewrite did not reach the text they read — the answer then is to find that text, not to
+restate the rule.
+
+**Source.** Task `cadenza-upstream-authority-sweep`, 2026-08-30, and the owner's instruction that
+the text producing the misreading is what has to go. Continuo's D-0036 is the same decision taken
+about the same upstream, in its own numbering space.
