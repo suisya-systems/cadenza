@@ -56,10 +56,11 @@ Explicitly **not** here yet:
   seam to a control plane. Interlock recorded the same question - its open
   issue #63, "Operating-layer delegation contract" - and left it unanswered;
   that reference is where the question came from, not an answer in transit.
-  G2 is held at cadenza#9, and the condition for taking it up is cadenza's to
-  set. It is not set yet:
-  `DECISIONS.md` D-0023 lists the candidate conditions and records that none has
-  been chosen.
+  G2 is held at cadenza#9. The condition for taking it up is cadenza's own
+  (D-0023) and is now set: `DECISIONS.md` D-0025 adopts D-0023's candidate 2 -
+  G2 opens when a `D-` entry here fixes what the delegation contract must
+  express (authority model, control-plane seam, what a run may do without
+  asking). That entry has not been written yet, so G2 stays not started.
 - **any dependency on interlock** - not in `pyproject.toml`, not as an extra.
   Interlock's control-plane API and SQLite schema are marked throwaway on
   interlock's own side, and interlock is frozen, so no later stabilisation is

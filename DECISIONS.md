@@ -54,6 +54,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0021 | The git-parity oracle runs the real `git` binary; `match=` becomes a `RegExp` only where a plain substring would look for a character the message never contains | accepted |
 | D-0022 | The import boundary is a test that parses the tree, not a lint rule: measured against Biome, chosen for the ledger | accepted |
 | D-0023 | interlock is a frozen source, not a decision-maker: cadenza's open questions are settled at cadenza's own human gate | accepted |
+| D-0025 | G2's unfreeze condition is D-0023's candidate 2: it opens on a design decision taken here, not on the port or on lifting the freeze | accepted |
 
 ---
 
@@ -1351,3 +1352,65 @@ its stale-tree error, which would mean the invalidation contract moved and the s
 trusted until it is answered.
 
 **Source.** Task `cadenza-ts7-compat`, 2026-08-30, superseding the bump in cadenza#12.
+
+---
+
+## D-0025 — G2's unfreeze condition is D-0023's candidate 2: it opens on a design decision taken here, not on the port or on lifting the freeze
+
+**Status:** accepted (2026-08-31, taken at cadenza's human gate)
+
+**Context.** D-0023 removed G2's original unfreeze condition — interlock settling its own
+delegation-contract question — as unreachable, and recorded three candidate replacements without
+adopting any: (1) gate on G1's TypeScript port completing and `src/cadenza/` being retired, (2) gate
+on a `D-` entry taken here that fixes what the delegation contract must express, (3) lift the freeze
+and treat G2 as ordinary work. cadenza#9 restated the same three and left the choice open. This entry
+is the choice.
+
+**Decision.** Candidate 2 is adopted. G2 opens when a `D-` entry in this file fixes what the
+delegation contract must express: the authority model, the seam to a control plane, and what a run
+may do without asking — the three things D-0023 names. Until such an entry exists, G2 stays not
+started against cadenza#9. This entry does not write that `D-` entry; it only sets the condition
+under which one would open G2.
+
+**Why candidate 2, and not 1 or 3.**
+
+- **The freeze's original rationale is gone, and nothing replaces it with a wait.** D-0023 already
+  established that interlock cannot answer this question: it is frozen, it recorded the same
+  question as its own open issue #63, and left it unanswered. There is no "wait for interlock" left
+  to fall back on, which is why this choice has to be made here rather than deferred again.
+- **Candidate 1 chains one undecided question onto another.** G1's TypeScript port is done — 330 of
+  330 collected node ids, per D-0022's index entry — but the Python implementation's retirement
+  (cadenza#25) carries its own open question: retiring `src/cadenza/` turns the `config_digest`
+  differential oracle's committed vectors (D-0011, D-0017) from something regenerable on demand into
+  a historical record, and whether that is acceptable is not settled. Whether G2 can be *designed*
+  does not depend on whether a Python implementation still exists beside the TypeScript one, so
+  tying G2's gate to Python's retirement would make G2 wait on an unrelated unresolved question for
+  no reason connected to what G2 actually needs.
+- **Candidate 3 is coherent but carries the highest risk of an invented contract.** Lifting the
+  freeze and treating G2 as ordinary work is a legitimate reading of "no one has decided to start"
+  (D-0023's own framing), but G2 has no design at all — no authority model, no control-plane seam, no
+  stated boundary on what a run may do unattended. Admitting it as ordinary work risks whoever picks
+  it up inventing the delegation contract as they implement it, rather than the contract being fixed
+  first and reviewed as a document. The `needs-decision` label and an `AGENTS.md` added alongside this
+  work reduce that risk but do not remove it.
+- **Candidate 2 is a design-before-implementation gate that chains to nothing else.** It replaces an
+  unbounded wait with a condition this repository can meet on its own schedule, and it does not make
+  G2 depend on any other open question's resolution.
+
+**Consequences.**
+
+- cadenza#9's body is updated: the two open-decision items this entry resolves (which candidate, and
+  who/when) are replaced with a reference to this entry, and the remaining condition — a `D-` entry
+  fixing what the delegation contract must express — is restated as the issue's acceptance criterion.
+- `README.md`'s G2 bullet, which pointed to D-0023's unresolved candidate list, is updated to name
+  this entry as the one that made the choice.
+- **This entry does not design the delegation contract.** The authority model, the control-plane seam,
+  and the bound on what a run may do without asking remain unwritten; a future `D-` entry naming this
+  one is what writes them and what actually opens G2.
+
+**What would falsify it.** A `D-` entry existing in this file that fixes what the delegation contract
+must express, with G2 still unable to open — that would mean this condition was met and something
+else is nonetheless blocking it, which would make this choice of gate wrong rather than merely
+unmet.
+
+**Source.** Human gate decision, 2026-08-31, cadenza#9.
