@@ -1,0 +1,306 @@
+{
+  "source": {
+    "repository": "suisya-systems/cadenza",
+    "revision": "a5672f8",
+    "note": "The source is this repository's own Python implementation, not a second checkout. Cadenza is being rewritten in place (cadenza#8): `src/cadenza/` and `tests/` are the specification until a later PR retires them, so every inventory here is collected from the working tree at the recorded revision.",
+    "suite_baseline": {
+      "collected": 330,
+      "passed": 330,
+      "skipped": 0,
+      "xfailed": 0,
+      "reconciliation": "`PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q -p no:cacheprovider` at a5672f8 on CPython 3.12.3: 330 passed. No module is skipped at collection time, so collected == the sum of the eight per-file inventories with nothing left over. See parity/source-inventory.manifest.json."
+    },
+    "file": {
+      "path": "tests/test_identifiers.py",
+      "collected": 25,
+      "inventory": "parity/source-inventory/test_identifiers.txt",
+      "note": "6 test functions, 25 collected node ids: three of the six are parametrized, contributing 6, 11 and 5 cases."
+    }
+  },
+  "target": {
+    "test_file": "test/domain/identifiers.test.ts",
+    "systematic_mappings": [
+      {
+        "from": "`pytest.raises(InvalidIdentifierError, match=...)`, sometimes `as caught`",
+        "to": "the `refusal(...)` helper from `test/support.ts`, then `caught.message`",
+        "why": "The helper the compose and resolve ledgers already record. `expect(...).toThrow(Kind)` checks the class and `toThrow(/re/)` the message, but neither yields the INSTANCE, and one case goes on to assert `.location`. `match=` searches `str(exc)`, and `.message` here carries the same formatted text (`src/domain/errors.ts`), so the two see the same string.",
+        "affects": "every refusal case: 11 shape refusals, 5 type refusals, and 3 more"
+      },
+      {
+        "from": "`parse_identifier(value, field=..., location=...)`, keyword-only",
+        "to": "`parseIdentifier(value, field, location)`, positional",
+        "why": "TypeScript has no keyword-only parameters. The order is the source's declaration order and `location` keeps its default of nothing, spelled `null` rather than `None`.",
+        "affects": "all 25 cases"
+      },
+      {
+        "from": "`@pytest.mark.parametrize('value', [...])`",
+        "to": "`parametrize(name, [[id, value], ...])` from `test/testkit/parametrize.ts`",
+        "why": "pytest's node id is taken VERBATIM rather than derived from a title template (D-0010), so a target id is a function of the source id. That includes the two spellings pytest invents: the ASCII escape `web\\xe9` for a non-ASCII parameter, and the fallback `value3`/`value4` for a list and a dict it will not print.",
+        "affects": "the 22 parametrized cases"
+      },
+      {
+        "from": "the Python literals `None`, `True`, `['web']`, `{'web': 1}`",
+        "to": "`null`, `true`, `['web']`, `{ web: 1 }`",
+        "why": "The direct translation. What each one has to preserve is the answer `pythonTypeName` gives for it -- `NoneType`, `bool`, `list`, `dict` -- which is asserted for its own sake in `test/domain/python-semantics.test.ts`.",
+        "affects": "cases 19 to 23, the non-string arm"
+      }
+    ],
+    "target_only_tests": {
+      "count": 2,
+      "ids": [
+        "test/domain/identifiers.test.ts::the identifier pattern's anchors and its refusal set > carries no flags, because 'm' would restore Python's '$'",
+        "test/domain/identifiers.test.ts::the identifier pattern's anchors and its refusal set > refuses whitespace on both sides of the isspace()/\\s disagreement"
+      ],
+      "why": "The two traps the kickoff (cadenza#8) named for this file, held open. Neither translates a source case, and neither could: `tests/test_identifiers.py` cannot state that a regex flag is absent when the language has no such flag, and it cannot state that a whitespace predicate is not consulted when `str.isspace()` is the only one there is. Both are properties of the PORT, created by translating into a language whose defaults differ, which is the same reason `test/domain/canonical-json.test.ts` exists. The first pins that `IDENTIFIER_PATTERN.flags` is empty and demonstrates what `m` would admit; the second pins that all six code points where `str.isspace()` and `/\\s/` disagree are refused, in both directions, so a later rewrite of the gate from a positive class into a `\\s` refusal cannot loosen it unnoticed."
+    },
+    "approved_non_running": []
+  },
+  "totals": {
+    "source_cases": 25,
+    "ported": 22,
+    "adapted": 3,
+    "not_ported": 0,
+    "waivers": 0
+  },
+  "inherited_limitations": [
+    {
+      "behaviour": "`test_refuses_non_string_values_naming_the_type` asserts only `must be a string, got` and stops before the type name its own title promises. All five cases stay green against an implementation that named every type `int`.",
+      "why": "The source's own shape, kept rather than strengthened: a translation that asserts more than its source is no longer a measure of the source. It is not left uncovered -- `test/domain/python-semantics.test.ts` asserts `pythonTypeName` against `str`, `NoneType`, `bool`, `list`, `dict` and `float` directly, and records the one place the int/float collapse is load-bearing (`schema_version`, in `parity/compose.ledger.json`)."
+    },
+    {
+      "behaviour": "The refusal text embeds `repr(value)` and no case in this file asserts it, so the `pythonRepr` gap `src/domain/python-text.ts` documents is invisible to all 25.",
+      "why": "Measured rather than assumed (D-0020). Over every code point, the port's `repr` differs from CPython's on 963,033 of them -- every non-ASCII code point CPython considers non-printable, which it decides from the Unicode character database. The divergence begins at U+0080: the ASCII range is exact, and so is this file's one non-ASCII case, U+00E9 being printable. The gap is message-only and reaches nothing that a run persists."
+    },
+    {
+      "behaviour": "Six accepted shapes and eleven refused ones are examples, not an enumeration. No case in this file establishes that the two implementations agree on the values nobody wrote a case about.",
+      "why": "What a translated test can do. The differential sweep behind D-0020 is what makes the stronger claim: 3,169 values -- every code point below U+0300 in four positions, the whitespace and format controls above it, the terminator shapes, both length boundaries and astral characters, plus a separate lone-surrogate probe -- are accepted or refused identically by CPython and the port, with zero disagreements."
+    }
+  ],
+  "entries": [
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_accepts_lowercase_identifier_shapes[a]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > accepts lowercase identifier shapes[a]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the value is returned unchanged. One character is a whole identifier: the pattern's tail is `{0,63}`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_accepts_lowercase_identifier_shapes[web]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > accepts lowercase identifier shapes[web]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the value is returned unchanged. The ordinary case.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_accepts_lowercase_identifier_shapes[web-app]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > accepts lowercase identifier shapes[web-app]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the value is returned unchanged. A hyphen is admitted inside, though not in the first position.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_accepts_lowercase_identifier_shapes[web_app]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > accepts lowercase identifier shapes[web_app]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the value is returned unchanged. An underscore is admitted inside, though not in the first position.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_accepts_lowercase_identifier_shapes[web2]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > accepts lowercase identifier shapes[web2]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the value is returned unchanged. A digit is admitted inside, though not in the first position.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_accepts_lowercase_identifier_shapes[abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > accepts lowercase identifier shapes[abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: the value is returned unchanged. 64 characters, the documented maximum. The bound is spelled `{0,63}` after the leading letter in both languages; JavaScript counts UTF-16 code units where Python counts code points, and the difference is unobservable here because every value the class admits is ASCII. Measured (D-0020), not argued: no value in the 3,169-value corpus is accepted by one side and refused by the other.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > refuses identifiers outside the shape[]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: refused as `InvalidIdentifierError`, with the same `is not a valid identifier` in the message. An empty string has no leading letter.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[Web]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > refuses identifiers outside the shape[Web]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: refused as `InvalidIdentifierError`, with the same `is not a valid identifier` in the message. Uppercase. The shape is lowercase, and the pattern carries no `i` flag.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[1web]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > refuses identifiers outside the shape[1web]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: refused as `InvalidIdentifierError`, with the same `is not a valid identifier` in the message. A leading digit.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[-web]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > refuses identifiers outside the shape[-web]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: refused as `InvalidIdentifierError`, with the same `is not a valid identifier` in the message. A leading hyphen.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[_web]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > refuses identifiers outside the shape[_web]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: refused as `InvalidIdentifierError`, with the same `is not a valid identifier` in the message. A leading underscore.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[web app]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > refuses identifiers outside the shape[web app]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: refused as `InvalidIdentifierError`, with the same `is not a valid identifier` in the message. A space. It is refused for being outside `[a-z0-9_-]`, not by a whitespace predicate -- which is why the `str.isspace()`/`/\\s/` trap the kickoff predicted for this file does not arise in it (D-0020).",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[web.app]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > refuses identifiers outside the shape[web.app]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: refused as `InvalidIdentifierError`, with the same `is not a valid identifier` in the message. A dot.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[web/app]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > refuses identifiers outside the shape[web/app]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: refused as `InvalidIdentifierError`, with the same `is not a valid identifier` in the message. A slash.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[web:app]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > refuses identifiers outside the shape[web:app]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: refused as `InvalidIdentifierError`, with the same `is not a valid identifier` in the message. A colon.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[web\\xe9]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > refuses identifiers outside the shape[web\\xe9]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: refused as `InvalidIdentifierError`, with the same `is not a valid identifier` in the message. A non-ASCII letter. The target id keeps pytest's own spelling of the parameter, `web\\xe9`, which is the ASCII escape pytest prints; the value under test is the character U+00E9 itself, written as an escape so the test file stays ASCII (D-0007).",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_refuses_identifiers_outside_the_shape[abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > refuses identifiers outside the shape[abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: refused as `InvalidIdentifierError`, with the same `is not a valid identifier` in the message. 65 characters, one past the maximum.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_refuses_a_trailing_newline",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > refuses a trailing newline",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, both halves: `parse_identifier('web\\n')` is refused and the pattern itself does not match. Adapted because the mechanism is where the trap lives. The source's end anchor is `\\Z`; the port's is `$` with NO `m` flag, which anchors at the end of the input exactly as `\\Z` does -- JavaScript's `$` only acquires Python's `$` behaviour under `m`. And `re.Pattern.match`, which anchors at the start on its own and returns a match object or `None`, becomes `RegExp.prototype.exec`, whose anchoring comes from the pattern's own `^`. Measured (D-0020): the same source under `m` accepts `web\\n` -- and also `web\\r`, `web\\u2028` and `web\\u2029`, three terminators Python's `$` does not break a line at. The target-only case in the same file holds the flag absent.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_refuses_non_string_values_naming_the_type[123]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > refuses non-string values naming the type[123]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a non-string is refused as `InvalidIdentifierError` with `must be a string, got` in the message. A Python `int` becomes a JavaScript `number`. The int/float collapse that `parity/compose.ledger.json` records is not reachable here: the source asserts the message's prefix (`must be a string, got`) and stops before the type name, so the case is the same case.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_refuses_non_string_values_naming_the_type[None]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > refuses non-string values naming the type[None]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a non-string is refused as `InvalidIdentifierError` with `must be a string, got` in the message. `None` becomes `null`, which `pythonTypeName` reports as `NoneType`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_refuses_non_string_values_naming_the_type[True]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > refuses non-string values naming the type[True]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a non-string is refused as `InvalidIdentifierError` with `must be a string, got` in the message. `True` becomes `true`. `typeof true === 'boolean'` is checked before the numeric arm in `pythonTypeName`, as Python's `bool` is checked before `int`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_refuses_non_string_values_naming_the_type[value3]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > refuses non-string values naming the type[value3]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a non-string is refused as `InvalidIdentifierError` with `must be a string, got` in the message. A `list` becomes an array. The target id keeps pytest's fallback parameter id `value3` verbatim -- pytest numbers a parameter it cannot print, and the ledger's ids are pytest's, not the translator's.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_refuses_non_string_values_naming_the_type[value4]",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > refuses non-string values naming the type[value4]",
+      "disposition": "ported",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion: a non-string is refused as `InvalidIdentifierError` with `must be a string, got` in the message. A `dict` becomes an object literal. The id `value4` is pytest's fallback, kept verbatim for the same reason as `value3`.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_error_names_the_field_and_the_location",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > error names the field and the location",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion, all three parts: the error carries the location, names the field, and prints the location last. Adapted for the shape change `src/domain/errors.ts` records -- `str(caught.value)` in Python is the formatted text and `.message` is the bare one, and in the port those are `.message` and `.detail` -- so `str(caught.value).endswith(...)` becomes `caught.message.endsWith(...)`. Python's keyword-only `location=` becomes a positional third argument, TypeScript having no keyword arguments.",
+      "source_revision": "a5672f8"
+    },
+    {
+      "source_nodeid": "tests/test_identifiers.py::test_identifier_error_is_a_catalog_error",
+      "target_id": "test/domain/identifiers.test.ts::parse_identifier > identifier error is a catalog error",
+      "disposition": "adapted",
+      "source_status": "passed",
+      "target_status": "passed",
+      "reason": "Same assertion about the same class relationship: an identifier refusal is reachable through the one base class (design doc section 7). Adapted because `issubclass` has no expression in TypeScript -- a class is a value and a type, and only the value carries a prototype chain -- so the question is asked of an instance with `toBeInstanceOf`, which walks exactly what `issubclass` walks. The same substitution `parity/resolve.ledger.json` makes for `test_not_found_is_not_a_catalog_error`.",
+      "source_revision": "a5672f8"
+    }
+  ]
+}

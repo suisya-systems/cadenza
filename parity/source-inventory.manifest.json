@@ -31,8 +31,8 @@
       "source": "tests/test_clone_source.py",
       "collected": 57,
       "test_functions": 35,
-      "status": "inventoried",
-      "note": "Collected as evidence only. Being in the inventory is not a commitment to port; the belt that opens this file writes its ledger then."
+      "status": "ported",
+      "note": "Covered by parity/clone-source.ledger.json -- the clone-source belt."
     },
     {
       "path": "parity/source-inventory/test_compose.txt",
@@ -55,24 +55,24 @@
       "source": "tests/test_identifiers.py",
       "collected": 25,
       "test_functions": 6,
-      "status": "inventoried",
-      "note": "Collected as evidence only. Being in the inventory is not a commitment to port; the belt that opens this file writes its ledger then."
+      "status": "ported",
+      "note": "Covered by parity/identifiers.ledger.json -- the identifier belt."
     },
     {
       "path": "parity/source-inventory/test_import_boundaries.txt",
       "source": "tests/test_import_boundaries.py",
       "collected": 97,
       "test_functions": 9,
-      "status": "inventoried",
-      "note": "Collected as evidence only. The kickoff (cadenza#8) re-points these nine functions rather than transcribing them: the source asserts that no module under `cadenza` imports interlock, and the equivalent claim about a TypeScript tree is a different scan over a different module graph. The Python file stays green in CI meanwhile, so the boundary it guards is not unguarded during the port."
+      "status": "ported",
+      "note": "Covered by parity/import-boundaries.ledger.json -- the import-boundaries belt. Re-pointed rather than transcribed (cadenza#8): the source asserts that no module under `cadenza` imports interlock, and the equivalent claim about a TypeScript tree is a different scan over a different module graph, so all 97 cases are `adapted` or `waived` and none is `ported`. The Python file stays green in CI meanwhile, so the boundary it guards is not unguarded during the port."
     },
     {
       "path": "parity/source-inventory/test_refs.txt",
       "source": "tests/test_refs.py",
       "collected": 62,
       "test_functions": 6,
-      "status": "inventoried",
-      "note": "Collected as evidence only. Being in the inventory is not a commitment to port; the belt that opens this file writes its ledger then."
+      "status": "ported",
+      "note": "Covered by parity/refs.ledger.json -- the refs belt."
     },
     {
       "path": "parity/source-inventory/test_resolve.txt",

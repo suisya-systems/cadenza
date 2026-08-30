@@ -141,6 +141,22 @@ jobs:
       - name: Source inventory
         run: npm run inventory
 
+      - name: import boundary check (no interlock edge)
+        # Named separately for the reason `tests.yml` records about the Python
+        # half: this file is what the build exists to defend, so it gets its own
+        # line in the log rather than passing as one of 386 in `npm test`. It
+        # has already run there -- twice per cell, under the shuffle -- so this
+        # step is visibility, not coverage.
+        #
+        # The seed is explicit because `CI` is set here and an unset seed under
+        # CI is a hard error by design (D-0006). A fixed value is right for this
+        # step and wrong for the suite: 95 filesystem-and-parser cases share no
+        # state, so ordering proves nothing, and the double-green job is where
+        # order is actually exercised.
+        env:
+          CADENZA_TEST_SEED: "1"
+        run: npx vitest run test/architecture/import-boundaries.test.ts
+
   oracle:
     # The differential oracle's Python half -- BOTH faces -- re-run against the
     # committed vectors. Without this, a vector is a fossil: the TypeScript suite

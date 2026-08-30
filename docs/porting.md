@@ -273,39 +273,72 @@ nobody would be told.
 
 | Source file | Node ids | Functions | Status |
 |---|---:|---:|---|
-| `tests/test_clone_source.py` | 57 | 35 | inventoried |
+| `tests/test_clone_source.py` | 57 | 35 | **ported** (57 mapped) |
 | `tests/test_compose.py` | 50 | 39 | **ported** (49 mapped, 1 not-ported) |
 | `tests/test_digest.py` | 14 | 8 | **ported** (14 mapped) |
-| `tests/test_identifiers.py` | 25 | 6 | inventoried |
-| `tests/test_import_boundaries.py` | 97 | 9 | inventoried |
-| `tests/test_refs.py` | 62 | 6 | inventoried |
+| `tests/test_identifiers.py` | 25 | 6 | **ported** (25 mapped) |
+| `tests/test_import_boundaries.py` | 97 | 9 | **ported** (64 mapped, 33 waived) |
+| `tests/test_refs.py` | 62 | 6 | **ported** (62 mapped) |
 | `tests/test_resolve.py` | 11 | 11 | **ported** (11 mapped) |
 | `tests/test_toml_loader.py` | 14 | 13 | **ported** (14 mapped) |
-| **Total** | **330** | **127** | 89 ported, 241 inventoried |
+| **Total** | **330** | **127** | 330 ported, 0 inventoried |
 
-*Inventoried* means collected as evidence. It is not a commitment to port; the belt that opens a file
-writes its ledger then.
+Every source file now carries a ledger. *Inventoried* remains a defined status in
+`parity/source-inventory.manifest.json` — collected as evidence, not a commitment to port — because
+a later source file added to the Python suite arrives in that state before a belt opens it.
+
+The last file is the one that is `ported` without a single `ported` case in it.
+`tests/test_import_boundaries.py` asserts the dependency direction of design section 8 over a
+**Python** module graph, and the kickoff (cadenza#8) decided from the start that the equivalent claim
+about this tree is a different scan over a different graph, to be re-pointed and recorded as
+`adapted` rather than silently dropped. So all 97 cases are `adapted` (64) or `waived` (33), and the
+33 are the eight Python modules with no TypeScript counterpart — seven `__init__.py` package
+initialisers and `__about__.py` — appearing across the four per-module functions, plus
+`cadenza.domain`'s own initialiser in the fifth. `parity/import-boundaries.ledger.json` names each
+one. Why the scan is written against the TypeScript compiler API rather than delegated to a lint
+rule, and what was measured before choosing, is `D-0022`.
+
+It is wider than its source in three places, and each is target-only rather than folded into a
+mapped case. A dynamic import whose specifier cannot be read statically **fails closed** instead of
+being silently dropped, which is what the source does with `importlib.import_module(name)`.
+`src/application` is swept for I/O as well as `src/domain`, because design section 8 marks both
+`(no I/O)` and the source's case covers only the second — a disagreement the oracle order settles in
+the document's favour (section 2). And the sweep looks for the I/O Node hands out with no import at
+all — `fetch`, `console`, `process` beyond `env` and `platform` — a surface that cannot exist in
+Python, where reaching the network means importing something, and which an import allowlist would
+therefore have reported nothing about.
 
 The composition belt closed the pilot's one deferral: `test_digest_survives_the_catalog_moving_to_
 another_file` is ported at `test/application/resolve.test.ts` and is still claimed by
 `parity/digest.ledger.json`, which is why the `unmapped` sweep runs after every ledger has been read
 rather than while each one is read.
 
-Two known traps were recorded here by the kickoff. The first has now been met; the second has not:
+Two known traps were recorded here by the kickoff. Both have now been met, and the identifier belt
+measured both rather than judging them by eye (`D-0020`):
 
 - **The identifier pattern's `\Z`.** `IDENTIFIER_PATTERN` ends `\Z`, not `$`, so `"web\n"` is
   refused. That is deliberate and must survive translation: JavaScript's `$` without the `m` flag
   behaves like `\Z` rather than like Python's `$`, so the naive translation happens to be correct —
   which is exactly why it needs to be recorded rather than rediscovered. **Met** by the composition
   belt, which needed `parse_identifier` for `compose_catalog`; `src/domain/identifiers.ts` records
-  the reasoning at the pattern, and there is deliberately no `m` flag.
+  the reasoning at the pattern, and there is deliberately no `m` flag. **Measured** by the identifier
+  belt (`D-0020`): the risk is not the translation that was written but the flag a later edit adds,
+  because the same source under `m` accepts `web\n` — and `web\r`, `web\u2028` and `web\u2029`
+  besides, three terminators Python's `$` does not break a line at. A target-only case in
+  `test/domain/identifiers.test.ts` holds the flag absent.
 - **`str.isspace()` against `/\s/`.** The two accept different sets. `_parse_git_url` rejects any
   character for which `str.isspace()` is true, and a translation to `/\s/` would change which URLs
-  are refused. The *cases* still belong to the `tests/test_clone_source.py` belt, but the composition
-  belt had to meet the trap early, because `parse_base_branch` asks the same predicate and
-  `compose_catalog` calls it: `isPythonSpace` in `src/domain/python-text.ts` is the explicit set, and
-  the two directions it disagrees with `/\s/` in — U+001C..U+001F and U+0085 on Python's side,
-  U+FEFF on JavaScript's — are asserted in `test/domain/python-semantics.test.ts`.
+  are refused. The composition belt had to meet the trap early, because `parse_base_branch` asks the
+  same predicate and `compose_catalog` calls it: `isPythonSpace` in `src/domain/python-text.ts` is
+  the explicit set, and the two directions it disagrees with `/\s/` in — U+001C..U+001F and U+0085 on
+  Python's side, U+FEFF on JavaScript's — are asserted in `test/domain/python-semantics.test.ts`.
+  **Met** for its own cases by the clone-source belt: "whitespace and control characters in a url are
+  refused" exercises `isPythonSpace` through `_parse_git_url` directly, at
+  `test/domain/clone-source.test.ts`. The identifier belt then measured whether the trap also reaches
+  `parse_identifier`, and it does not (`D-0020`): that gate is a **positive** character class, so a
+  space is refused for being outside `[a-z0-9_-]` rather than for being whitespace, and over a
+  3,169-value corpus the two implementations disagree on zero accept/refuse verdicts — the six
+  whitespace-disagreement code points included.
 
 A third trap was found by this belt rather than predicted, and is recorded for the same reason:
 
