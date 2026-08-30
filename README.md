@@ -216,6 +216,8 @@ a boundary review harder than it needs to be.
 - `docs/porting.md` - the TypeScript rewrite: the oracle order, the parity
   ledger, the differential oracle, and what has been ported so far.
 - `docs/repository-policy.md` - branch protection, review and release policy.
+- `AGENTS.md` - the conventions to know before picking up an open issue, for
+  human and AI implementers alike.
 - `SECURITY.md` - how to report a vulnerability.
 
 ## Licence
