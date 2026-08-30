@@ -1286,3 +1286,68 @@ restate the rule.
 **Source.** Task `cadenza-upstream-authority-sweep`, 2026-08-30, and the owner's instruction that
 the text producing the misreading is what has to go. Continuo's D-0036 is the same decision taken
 about the same upstream, in its own numbering space.
+
+## D-0024 — the syntax tree comes from the compiler, through one module, and the parse is asserted against its own input
+
+**Status:** accepted
+
+**Context.** Two checks in this repository read TypeScript rather than running it:
+`scripts/parity-check.mjs` counts non-running test constructs, and
+`test/architecture/import-boundaries.test.ts` walks the module graph. Both are written against a
+syntax tree on purpose (D-0022, and the header of the parity sweep): comments and string literals
+are not nodes, so prose about `test.skip` cannot be miscounted, and an import hidden in a function
+body is still an import. Both obtained that tree by calling `ts.createSourceFile` on text they had
+read themselves.
+
+TypeScript 7 removes it. The compiler is a Go program now; the `typescript` package's main export is
+`{ version, versionMajorMinor }` and nothing else. The tree is still reachable, but only as data the
+compiler sends back — decoded by `typescript/unstable/ast`, requested through
+`typescript/unstable/sync`. Parsing stopped being a pure function over a string and became a
+question put to a running program.
+
+The break was worse than the pull request's red suggested. The visible failure was one step, `npm
+run parity`, because the branch predated the import-boundary belt; once `main` merged in, the type
+check failed with 89 errors and 61 of the 99 boundary cases failed with it. Nothing in `src/` needed
+changing: under TypeScript 7 this repository's own code type-checks unaltered, and the whole of the
+breakage was in the two files that read the compiler's API. Continuo took the same bump green
+because it never consumed that API.
+
+**Decision.** The plumbing lives in `scripts/lib/ts-ast.mjs` and nowhere else, and it keeps the old
+signature: `parseSourceFile(fileName, source)` parses **the text it is given**, as though that text
+lived at that path. It does so by mounting the text in a virtual filesystem — one file plus a
+`tsconfig.json` with `noLib` and `noResolve` — and asking the compiler about that. No disk is
+touched, and one compiler process is shared for the life of the host and shut down explicitly.
+
+**Why the text and not the file on disk.** Asking the compiler for the file at a path reads better
+and is wrong here: the boundary sweep's detector cases parse hand-written snippets attributed to
+`src/domain/probe.ts`, a module that has never existed. Those cases are how the detector is tested,
+so a parse that could only see real files would have silently cost the sweep its own test.
+
+**Why the parse is asserted against its input.** `parseSourceFile` compares `tree.text` to the
+source it was handed and throws when they differ. This is not defensiveness in the abstract; it is
+the trap this change actually fell into. Invalidating the compiler's copy takes
+`fileChanges: { changed: [...] }`, and the near-miss spelling — `changedFiles`, which the neighbouring
+`ProjectFileChanges` type does use — is accepted, returns a fresh snapshot, and hands back the
+**previous** file's tree. Under it, both sweeps examine their first input a few dozen times and
+report nothing wrong with any of the others. Every symptom of that bug is a green run, so the
+guarantee has to be checked rather than reasoned about.
+
+**Rejected alternative: stay on TypeScript 5.8.3.** It works and costs nothing today, and it means
+the repository's two static checks pin the compiler for the whole tree. The removal is not a
+deprecation to wait out; the JavaScript compiler is gone in 7.
+
+**Rejected alternative: one copy of the plumbing in each caller.** Rejected because the lifecycle —
+spawn, mount, invalidate, shut down — is exactly where the silent failure above lives, and a second
+copy is a second chance to get the invalidation wrong in a way that looks green.
+
+**What this accepts.** `typescript/unstable/*` is named unstable and may change shape within
+TypeScript 7. The exposure is one module of about forty lines; a rename lands there and nowhere
+else, and the assertion above means a semantic change surfaces as a red gate rather than as a sweep
+that stops finding things.
+
+**What would falsify it.** A TypeScript release restoring a supported standalone parse, which would
+make the virtual-filesystem mount unnecessary machinery. Short of that: `parseSourceFile` throwing
+its stale-tree error, which would mean the invalidation contract moved and the sweeps must not be
+trusted until it is answered.
+
+**Source.** Task `cadenza-ts7-compat`, 2026-08-30, superseding the bump in cadenza#12.
