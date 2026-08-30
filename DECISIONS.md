@@ -44,7 +44,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0011 | The differential oracle, and the one face this pilot implements | accepted |
 | D-0012 | The TypeScript tree lives at the repository root, beside the Python package | accepted |
 | D-0013 | The canonical encoder refuses a lone surrogate rather than escaping it | accepted |
-| D-0014 | G2 and the interlock seam are untouched by the port | accepted |
+| D-0014 | G2 and the interlock seam are untouched by the port | superseded by D-0023 |
 | D-0015 | Value objects are snapshotted and frozen, not merely typed `readonly` | accepted |
 | D-0016 | `smol-toml` is the port's one runtime dependency | accepted |
 | D-0017 | The oracle's second face: composition, over the persisted digest only | accepted |
@@ -53,6 +53,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0020 | The identifier belt's two predicted traps, settled by measurement | accepted |
 | D-0021 | The git-parity oracle runs the real `git` binary; `match=` becomes a `RegExp` only where a plain substring would look for a character the message never contains | accepted |
 | D-0022 | The import boundary is a test that parses the tree, not a lint rule: measured against Biome, chosen for the ledger | accepted |
+| D-0023 | interlock is a frozen source, not a decision-maker: cadenza's open questions are settled at cadenza's own human gate | accepted |
 
 ---
 
@@ -431,7 +432,14 @@ design document is where that gets settled first (D-0001).
 
 ## D-0014 — G2 and the interlock seam are untouched by the port
 
-**Status:** accepted
+**Status:** superseded by D-0023
+
+D-0023 restates what this entry decided that still holds — the port neither unfreezes G2 nor opens
+the interlock seam — and replaces its account of *why*. The body below is left as written, per this
+file's rule that an ID is never rewritten, and is a record of what was believed in August 2026. Read
+through D-0023: "pending interlock#74's TypeScript migration" and "interlock#74 landing, which is
+the stated precondition for unfreezing G2" describe a precondition cadenza is **not** waiting on.
+G2's unfreeze condition is cadenza's to set, and is not set yet.
 
 **Decision.** The port does not touch G2 (frozen at cadenza#9 pending interlock#74's TypeScript
 migration) and does not open the interlock seam: `src/cadenza/adapters/interlock/` stays empty on
@@ -1163,3 +1171,118 @@ was reviewed by the round after it.
 `approved_non_running` is, which would remove reason 1; or a Biome rule that could be addressed by a
 ledger entry, which would remove reason 3. Reason 2 would go if the other seven claims found a
 natural home elsewhere, which would mean section 8's boundary had stopped being one subject.
+
+---
+
+## D-0023 — interlock is a frozen source, not a decision-maker: cadenza's open questions are settled at cadenza's own human gate
+
+**Status:** accepted
+
+**Context.** Several documents in this repository described interlock as an active party with
+something still to decide. `README.md` held G2 as "blocked on interlock settling its own contract";
+`docs/design/g1-project-registry.md` section 9 and `docs/repository-policy.md` section 5 said
+cadenza does not depend on interlock "yet", with the reason resting on a state of interlock's that
+was implied to be temporary; D-0014 recorded "interlock#74 landing" as "the stated precondition for
+unfreezing G2", and cadenza#9 restated the same shape.
+
+None of those conditions can be met. Interlock is the frozen source this successor stack is ported
+from: its last commit is 2026-08-21 (UTC), its own delegation-contract question — interlock's open
+issue #63, "Operating-layer delegation contract", opened 2026-08-21 — was recorded and left
+unanswered, and interlock#74 is the kickoff for porting it away, not a contract that will be settled
+there. (Issue numbers in interlock's *git history* are not interlock's: commits inherited from
+`claude-org-runtime`, which interlock forked at `befd309`, carry that repository's numbering, so a
+`Closes #63` dated before the fork is a different issue entirely. Cite interlock issues by title as
+well as by number.) A condition that cannot occur is not a condition; it is an unbounded
+wait wearing one. The test applied across the sweep was: **could a reader — human or agent — take
+this sentence at face value and conclude that waiting is the correct behaviour?** Where the answer
+was yes, the sentence was wrong, not merely imprecise. Continuo reached the same conclusion about
+the same upstream on the same date (continuo D-0036), from its own evidence.
+
+**Decision.** interlock is the **frozen source** of this stack. It supplies design lineage, prior
+reasoning, the questions that were asked, and — for continuo — test cases. It supplies **no
+decisions and no answers to cadenza**. Concretely:
+
+1. **No cadenza status, gate or document is "blocked upstream", "pending upstream", or held until
+   interlock settles anything.** There is no upstream process left to be pending on. Where such a
+   phrase appears it is rewritten, not annotated.
+2. **An interlock issue number cited here names a question interlock left unanswered, or a record of
+   what was decided there before the freeze.** The citation stays — it is the record of what was
+   asked and where it came from — but its status is *unanswered*, never *open pending upstream*, and
+   never a precondition.
+3. **If cadenza needs one of those questions answered, cadenza answers it**, at this repository's
+   human gate, as a `D-` entry, on cadenza's own terms. Declining to answer stays legitimate: this
+   entry does not force G2's unfreeze condition, or the shape of the delegation contract, to be
+   settled now. What it forbids is recording the decline as *waiting*.
+4. **The human gate on this repository is the only decision-making body over cadenza.** "Undecided"
+   means undecided *here*.
+
+**Consequences.**
+
+- `README.md`'s "explicitly not here yet" list no longer holds G2 behind an interlock-side contract
+  question. The question itself is kept in full — what a delegated run may do, on whose authority,
+  and how that is expressed at the seam to a control plane — together with the interlock#63
+  citation, marked unanswered. The interlock dependency bullet states the reason as a settled fact
+  about a frozen repository rather than as a temporary condition.
+- `docs/design/g1-project-registry.md` section 9 and `docs/repository-policy.md` section 5 drop
+  "yet" and say that whether cadenza takes a control-plane dependency is decided here. Section 9's
+  bare `(D-0026)` is also corrected to `(interlock D-0026)`, which is what this file's own citation
+  rule requires.
+- **D-0014 is superseded by this entry, and its body is not rewritten** — the ID keeps its text, per
+  this file's rule, and gains `Status: superseded by D-0023`. What D-0014 decided is restated here
+  without the upstream precondition, so a reader who lands on D-0014 alone is sent to a live entry
+  rather than left with the old framing: **the TypeScript port does not touch G2 and does not open
+  the interlock seam.** `src/cadenza/adapters/interlock/` stays empty on the Python side and has no
+  TypeScript counterpart, and the Python implementation is retired by its own later PR, not by the
+  PR that introduced the port — removing it earlier would delete the oracle's Python half (D-0011)
+  in the same diff that first relies on it. G2 stays frozen because nobody has decided to start it,
+  and a port is not the change that starts it. What is dropped is D-0014's claim that G2 is "frozen
+  at cadenza#9 pending interlock#74's TypeScript migration" and that interlock#74 landing is "the
+  stated precondition for unfreezing G2"; there is no such precondition.
+- Nothing about the port changes. G2 stays frozen and the seam stays empty on this change; what
+  changes is who is understood to hold the condition for lifting either.
+
+**The unfreeze condition for G2 is not chosen by this entry.** It records the candidates so the next
+reader argues about the choice rather than rediscovering that the old condition was unreachable.
+Three, none adopted:
+
+1. **Gate on G1's TypeScript port.** G2 opens when the port is complete and `src/cadenza/` is
+   retired (D-0014's second half). Concrete, already tracked, and close: as of this entry the belts
+   have reached 330 of 330 collected node ids. It says nothing about whether the delegation contract
+   is *ready to be designed*, only that the language question is behind us.
+2. **Gate on a design decision taken here.** G2 opens when a `D-` entry in this file fixes what a
+   delegation contract must express — the authority model, the seam to a control plane, and what a
+   run may do without asking. This is the condition that matches the actual reason G2 was deferred
+   (designing against an undefined seam), with the difference that the definition is cadenza's to
+   write rather than someone else's to supply.
+3. **Lift the freeze and gate the work instead.** G2 stops being frozen; work on it is admitted the
+   way any other work is, behind the human gate and the review policy, with cadenza#9 closed and
+   replaced by an ordinary design issue. This treats the freeze as having been a stand-in for "no
+   one has decided to start", which is what it now is once the upstream condition is removed.
+
+They are not exclusive: 1 and 2 compose as a conjunction, and 3 is what remains if neither is judged
+worth stating. The choice is a human-gate decision and is expected to be taken against the
+successor-stack sequencing work running in parallel; whichever is taken should be a new `D-` entry
+that names this one.
+
+**Where the candidates are recorded, and why here rather than in `README.md`.** `README.md` states
+what is true of the repository now; a list of options nobody has chosen is not that, and would
+either rot or read as a plan. This file is the place that already carries undecided reasoning with a
+falsifier attached, and the one a later `D-` entry can supersede by ID.
+
+**Rejected alternative: leave the text and correct the reading in a convention.** Rejected because
+the failure mode is a reader forming a false belief from the document in front of them; every new
+agent starts from the text, and a convention held elsewhere is not in that path.
+
+**Rejected alternative: delete the interlock citations.** Rejected because they carry real
+information — what was asked, and why it went unanswered. Deleting them trades one wrong reading
+("someone will answer this") for another ("nobody ever noticed this").
+
+**What would falsify it.** interlock being un-frozen with someone answering its open questions,
+which would restore the premise and make this entry worth revisiting. Short of that: a reader found
+treating a cadenza freeze or an empty seam as an external blocker despite this sweep, which would
+mean the rewrite did not reach the text they read — the answer then is to find that text, not to
+restate the rule.
+
+**Source.** Task `cadenza-upstream-authority-sweep`, 2026-08-30, and the owner's instruction that
+the text producing the misreading is what has to go. Continuo's D-0036 is the same decision taken
+about the same upstream, in its own numbering space.
