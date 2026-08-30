@@ -106,11 +106,27 @@ export function parseSourceFile(fileName, source) {
   // by one file per call, and `include` would have the compiler re-read all of
   // them on every snapshot.
   const path = `${PARSE_DIR}/source${extension}`;
-  if (state.mounted !== null && state.mounted !== path) {
-    state.fs.removeFile(state.mounted);
+  const previousPath = state.mounted;
+  if (previousPath !== null && previousPath !== path) {
+    state.fs.removeFile(previousPath);
   }
   state.fs.writeFile(path, source);
   state.mounted = path;
+
+  // Rewriting one file is a change; switching grammars is a different file
+  // appearing and the old one going away, and the compiler has to be told which
+  // it was. Reporting a new path as merely `changed` leaves the wildcard
+  // project holding the root that no longer exists and never picking up the one
+  // that does, and `getSourceFile` then returns nothing at all. Only `.ts` is in
+  // this tree today, so the first `.tsx`, `.mts` or `.cts` module to arrive is
+  // what would have found this -- by breaking the boundary sweep that exists to
+  // greet it.
+  const fileChanges =
+    previousPath === path
+      ? { changed: [path] }
+      : previousPath === null
+        ? { created: [path] }
+        : { created: [path], deleted: [previousPath] };
 
   // `changed` is what invalidates the compiler's copy. Without it the snapshot
   // is new, the call succeeds, and the tree returned is the *previous* file's
@@ -129,7 +145,7 @@ export function parseSourceFile(fileName, source) {
 
   const snapshot = state.api.updateSnapshot({
     openProjects: [TSCONFIG],
-    fileChanges: { changed: [path] },
+    fileChanges,
   });
   state.snapshot = snapshot;
 
