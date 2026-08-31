@@ -51,16 +51,23 @@ Early. This repository currently contains:
 
 Explicitly **not** here yet:
 
-- **G2 delegation contract** - not designed. The open question is what a
+- **G2 delegation contract** - designed, not implemented. The question - what a
   delegated run may do, on whose authority, and how that is expressed at the
-  seam to a control plane. Interlock recorded the same question - its open
-  issue #63, "Operating-layer delegation contract" - and left it unanswered;
-  that reference is where the question came from, not an answer in transit.
-  G2 is held at cadenza#9. The condition for taking it up is cadenza's own
-  (D-0023) and is now set: `DECISIONS.md` D-0025 adopts D-0023's candidate 2 -
-  G2 opens when a `D-` entry here fixes what the delegation contract must
-  express (authority model, control-plane seam, what a run may do without
-  asking). That entry has not been written yet, so G2 stays not started.
+  seam to a control plane - is answered by `DECISIONS.md` D-0026, which is the
+  entry D-0025 set as G2's unfreeze condition, so G2 is no longer frozen. It
+  fixes three things: authority is a closed, enumerated grant bound to a
+  `project_id`, a `config_digest` and the run it was issued for, never a role
+  name; the seam is a contract document and its digest rather than an API, with
+  the control plane depending on cadenza and never the reverse; and every
+  intended action classifies as exactly one of allowed, needs-approval or
+  refused, where silence is never consent and an approval is a superseding
+  contract rather than a widening of the running one. What D-0026 deliberately
+  leaves open - the capability vocabulary, budgets, expiry, signing - it names.
+  The argument behind the entry is `docs/design/g2-delegation-contract-proposal.md`.
+  No G2 code is here yet. Interlock recorded the same question - its open issue
+  #63, "Operating-layer delegation contract" - and left it unanswered; that
+  reference is where the question came from, not an answer in transit, and
+  answering it here is what D-0023 said cadenza would have to do.
 - **any dependency on interlock** - not in `pyproject.toml`, not as an extra.
   Interlock's control-plane API and SQLite schema are marked throwaway on
   interlock's own side, and interlock is frozen, so no later stabilisation is
@@ -212,6 +219,9 @@ a boundary review harder than it needs to be.
 
 - `docs/design/g1-project-registry.md` - the G1 contract: identity, clone source
   union, merge rules, digest, resolution.
+- `docs/design/g2-delegation-contract-proposal.md` - the argument behind D-0026:
+  the options weighed for the delegation contract, and what each would cost.
+  D-0026 is the decision; this is why it is that one.
 - `DECISIONS.md` - the append-only record of design decisions. Cadenza's own
   numbering space, starting at D-0001.
 - `docs/porting.md` - the TypeScript rewrite: the oracle order, the parity

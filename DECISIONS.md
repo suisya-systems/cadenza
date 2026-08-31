@@ -55,6 +55,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0022 | The import boundary is a test that parses the tree, not a lint rule: measured against Biome, chosen for the ledger | accepted |
 | D-0023 | interlock is a frozen source, not a decision-maker: cadenza's open questions are settled at cadenza's own human gate | accepted |
 | D-0025 | G2's unfreeze condition is D-0023's candidate 2: it opens on a design decision taken here, not on the port or on lifting the freeze | accepted |
+| D-0026 | What the delegation contract must express: an enumerated grant, a seam that is a document rather than an API, and a total three-valued bound on unattended action | accepted |
 
 ---
 
@@ -1414,3 +1415,190 @@ else is nonetheless blocking it, which would make this choice of gate wrong rath
 unmet.
 
 **Source.** Human gate decision, 2026-08-31, cadenza#9.
+
+---
+
+## D-0026 — what the delegation contract must express: an enumerated grant, a seam that is a document rather than an API, and a total three-valued bound on unattended action
+
+**Status:** accepted (2026-08-31, taken at cadenza's human gate)
+
+**This is the entry D-0025 set as G2's unfreeze condition, and it opens G2.** D-0025 adopted
+D-0023's candidate 2: G2 opens when a `D-` entry here fixes what the delegation contract must
+express — the authority model, the seam to a control plane, and what a run may do without asking.
+The three sections below fix those three, and each names what it deliberately leaves open. The full
+argument, with the options weighed and the rejected alternatives, is
+`docs/design/g2-delegation-contract-proposal.md`; this entry is the decision, and where the two
+disagree this entry is what was decided.
+
+**What this entry is not.** It is not an implementation, and it does not describe one. There is no
+capability vocabulary, no module and no type here. The belt that writes those comes after this
+entry, against it.
+
+### 1. The authority model: an enumerated grant
+
+**Decision.** A delegated run's authority is a **closed, enumerated grant** carried by the contract
+that authorised it. Roles are not the model.
+
+- **Authority is exactly the grant.** Nothing is authority by default, by role name, by convention,
+  by what a neighbouring run was allowed, or by the run's own reading of its task. Absent means not
+  granted.
+- **Grants are closed.** An unrecognised capability key refuses the whole contract, naming the key
+  — G1 §5.6's rule extended to G2, for its reason: a typo that falls back to a default is the
+  failure this layer exists to prevent.
+- **A capability key's meaning is permanent.** A key is never redefined, broadened, or reused for
+  something else; a wider power is a new key. The contract pins the vocabulary version it was
+  written against and refuses a version this build does not know, as G1 §5.2 does for
+  `schema_version`. Without this, a later release could widen every contract already issued at an
+  unchanged digest.
+- **No amplification.** A run cannot widen its own grant, and anything it delegates onward carries a
+  subset. Widening happens only by a new contract from the granter (§3).
+- **The subject is pinned.** The contract names its project by `project_id` — never an alias — and
+  pins the `config_digest` (G1 §4) it was issued against. A catalog that has moved on makes the
+  contract **stale**; stale is invalid (§3).
+- **A contract is not a bearer token.** It names its **grantee**, the run identity it was issued
+  for, and that binding is part of its semantics and so of its digest. Presented on behalf of any
+  other run it classifies as `refused`. Run identity is the control plane's to mint (§2), so the
+  control plane reserves the run and the granter then issues against it.
+- **The issuer is carried, and authentication is not authorisation.** A contract without an issuer
+  identity is refused. Cadenza asserts nothing about who the issuer really was — that is the control
+  plane's at the edge — but the control plane must establish that the issuer may grant *this*
+  authority over *this* project. Two rules are cadenza's own: a contract whose issuer is its own
+  grantee is refused, and a granter passes on only what it holds.
+- **A contract is a frozen value with a digest.** Immutable once issued (D-0015), carrying a
+  `contract_digest` over its semantics computed the way `config_digest` is (G1 §4; D-0011, D-0017
+  for the technique and its oracle), so two parties can prove they mean the same contract.
+
+**Why not roles.** A role name in a durable record means whatever the role table meant *at the time*:
+change the table and the meaning of every past record changes with it. That is the alias failure
+G1 §2 already rejects — `project_id` is immutable and durable, aliases are display-only — and it is
+the drift interlock recorded from the other side in its unanswered issue #63 ("prose↔practice
+drift", the hardcoded permission-mode mirrors). A role is an alias for an authority. Roles stay
+admissible later strictly as a **rendering**: a role expands to a grant before the contract exists,
+the contract stores the expansion, and the role name survives only as provenance (G1 §5.7).
+
+**Why not a predicate policy** evaluated at action time. It is the most expressive and the least
+reconstructable: if the decision depends on state the granter could not see, what was authorised
+cannot be recovered from the record — and it puts an evaluator, with the I/O and clock an evaluator
+needs, inside a layer G1 keeps pure.
+
+**Deliberately not fixed.** The capability vocabulary itself; whether role presets ever exist as the
+rendering above; how issuer or grantee identity is authenticated, and whether contracts are signed;
+whether an unbound template may be authored before a run is reserved; **expiry, and revocation with
+no successor to issue** — supersession (§3) is the supported way authority is replaced or taken
+back, and what is left open is the case with no successor and the case of a contract lapsing with
+time, which would need a signal that is not a contract and a clock cadenza does not have.
+
+### 2. The seam to a control plane: a document and its digest, not an API
+
+**Decision.** Cadenza produces and validates delegation contracts and classifications as **values**.
+The control plane transports, stores and enforces them.
+
+- **The dependency points inward.** A control plane may depend on cadenza; cadenza takes no
+  dependency on one — no import, no requirement, no extra. This is the existing rule and its
+  existing scope: what is prohibited is the import and the direction (G1 §8,
+  `tests/test_import_boundaries.py`, D-0022's TypeScript counterpart), not the mention. Naming a
+  control plane in prose, or reserving an empty adapter directory for one, is not a dependency.
+- **What cadenza cannot compute purely is an input.** Run identity, session identity, wall-clock
+  time, randomness, durability and retry are supplied by the caller. Cadenza never mints a run id
+  and never reads a clock — which is what makes a contract reproducible from its inputs, and its
+  digest worth having.
+- **The contract is the authority; the control plane is the enforcer.** Cadenza classifies an
+  *intended* action against a contract and returns the classification. It does not stop anything,
+  and a system that consults it and then ignores the answer is not defended against here.
+- **`adapters/interlock/` stays empty.** G2 does not open the interlock seam. Whether a delegated
+  run ever reaches interlock specifically is a separate decision, taken here when someone needs the
+  answer (D-0023), and this entry is not it.
+
+**Why not an outbound port** that a control plane implements. It reads naturally if cadenza is
+pictured as the orchestrator, and it requires cadenza to hold a lifecycle, a clock and I/O — and
+every port shape would be a guess about a control plane this repository has explicitly not chosen.
+The empty seam exists so the first real integration is a new file in an agreed place, not a set of
+interfaces designed against a repository nobody has committed to. **Why not a shared durable
+schema:** G1 §9 refuses it already — interlock's control-plane API and SQLite schema are marked
+throwaway on interlock's own side (interlock D-0026, a different numbering space) and interlock is
+frozen, so sharing rows converts a spike into a dependency by inertia.
+
+**Deliberately not fixed.** Serialisation at the edge (TOML, JSON, or a row in someone's table); the
+event or journal schema, and whether cadenza has any say in it; whether the control plane is ever
+interlock; gate management (G3) — a gate outcome is an input to a classification, and what gates are
+is not settled here.
+
+### 3. What a run may do without asking: three values, and the classification is total
+
+**Decision.** Every intended action classifies as exactly one of `allowed`, `needs_approval`,
+`refused`.
+
+- **The classification is total.** There is no fourth state, and no rule anywhere turns "not
+  classified" into "allowed".
+- **The boundary is the contract's, not the run's.** A run does not judge when to ask; it asks
+  exactly when the classification says `needs_approval`. A run that proceeded because it judged the
+  action harmless acted outside its contract, and the outcome being fine does not change that.
+- **Silence is not consent.** An unanswered `needs_approval` is not a proceed. The run stalls or
+  ends; no timeout, backoff or retry converts asking into permission.
+- **An approval is a superseding contract, not a widening of the running one.** A contract is never
+  mutated in flight (D-0015). Immutability alone does not make "under which contract did it do
+  that" answerable — a twice-granted run holds two contracts that may both authorise the same later
+  action — so three things go with it: the successor names the `contract_digest` it replaces, at
+  most one contract is current for a run at a time, and every classification carries the
+  `contract_digest` it was made under. A successor is not required to widen: narrowing, and
+  narrowing to nothing, is how authority is taken back while revocation is otherwise deferred (§1).
+- **Asking is itself bounded.** The contract declares what is **askable** alongside what is granted,
+  and **the two sets are disjoint** — a contract listing the same capability in both is refused at
+  issue time, since an overlap is the one shape that would leave an action classifiable two ways.
+  Refusing beats inventing a precedence at classification time, as G1 §5.4 refuses a colliding
+  namespace rather than resolving it by order. Anything in neither set is `refused` outright and is
+  not escalatable, so a run cannot escalate its way toward arbitrary authority.
+- **A stale contract is invalid, and classifying against an invalid contract is `refused`.**
+  Staleness (§1) is checked before the grant is consulted at all, so totality holds without an
+  implementation inventing whether staleness refuses or asks. Refusing rather than asking is what
+  this repository already does when a record no longer matches what it was written against (G1 §5.2,
+  an unknown `schema_version`); what happens next is the granter's move, not the classifier's.
+
+**Why not a binary bound** — inside the grant act, outside it refuse, nothing askable. It is the
+most auditable shape and the least survivable one: every real delegation meets a case that is
+neither clearly granted nor clearly forbidden, and if the only escape is reissuing by hand, the
+practice becomes issuing a very wide grant up front. Its simplicity converts into over-grant under
+pressure. **Why budgets are not here:** counters, review-round limits and elapsed-time bounds are a
+refinement on top of this shape rather than a third shape, and they need state and a clock, which
+by §2 are not cadenza's. They remain available later.
+
+**Deliberately not fixed.** Budgets; who approves (human, automated, or a quorum — the rules above
+hold whichever it is); escalation transport and timeout values, of which only the meaning is fixed:
+never yes; the action vocabulary being classified.
+
+**What would falsify it.**
+
+- **Against §1.** A run whose correct authority genuinely cannot be enumerated at issue time because
+  it depends on state only visible mid-run — that would mean the predicate policy was the right
+  shape and an enumerated grant is a lie told at issue time.
+- **Against §2.** A contract that cannot be produced without cadenza reading a clock, minting an
+  identity, or calling a control plane — that would mean the seam is an API after all and the
+  outbound port was needed.
+- **Against §3's totality.** An action genuinely required by ordinary work that is expressible
+  neither as a grant entry nor as an askable escalation, so the classification forces either a
+  refusal that blocks the work or a grant so wide it stops being a bound.
+- **Against §3's supersession.** Approvals answered in practice by editing the live contract because
+  reissuing costs too much — that would mean either the rule is unworkable or the contract is too
+  large a unit to be the thing reissued.
+- **Against the gate.** This entry existing with G2 still unable to open, which is D-0025's own
+  falsifier and would make its choice of gate wrong rather than merely unmet.
+
+**Consequences.**
+
+- **G2 is no longer frozen.** cadenza#9's acceptance criterion is met by this entry, and the marker
+  closes. Work on G2 is admitted the way any other work is, against this entry: an implementation
+  that contradicts a fixed point above is a defect in the implementation, and a question this entry
+  names as not fixed is settled by the belt that needs it, as a new `D-` entry.
+- `README.md`'s G2 bullet no longer says G2 is not designed and names this entry instead.
+- `docs/design/g2-delegation-contract-proposal.md` stays in the tree as the argument behind this
+  entry — the options weighed and the alternatives rejected — with its status pointing here. It is
+  not a second contract: this entry is what was decided, and G2's own design document, when the
+  implementing belt writes one, takes G1's document's role for G2 (D-0001).
+- Nothing in the port changes, and no code is added by this entry.
+
+**Source.** Human gate decision, 2026-08-31, cadenza#9, on the proposal produced by task
+`cadenza-g2-delegation-design` and reviewed over four rounds. The six points the review added —
+permanent capability meanings with a pinned vocabulary version, the grantee binding, issuer
+authorisation, supersession lineage, the disjoint askable set, and stale-as-invalid — are in the
+decision above rather than recorded as amendments, because none of them had a version that was
+decided and then changed.

@@ -1,18 +1,26 @@
 # G2 — Delegation contract: design proposal
 
-**Status: proposal. This is not a decision and does not open G2.**
+**Status: accepted, and recorded as D-0026.** This document is the argument;
+`DECISIONS.md` D-0026 is the decision, and where the two disagree the entry is
+what was decided.
 
 D-0025 set G2's unfreeze condition: G2 opens when a `D-` entry in `DECISIONS.md`
 fixes what the delegation contract must express — **the authority model**, **the
 seam to a control plane**, and **what a run may do without asking**. This
-document is the argument for what that entry should say. It stops at a
-recommendation; writing the entry is a human-gate decision — D-0023 holds that
-this repository's human gate is the only body deciding cadenza's open questions —
-because it is the decision that opens a whole belt and has to be read against
-the existing `D-` record rather than taken inside a task.
+document is the argument for what that entry should say, and it is kept in the
+tree because the entry states the decision while this states the options that
+were weighed and what each would have cost. It was written to stop at a
+recommendation, since taking the decision is the human gate's — D-0023 holds
+that this repository's human gate is the only body deciding cadenza's open
+questions — and that recommendation was taken, unchanged, at the gate on
+2026-08-31.
+
+Read it in the present tense of a proposal: everything below is phrased as what
+the entry *would* fix, because that is what it said when it was decided on.
+D-0026 is where to check what it does fix.
 
 Nothing here is implementation. No module, no test and no `src/` file follows
-from this document until the entry exists.
+from this document; the belt that implements G2 works against D-0026.
 
 Inputs: cadenza#9, `DECISIONS.md` D-0014 (superseded), D-0023, D-0025,
 `docs/design/g1-project-registry.md` §2, §4, §5.6, §8, §9, and interlock's own
