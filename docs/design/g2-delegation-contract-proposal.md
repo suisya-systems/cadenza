@@ -6,9 +6,10 @@ D-0025 set G2's unfreeze condition: G2 opens when a `D-` entry in `DECISIONS.md`
 fixes what the delegation contract must express — **the authority model**, **the
 seam to a control plane**, and **what a run may do without asking**. This
 document is the argument for what that entry should say. It stops at a
-recommendation; writing the entry is a human-gate decision (D-0023 §4), because
-it is the decision that opens a whole belt and has to be read against the
-existing `D-` record rather than taken inside a task.
+recommendation; writing the entry is a human-gate decision — D-0023 holds that
+this repository's human gate is the only body deciding cadenza's open questions —
+because it is the decision that opens a whole belt and has to be read against
+the existing `D-` record rather than taken inside a task.
 
 Nothing here is implementation. No module, no test and no `src/` file follows
 from this document until the entry exists.
@@ -147,10 +148,16 @@ authority, and it is why A2's convenience can be had later without A2's cost.
   reserved, bound to a run identity at issue time. F4a fixes that the *contract*
   is bound; whether the granter may author one earlier in a weaker form is left
   to the belt that wants it.
-- **What a stale contract (F4) does** — refuse, or require re-approval. F4 fixes
-  that the mismatch is detectable and named; which of the two reactions is right
-  depends on operational experience nobody here has yet, and guessing it now
-  would be inventing the thing D-0025 warns about.
+- **What follows a stale contract (F4) operationally** — whether the granter
+  reissues automatically, and how an operator is told. What is *not* left open is
+  the classification: **a stale contract is invalid, and classification against
+  an invalid contract is `refused`.** Staleness is checked before the grant is
+  consulted at all, so F12's exactly-one rule holds without the implementation
+  inventing a precedence. Refusing rather than asking is the conservative reading
+  and the one this repository already takes when a record no longer matches what
+  it was written against (G1 §5.2, an unknown `schema_version` is refused
+  for that file rather than guessed at); what happens next is the granter's move,
+  not the classifier's.
 - **Expiry, and revocation without a successor.** Supersession (F15) *is* the
   supported way a contract stops being current, and a successor is not obliged to
   preserve what it replaces: narrowing, and narrowing to nothing, are how
@@ -220,8 +227,8 @@ specified without naming the party on the other side.
   then ignores the answer is not defended against here.
 - **F11. `adapters/interlock/` stays empty.** G2 does not open the interlock seam.
   Whether a delegated run ever reaches interlock specifically is a separate
-  decision, taken here when someone needs it (D-0023 §3), and this entry is not
-  it.
+  decision, taken here when someone needs the answer rather than waited on
+  elsewhere (D-0023), and this entry is not it.
 
 ### What the entry would deliberately not fix
 
