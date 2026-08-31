@@ -102,6 +102,14 @@ authority, and it is why A2's convenience can be had later without A2's cost.
   the grant was issued against. A catalog that has since moved on makes the
   contract **stale**, and stale is a named, detectable condition rather than a
   silent difference.
+- **F4a. A contract is not a bearer token.** It names the **grantee** — the run
+  identity it was issued for — and that binding is part of its semantics and so
+  of its digest (F6). A contract presented on behalf of any other run classifies
+  as `refused`, whatever it says. Without this, an authentic contract copied from
+  a neighbouring run would carry its authority across, which is exactly what F1
+  denies. The run identity is the control plane's to mint (F9), so issuing a
+  contract requires that identity to exist first: the control plane reserves the
+  run, then the granter issues against it.
 - **F5. The issuer is data, not a claim cadenza checks.** The contract carries an
   issuer identity; a contract without one is refused. Authenticating that
   identity belongs to the control plane at the adapter edge (§2, F8) — cadenza
@@ -120,6 +128,13 @@ authority, and it is why A2's convenience can be had later without A2's cost.
 - **Whether role presets exist**, and their names, if they are ever added as the
   rendering described above.
 - **How issuer identity is authenticated**, and whether contracts are ever signed.
+  The same goes for the grantee side of F4a: cadenza compares the run identity it
+  is given against the one the contract names, and *proving* that the presenting
+  run is that run is the control plane's job at the edge (F5, F10).
+- **Whether an unbound template exists** — a grant written before any run is
+  reserved, bound to a run identity at issue time. F4a fixes that the *contract*
+  is bound; whether the granter may author one earlier in a weaker form is left
+  to the belt that wants it.
 - **What a stale contract (F4) does** — refuse, or require re-approval. F4 fixes
   that the mismatch is detectable and named; which of the two reactions is right
   depends on operational experience nobody here has yet, and guessing it now
@@ -170,9 +185,13 @@ specified without naming the party on the other side.
   validates delegation contracts and classifications as values. The control plane
   transports them, stores them, and enforces them.
 - **F8. The dependency points inward.** A control plane may depend on cadenza;
-  cadenza never imports or names one. This is the existing rule
-  (G1 §8, `tests/test_import_boundaries.py`, D-0022's TypeScript counterpart),
-  and G2 does not earn an exception to it.
+  cadenza takes no dependency on one — no import, no package requirement, no
+  extra. This is the existing rule and its existing scope: what is prohibited is
+  the import and the inward-only direction (G1 §8,
+  `tests/test_import_boundaries.py`, D-0022's TypeScript counterpart), not the
+  mention. Naming a control plane in prose, or reserving an empty adapter
+  directory for one (F11), is not a dependency and stays permitted; G2 earns no
+  exception to the part that is.
 - **F9. What cadenza cannot compute purely is an input.** Run identity, session
   identity, wall-clock time, randomness, durability and retry are supplied by the
   caller. Cadenza never mints a run id and never reads a clock — so a contract is
@@ -246,7 +265,12 @@ defined move.
   continues under it. A contract is never mutated in flight (F6, D-0015), so
   "under which contract did it do that" always has exactly one answer.
 - **F16. Asking is itself bounded.** The contract declares what is *askable*
-  alongside what is granted. Anything in neither set is `refused` outright and is
+  alongside what is granted. **The two sets are disjoint, and a contract that
+  lists the same capability in both is refused** — an overlap is the one shape
+  that would leave an action classifiable two ways and so break F12's
+  exactly-one rule, and refusing it at issue time beats inventing a precedence
+  at classification time (G1 §5.4 refuses a colliding namespace for the same
+  reason). Anything in neither set is `refused` outright and is
   not escalatable, so a run cannot escalate its way toward arbitrary authority
   and no approver is ever presented with a request the contract did not
   anticipate.
@@ -289,9 +313,9 @@ was wrong rather than merely incomplete.
 
 | This proposal | Rests on |
 |---|---|
-| F4 (`project_id`, never an alias) | G1 §2 — identity is split so a durable record cannot drift |
+| F4 (`project_id`, never an alias), F4a (bound to its grantee) | G1 §2 — identity is split so a durable record cannot drift |
 | F6 (`contract_digest` over semantics) | G1 §4; D-0011, D-0017 for the digest and its oracle |
-| F2 (unknown key refuses) | G1 §5.6 — every table is closed |
+| F2 (unknown key refuses), F16 (grant and askable disjoint) | G1 §5.6 — every table is closed; §5.4 — a colliding namespace is refused, not resolved by precedence |
 | F6, F15 (frozen, superseded not mutated) | D-0015 — value objects are snapshotted and frozen |
 | F8, F11 (inward only, empty seam) | G1 §8, §9; D-0023; `tests/test_import_boundaries.py`, D-0022 |
 | F5, F9, F10 (cadenza decides, others act) | G1 §1 — pure data and pure rules; intent recorded, not carried out |
