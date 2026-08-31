@@ -66,6 +66,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   source test does not, and catches the global I/O Node hands out without an
   import (`fetch`, `console`, `process` beyond `env` and `platform`). With this,
   all 330 source node ids carry a ledger.
+- G2's delegation contract is designed (D-0026), which is the entry D-0025 set
+  as G2's unfreeze condition, so G2 is no longer frozen - the design is
+  recorded, and no G2 code lands with it. Authority is a closed, enumerated
+  grant bound to a `project_id`, a `config_digest` and the run it was issued
+  for, with permanent capability meanings and no self-issue, rather than a role
+  name whose table can be rewritten under past records. The seam to a control
+  plane is a contract document and its digest instead of an API: cadenza
+  classifies and the control plane enforces, run ids and clocks are inputs, and
+  `adapters/interlock/` stays empty. And every intended action classifies as
+  exactly one of allowed, needs-approval or refused, where an unclassified case
+  never falls through to allowed, silence is never consent, what may be asked
+  about is itself declared and disjoint from what is granted, and an approval is
+  a superseding contract rather than a widening of the running one.
+  `docs/design/g2-delegation-contract-proposal.md` records the options weighed
+  and the alternatives rejected (cadenza#9).
 
 ### Changed
 
