@@ -114,7 +114,13 @@ authority, and it is why A2's convenience can be had later without A2's cost.
   issuer identity; a contract without one is refused. Authenticating that
   identity belongs to the control plane at the adapter edge (§2, F8) — cadenza
   fixes the shape and refuses the absence, and asserts nothing about who the
-  issuer really was.
+  issuer really was. What the entry does fix is that **authentication is not
+  authorisation**: the control plane must establish that the issuer is permitted
+  to grant *this* authority over *this* project before a contract is honoured,
+  and cadenza's own rules are two — a contract whose issuer is its own grantee is
+  refused (no self-issue), and a granter may only pass on what it holds (F3's
+  attenuation, applied to the granter as well as the run). How a control plane
+  decides who may grant what is its business; that it must decide is not.
 - **F6. A contract is a frozen value with a digest.** Once issued it is immutable
   (D-0015), and it carries a `contract_digest` over its semantics, computed the
   way `config_digest` is (G1 §4; D-0011, D-0017 for the technique and its
@@ -262,8 +268,18 @@ defined move.
   into permission.
 - **F15. An approval is a new contract, not a widening of the running one.** The
   granter issues a superseding contract with its own digest, and the run
-  continues under it. A contract is never mutated in flight (F6, D-0015), so
-  "under which contract did it do that" always has exactly one answer.
+  continues under it. A contract is never mutated in flight (F6, D-0015).
+  Immutability alone does not make "under which contract did it do that"
+  answerable, though — a run that has been granted twice holds two contracts that
+  may both authorise the same later action — so three things go with it: **the
+  superseding contract names the `contract_digest` of the one it replaces**, so
+  the chain back to the first grant is walkable; **at most one contract is
+  current for a run at a time**, and the successor's arrival ends its
+  predecessor's currency; and **every classification carries the
+  `contract_digest` it was made under**, so the record of what a run did cites
+  the contract rather than leaving it to be inferred. With revocation deferred
+  (§1), supersession is the only way a contract stops being current, which is
+  precisely why the lineage has to be explicit rather than reconstructed.
 - **F16. Asking is itself bounded.** The contract declares what is *askable*
   alongside what is granted. **The two sets are disjoint, and a contract that
   lists the same capability in both is refused** — an overlap is the one shape
