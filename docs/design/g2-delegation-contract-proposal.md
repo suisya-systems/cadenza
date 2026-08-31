@@ -129,8 +129,14 @@ authority, and it is why A2's convenience can be had later without A2's cost.
 ### What the entry would deliberately not fix
 
 - **The capability vocabulary.** Which capabilities exist, and how finely they
-  are cut, is the first implementation belt's work. F2 is what makes deferring
-  it safe.
+  are cut, is the first implementation belt's work. What is fixed, and what makes
+  deferring the rest safe, is F2 plus **F2a: a capability key's meaning is
+  permanent.** A key is never redefined, broadened or reused for something else —
+  a wider power is a new key — and the contract pins the vocabulary version it
+  was written against, refusing a version this build does not know, exactly as
+  G1 §5.2 does for `schema_version`. Without F2a, a later release could broaden a
+  recognised key and silently widen every contract already issued, at an
+  unchanged digest: the A2 drift this proposal rejects, arriving by another door.
 - **Whether role presets exist**, and their names, if they are ever added as the
   rendering described above.
 - **How issuer identity is authenticated**, and whether contracts are ever signed.
@@ -145,9 +151,15 @@ authority, and it is why A2's convenience can be had later without A2's cost.
   that the mismatch is detectable and named; which of the two reactions is right
   depends on operational experience nobody here has yet, and guessing it now
   would be inventing the thing D-0025 warns about.
-- **Expiry and revocation.** Named here so that its absence is a recorded gap
-  rather than an oversight; a contract as specified has no lifetime and no way
-  to be withdrawn once issued, and the belt that needs either writes it.
+- **Expiry, and revocation without a successor.** Supersession (F15) *is* the
+  supported way a contract stops being current, and a successor is not obliged to
+  preserve what it replaces: narrowing, and narrowing to nothing, are how
+  authority is taken back. What is not fixed is the case with no successor to
+  issue — a granter withdrawing a contract out of band, and a contract lapsing
+  with time. Both need something F15 does not provide (a signal that is not
+  itself a contract, and a clock cadenza does not have, F9), and the belt that
+  needs either writes it. Named here so the gap is recorded rather than
+  discovered.
 
 ## 2. The seam to a control plane
 
@@ -279,7 +291,10 @@ defined move.
   `contract_digest` it was made under**, so the record of what a run did cites
   the contract rather than leaving it to be inferred. With revocation deferred
   (§1), supersession is the only way a contract stops being current, which is
-  precisely why the lineage has to be explicit rather than reconstructed.
+  precisely why the lineage has to be explicit rather than reconstructed — and
+  why a successor is *not* required to widen: an approval is the case that
+  motivates F15, but a granter narrowing a run's authority, to nothing if it
+  chooses, issues a successor the same way.
 - **F16. Asking is itself bounded.** The contract declares what is *askable*
   alongside what is granted. **The two sets are disjoint, and a contract that
   lists the same capability in both is refused** — an overlap is the one shape
