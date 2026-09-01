@@ -54,6 +54,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0021 | The git-parity oracle runs the real `git` binary; `match=` becomes a `RegExp` only where a plain substring would look for a character the message never contains | accepted |
 | D-0022 | The import boundary is a test that parses the tree, not a lint rule: measured against Biome, chosen for the ledger | accepted |
 | D-0023 | interlock is a frozen source, not a decision-maker: cadenza's open questions are settled at cadenza's own human gate | accepted |
+| D-0024 | The syntax tree comes from the compiler, through one module, and the parse is asserted against its own input | accepted |
 | D-0025 | G2's unfreeze condition is D-0023's candidate 2: it opens on a design decision taken here, not on the port or on lifting the freeze | accepted |
 | D-0026 | What the delegation contract must express: an enumerated grant, a seam that is a document rather than an API, and a total three-valued bound on unattended action | accepted |
 
