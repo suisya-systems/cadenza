@@ -58,6 +58,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0025 | G2's unfreeze condition is D-0023's candidate 2: it opens on a design decision taken here, not on the port or on lifting the freeze | accepted |
 | D-0026 | What the delegation contract must express: an enumerated grant, a seam that is a document rather than an API, and a total three-valued bound on unattended action | accepted |
 | D-0027 | The capability vocabulary: a two-segment key matched by equality, a cumulative version pinned per contract, and seven keys to start | accepted |
+| D-0028 | What the classifier's totality ranges over: the action and the context, and malformed input is an answer rather than an exception | accepted |
 
 ---
 
@@ -1768,3 +1769,68 @@ this design cannot keep.
   the refusals it raises are named in that document's §5.
 - No key here names a control plane, a provider or interlock, and none may: the vocabulary is
   provider-agnostic in the same sense G1 is (G1 §1).
+
+---
+
+## D-0028 — what the classifier's totality ranges over: the action and the context, and malformed input is an answer rather than an exception
+
+**Status:** accepted (2026-09-04, cadenza#32, the belt implementing D-0026)
+
+**Context.** D-0026 §3 fixes that every intended action classifies as exactly one of `allowed`,
+`needs_approval`, `refused`, that the classification is total, and that no rule turns "not
+classified" into "allowed". Issue #32 asks for a property-style test showing no input reaches a
+fourth state. Writing that test forces a question the entry does not answer, because in Python it
+would barely arise: **over which arguments is the claim made?** `classify` takes three, and they do
+not have the same provenance -- two are composed freely by the caller, one is a value this package
+built. This entry fixes the boundary, and it is recorded because it is observable at the API rather
+than an implementation detail (AGENTS.md §3).
+
+**Decision.**
+
+- **Totality ranges over the action and the context, unconditionally.** Any `IntendedAction` and any
+  `ClassificationContext` -- including values a JavaScript caller or a cast produces, which the types
+  say cannot exist -- yield one of the three outcomes. `classify` throws for none of them.
+- **Malformed input is an answer, not an exception.** A `capabilities` that is not a list names no
+  capability and classifies `refused` with reason `no_capability`, exactly as the empty list does; a
+  key that is not a string is in no vocabulary and classifies `refused` with reason
+  `unknown_capability`; a `runId` or `configDigest` that is not a string simply fails to equal what
+  the contract carries. Every one of these is a refusal, so the malformed case fails closed.
+- **The contract is not in the range.** A value that never came from `delegationContract` has been
+  through no validation, and `classify` refuses it with `ForgedContractError` rather than
+  classifying it. That is not a fourth state: it is the boundary of what a contract is
+  (`docs/design/g2-delegation-contract.md` §4), and the check is `contractDigest`'s, since every
+  answer carries the digest and so the gate is passed before the first rule runs.
+
+**Why an answer rather than an exception.** A thrown error *is* a fourth state, spelled differently:
+whether it ends as "allowed" then depends on who catches it and what they do next, which is exactly
+the rule D-0026 §3 states as "no rule anywhere turns not-classified into allowed". A total function
+puts that decision in the classifier, where it can be read, instead of in a caller's `catch`. It
+also costs nothing, because every malformed shape has an obvious refusing answer: nothing is
+granted by being unrecognisable.
+
+**Why the contract is outside it.** The alternative is to classify against whatever object is
+handed over, which means answering a question about a document that does not exist -- with an
+overlap between granted and askable, or a vocabulary version nobody knows, both of which the issue
+gate refuses precisely so no later reader has to cope with them. Refusing the value is narrower and
+honest: cadenza will not answer for a contract it did not issue.
+
+**What would falsify it.**
+
+- A caller for whom a refusal is indistinguishable from a working answer -- one that needs to tell
+  "this action is not permitted" from "you called me wrongly" and cannot, because both arrive as
+  `refused`. That would mean the malformed case needs its own channel after all, and the honest
+  shape is a thrown error at the edge with the three values kept for real questions.
+- A control plane that legitimately holds a contract it did not obtain from `delegationContract` --
+  one read back from storage, say, once serialisation at the edge exists (D-0026 §2, deliberately
+  not fixed). That would not falsify the boundary but would move it: the loader becomes the thing
+  that produces contracts, and this entry's third point would then be about it rather than about the
+  factory.
+
+**Consequences.**
+
+- `docs/design/g2-delegation-contract.md` §7 states both halves and is what the code is checked
+  against; this entry is why it says so.
+- `test/domain/classification.test.ts` carries the property sweep D-0026 §3's totality needs, and it
+  is written to fail if the corpus stops reaching every outcome and every reason -- a sweep that
+  degenerated into one refusal repeated would satisfy the letter of the claim and test nothing.
+- No behaviour of the contract or the vocabulary changes, and nothing here reopens D-0026 or D-0027.

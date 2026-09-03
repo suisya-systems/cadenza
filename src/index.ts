@@ -2,9 +2,10 @@
  * The port's public surface, as far as it has been ported.
  *
  * G2 has begun beside it: the capability vocabulary D-0027 fixes, the delegation
- * contract as a frozen value with its issue-time refusals, and `contract_digest`
- * over the same canonical-JSON path `config_digest` takes. The classifier and
- * supersession are the belt's later steps and are not here yet.
+ * contract as a frozen value with its issue-time refusals, `contract_digest`
+ * over the same canonical-JSON path `config_digest` takes, and the total
+ * three-valued classifier. Supersession is the belt's last step and is not here
+ * yet.
  *
  * G1's answer to "given a name an operator typed, which project is that?" needs
  * composition and resolution, and both are here now: the digest pilot brought
@@ -36,6 +37,14 @@ export {
   VOCABULARY_VERSION_1,
   vocabularyFor,
 } from "./domain/capability.js";
+export {
+  type Classification,
+  type ClassificationContext,
+  type ClassificationReason,
+  classify,
+  type IntendedAction,
+  type Outcome,
+} from "./domain/classification.js";
 export {
   ALLOWED_URL_SCHEMES,
   type CloneSource,

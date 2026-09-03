@@ -106,6 +106,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that depended on which runtime computed it would be worse than one that could
   not be computed. `configDigest` and `contractDigest` now share one `sha256:`
   framing (`digestOf`) rather than spelling it twice.
+- G2's classifier (cadenza#32), the belt's third step: `classify(contract,
+  action, context)` in `src/domain/classification.ts` answers `allowed` /
+  `needs_approval` / `refused` and carries the `contract_digest` it was made
+  under on every answer, refusals included. Staleness is checked before the
+  grant is read at all, an action names the set of capability keys whose acts it
+  performs, and the strictest key wins - so a contract granting `command.run`
+  and withholding `branch.push` refuses a command that pushes a branch.
+- D-0028, recording what the classifier's totality ranges over: the action and
+  the context unconditionally, with malformed input answered rather than thrown
+  about, and the contract outside the range because a value that never came
+  from `delegationContract` is refused rather than classified.
+- The classifier's totality is measured rather than described: a deterministic
+  property sweep asserts that no action or context reaches a fourth state or an
+  exception, and requires the corpus to reach every outcome and every reason so
+  it cannot pass by degenerating into one refusal repeated. It found a real hole
+  on its first run - sorting the keys for a deterministic reason handed a
+  non-string to a code-point collation, which threw.
 
 ### Changed
 
