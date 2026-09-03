@@ -15,12 +15,15 @@ import { describe, expect, test } from "vitest";
 
 import { VOCABULARY_VERSION_1 } from "../../src/domain/capability.js";
 import {
+  type DelegationContract,
   type DelegationContractInput,
   delegationContract,
+  isDelegationContract,
   MAX_IDENTITY_LENGTH,
 } from "../../src/domain/contract.js";
 import { contractDigest } from "../../src/domain/contract-digest.js";
 import {
+  ForgedContractError,
   InvalidDigestError,
   InvalidIdentifierError,
   InvalidIdentityError,
@@ -273,6 +276,64 @@ describe("delegationContract", () => {
       delegationContract(valid({ supersedes: "sha256:not-a-digest" })),
     );
     expect(caught.message).toContain("supersedes");
+  });
+
+  // --- the brand: valid by construction, and not forgeable -----------------
+
+  test("marks what it built, and recognises nothing else", () => {
+    expect(isDelegationContract(delegationContract(valid()))).toBe(true);
+    expect(isDelegationContract(undefined)).toBe(false);
+    expect(isDelegationContract(null)).toBe(false);
+    expect(isDelegationContract("contract")).toBe(false);
+    expect(isDelegationContract({})).toBe(false);
+  });
+
+  test("does not recognise an object that merely has the right fields", () => {
+    // The hole this closes: `DelegationContract` is structural, so without the
+    // brand this literal IS one as far as the type checker is concerned -- and
+    // it is a contract that went through no validation at all, with granted and
+    // askable overlapping and a vocabulary version nobody knows. "Valid by
+    // construction" has to be a claim the types actually make.
+    const forged = {
+      vocabularyVersion: 99,
+      projectId: "cadenza",
+      configDigest: CONFIG_DIGEST,
+      issuer: "run:0f2a",
+      grantee: "run:0f2a",
+      granted: ["network.fetch"],
+      askable: ["network.fetch"],
+      supersedes: null,
+    } as unknown as DelegationContract;
+
+    expect(isDelegationContract(forged)).toBe(false);
+    refusal(ForgedContractError, () => contractDigest(forged));
+  });
+
+  // --- D-0007: everything printed is ASCII ---------------------------------
+
+  test("keeps a refusal's text ASCII even when the value refused is not", () => {
+    // A grantee may legitimately hold any printable Unicode (design document
+    // section 4.1), so a refusal quoting one would print non-ASCII -- and the
+    // console this is developed against is cp932, where that kills the process
+    // at the print rather than at the bug (D-0007).
+    const messages = [
+      refusal(SelfIssuedContractError, () =>
+        delegationContract(
+          valid({ issuer: "run:\u30c6\u30b9\u30c8", grantee: "run:\u30c6\u30b9\u30c8" }),
+        ),
+      ).message,
+      refusal(UnknownCapabilityError, () =>
+        delegationContract(valid({ granted: ["\u30c6.\u30b9\u30c8"] })),
+      ).message,
+      refusal(InvalidIdentityError, () => delegationContract(valid({ grantee: " run:\u30c6" })))
+        .message,
+      refusal(InvalidDigestError, () =>
+        delegationContract(valid({ configDigest: "sha256:\u30c6" })),
+      ).message,
+    ];
+    for (const message of messages) {
+      expect(message).toMatch(/^[\x20-\x7e]*$/);
+    }
   });
 
   // --- the negative property the classifier depends on ---------------------

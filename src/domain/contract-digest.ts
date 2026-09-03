@@ -14,7 +14,7 @@
  * persisted and compared across parties, so it is not free to be idiomatic.
  */
 import type { CanonicalValue } from "./canonical-json.js";
-import type { DelegationContract } from "./contract.js";
+import { type DelegationContract, requireContract } from "./contract.js";
 import { digestOf } from "./digest.js";
 
 /**
@@ -37,8 +37,14 @@ import { digestOf } from "./digest.js";
  * one that replaces something cannot collide into one digest.
  */
 export function contractPayload(
-  contract: DelegationContract,
+  value: DelegationContract,
 ): Readonly<Record<string, CanonicalValue>> {
+  // Checked rather than trusted: the brand is what makes "valid by
+  // construction" true of a value that arrived through a cast or from
+  // JavaScript, and a digest over an unvalidated object would be a digest two
+  // parties could agree on while one of them held something that was never a
+  // contract.
+  const contract = requireContract(value);
   return {
     vocabulary_version: contract.vocabularyVersion,
     project_id: contract.projectId,

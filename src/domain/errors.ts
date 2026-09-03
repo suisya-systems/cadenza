@@ -106,3 +106,6 @@ export class SelfIssuedContractError extends CadenzaError {}
 
 /** A `sha256:<hex>` digest field is not one. */
 export class InvalidDigestError extends CadenzaError {}
+
+/** A value reached a contract-reading function without coming from `delegationContract`. */
+export class ForgedContractError extends CadenzaError {}

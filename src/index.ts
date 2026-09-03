@@ -54,13 +54,16 @@ export {
   type DelegationContract,
   type DelegationContractInput,
   delegationContract,
+  isDelegationContract,
   MAX_IDENTITY_LENGTH,
+  requireContract,
 } from "./domain/contract.js";
 export { contractDigest, contractPayload } from "./domain/contract-digest.js";
 export { canonicalPayload, configDigest, DIGEST_PATTERN, digestOf } from "./domain/digest.js";
 export {
   CadenzaError,
   CatalogError,
+  ForgedContractError,
   InvalidBaseBranchError,
   InvalidCloneSourceError,
   InvalidDigestError,

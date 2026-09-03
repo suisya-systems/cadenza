@@ -22,6 +22,7 @@ import { nativePath, posix, windows } from "../../src/domain/python-path.js";
 import {
   isControlCharacter,
   isPythonSpace,
+  pythonAscii,
   pythonRepr,
   pythonTypeName,
 } from "../../src/domain/python-text.js";
@@ -92,6 +93,24 @@ describe("repr and type names", () => {
     // because JavaScript has a single numeric type. Asserted rather than left
     // as a comment, so the limitation is visible where it bites.
     expect(pythonTypeName(1.0)).toBe("int");
+  });
+
+  test("ascii() is repr() with the non-ASCII escaped, which is what G2 prints", () => {
+    // G2's refusals quote values the caller chose, and a run identity may hold
+    // any printable Unicode (`docs/design/g2-delegation-contract.md` section
+    // 4.1) while D-0007 requires everything printed to be ASCII. `repr` keeps
+    // the character; `ascii` is CPython's own answer to the same problem.
+    expect(pythonAscii("web")).toBe("'web'");
+    expect(pythonRepr("\u00e9")).toBe("'\u00e9'");
+    expect(pythonAscii("\u00e9")).toBe("'\\xe9'");
+    expect(pythonAscii("\u30c6")).toBe("'\\u30c6'");
+    expect(pythonAscii("\u{1f600}")).toBe("'\\U0001f600'");
+    // A lone surrogate has no UTF-8 encoding at all, so a refusal quoting one
+    // must not carry it through to a stream that will try.
+    expect(pythonAscii("\ud800")).toBe("'\\ud800'");
+    // The escapes repr already makes are untouched, not double-escaped.
+    expect(pythonAscii("a\nb")).toBe("'a\\nb'");
+    expect(pythonAscii("\u0000")).toBe("'\\x00'");
   });
 });
 

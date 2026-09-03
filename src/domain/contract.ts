@@ -25,6 +25,7 @@ import {
 } from "./capability.js";
 import { DIGEST_PATTERN } from "./digest.js";
 import {
+  ForgedContractError,
   InvalidDigestError,
   InvalidIdentityError,
   OverlappingCapabilityError,
@@ -33,13 +34,27 @@ import {
   UnknownVocabularyVersionError,
 } from "./errors.js";
 import { parseIdentifier } from "./identifiers.js";
-import { isControlCharacter, isPythonSpace, pythonRepr, pythonTypeName } from "./python-text.js";
+import { isControlCharacter, isPythonSpace, pythonAscii, pythonTypeName } from "./python-text.js";
 
 /** D-0026 section 1: opaque to cadenza, but not unbounded. Design document section 4.1. */
 export const MAX_IDENTITY_LENGTH = 256;
 
+/**
+ * The mark {@link delegationContract} leaves and nothing else can.
+ *
+ * Without it `DelegationContract` is a structural type, so an object literal
+ * with the right fields is one as far as the type checker is concerned -- and
+ * "valid by construction" would be a claim the types actively fail to make.
+ * The symbol is module-private, so no caller can name the property, and it
+ * exists at runtime as well as in the type, so a JavaScript caller or a cast is
+ * caught too (see {@link isDelegationContract}).
+ */
+const CONTRACT_BRAND: unique symbol = Symbol("cadenza.delegation-contract");
+
 /** A delegation contract, frozen and valid by construction. */
 export interface DelegationContract {
+  /** Set only by {@link delegationContract}; unreachable from outside this module. */
+  readonly [CONTRACT_BRAND]: true;
   readonly vocabularyVersion: number;
   readonly projectId: string;
   readonly configDigest: string;
@@ -86,7 +101,7 @@ export function delegationContract(input: DelegationContractInput): DelegationCo
   const grantee = requireIdentity(input.grantee, "grantee");
   if (issuer === grantee) {
     throw new SelfIssuedContractError(
-      `issuer ${pythonRepr(issuer)} is its own grantee: a contract cannot be self-issued`,
+      `issuer ${pythonAscii(issuer)} is its own grantee: a contract cannot be self-issued`,
     );
   }
 
@@ -98,6 +113,7 @@ export function delegationContract(input: DelegationContractInput): DelegationCo
       : requireDigest(input.supersedes, "supersedes");
 
   return Object.freeze({
+    [CONTRACT_BRAND]: true as const,
     vocabularyVersion: version,
     projectId,
     configDigest,
@@ -107,6 +123,34 @@ export function delegationContract(input: DelegationContractInput): DelegationCo
     askable,
     supersedes,
   });
+}
+
+/**
+ * True only for a value {@link delegationContract} produced.
+ *
+ * The type-level half of the brand stops an object literal at compile time; this
+ * is the half that survives a cast and a JavaScript caller. Anything that reads
+ * a contract's semantics -- `contractDigest` today, the classifier next --
+ * checks it, because a forged contract is exactly the invalid contract the
+ * design document says cannot exist (section 4).
+ */
+export function isDelegationContract(value: unknown): value is DelegationContract {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as Record<symbol, unknown>)[CONTRACT_BRAND] === true
+  );
+}
+
+/** Refuse anything that did not come from {@link delegationContract}. */
+export function requireContract(value: unknown): DelegationContract {
+  if (!isDelegationContract(value)) {
+    throw new ForgedContractError(
+      "value was not produced by delegationContract(): a contract carries a mark " +
+        "no caller can set, and one without it has been through no validation",
+    );
+  }
+  return value;
 }
 
 /** Rule 1. A version this build does not know refuses the whole contract. */
@@ -172,7 +216,7 @@ function refuseOverlap(granted: readonly string[], askable: readonly string[]): 
   for (const key of granted) {
     if (asked.has(key)) {
       throw new OverlappingCapabilityError(
-        `capability ${pythonRepr(key)} is both granted and askable: the two sets are disjoint`,
+        `capability ${pythonAscii(key)} is both granted and askable: the two sets are disjoint`,
       );
     }
   }
@@ -203,14 +247,14 @@ function requireIdentity(value: unknown, field: string): string {
   }
   for (const character of value) {
     if (isControlCharacter(character)) {
-      throw new InvalidIdentityError(`${field} ${pythonRepr(value)} contains a control character`);
+      throw new InvalidIdentityError(`${field} ${pythonAscii(value)} contains a control character`);
     }
   }
   const first = Array.from(value)[0] as string;
   const last = Array.from(value)[length - 1] as string;
   if (isPythonSpace(first) || isPythonSpace(last)) {
     throw new InvalidIdentityError(
-      `${field} ${pythonRepr(value)} has leading or trailing whitespace`,
+      `${field} ${pythonAscii(value)} has leading or trailing whitespace`,
     );
   }
   if (hasLoneSurrogate(value)) {
@@ -229,7 +273,7 @@ function requireDigest(value: unknown, field: string): string {
   }
   if (!DIGEST_PATTERN.test(value)) {
     throw new InvalidDigestError(
-      `${field} ${pythonRepr(value)} is not a digest: expected sha256: followed by ` +
+      `${field} ${pythonAscii(value)} is not a digest: expected sha256: followed by ` +
         "64 lowercase hex digits",
     );
   }
@@ -256,7 +300,7 @@ function hasLoneSurrogate(value: string): boolean {
 
 /** A value in a refusal message: quoted if it is a string, named if it is not. */
 function describe(value: unknown): string {
-  return typeof value === "string" ? pythonRepr(value) : `${String(value)}`;
+  return typeof value === "string" ? pythonAscii(value) : `${String(value)}`;
 }
 
 function known(versions: ReadonlySet<number>): string {
