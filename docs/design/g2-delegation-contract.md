@@ -1,12 +1,12 @@
 # G2 — Delegation contract
 
-Status: proposed (belt scope)
+Status: accepted (belt scope, 2026-09-04)
 Applies to: `src/domain/` (TypeScript only — there is no Python G2, #25)
 
-This document is closed over the capability vocabulary D-0027 fixes, and D-0027
-is itself `proposed` until cadenza's human gate takes it. Both statuses move
-together: this document becomes `accepted` when D-0027 does, and no `src/` change
-that depends on either lands before then (Issue #32).
+This document is closed over the capability vocabulary D-0027 fixes, and it was
+accepted with it: D-0027 was taken at cadenza's human gate on 2026-09-04
+(cadenza#32), which is what Issue #32 required before the first `src/` change
+that depends on either.
 
 This document is the contract for G2, taking for G2 the role
 `docs/design/g1-project-registry.md` takes for G1 (D-0001, and D-0026's

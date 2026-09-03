@@ -57,7 +57,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0024 | The syntax tree comes from the compiler, through one module, and the parse is asserted against its own input | accepted |
 | D-0025 | G2's unfreeze condition is D-0023's candidate 2: it opens on a design decision taken here, not on the port or on lifting the freeze | accepted |
 | D-0026 | What the delegation contract must express: an enumerated grant, a seam that is a document rather than an API, and a total three-valued bound on unattended action | accepted |
-| D-0027 | The capability vocabulary: a two-segment key matched by equality, a cumulative version pinned per contract, and seven keys to start | proposed |
+| D-0027 | The capability vocabulary: a two-segment key matched by equality, a cumulative version pinned per contract, and seven keys to start | accepted |
 
 ---
 
@@ -1609,10 +1609,11 @@ decided and then changed.
 
 ## D-0027 — the capability vocabulary: a two-segment key matched by equality, a cumulative version pinned per contract, and seven keys to start
 
-**Status:** proposed (2026-09-04, cadenza#32). This entry is the human-gate item D-0026 §1 called
-for when it left "the capability vocabulary itself" unfixed; it becomes `accepted` when the gate
-takes it, and no `src/` change that depends on it lands before then (Issue #32, "What the belt has
-to settle, and where").
+**Status:** accepted (2026-09-04, taken at cadenza's human gate in cadenza#32). This is the entry
+D-0026 §1 called for when it left "the capability vocabulary itself" unfixed, and Issue #32 required
+before the first `src/` change that depends on it. It was taken as proposed, unchanged, after three
+rounds of adversarial review had settled what `command.run` means and what this vocabulary cannot
+express.
 
 **Context.** D-0026 §1 fixes that authority is a closed, enumerated grant over a capability
 vocabulary, that an unrecognised key refuses the whole contract naming the key, that a key's meaning
