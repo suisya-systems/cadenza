@@ -97,15 +97,22 @@ which validates every rule in §5 before it returns. **There is no route to an
 invalid contract**, which is how "classifying against an invalid contract is
 `refused`" (D-0026 §3) is realised: the classifier cannot be handed one.
 
-"Constructed only through" is a claim the type has to make rather than the prose.
-A structural interface is satisfied by any object literal with the right fields,
-so the contract carries a **brand**: a property keyed by a module-private symbol,
-set by the factory and nameable by nothing outside that module. It closes both
-routes — a literal is not assignable at compile time, and because the symbol
-exists at runtime a cast or a JavaScript caller is caught too. Every function
-that reads a contract's semantics checks the brand and refuses what does not
-carry it (`ForgedContractError`), since a value that went through no validation
-is exactly the invalid contract this section says cannot exist.
+"Constructed only through" is a claim the type has to make rather than the prose,
+and it takes two halves. A structural interface is satisfied by any object
+literal with the right fields, so the type carries a **brand** keyed by a
+module-private symbol that is declared and never created: nothing outside the
+module can name it, so a literal does not type-check, and nothing carries it at
+runtime. Runtime provenance is **identity** — the factory records what it built
+in a module-private `WeakSet`, and every function that reads a contract's
+semantics asks that set and refuses what is not in it (`ForgedContractError`).
+
+Identity rather than a mark on the value, because a mark can be copied: a spread
+carries a symbol-keyed property across, so `{ ...contract, grantee: other }`
+would satisfy a property check while holding a grantee that was never validated
+— and the grantee binding is what stops a contract being a bearer token
+(D-0026 §1). Provenance a copy can inherit is not provenance. A value that went
+through no validation is exactly the invalid contract this section says cannot
+exist, which is why the check is at every reader rather than at the edge.
 
 | field | type | meaning |
 | --- | --- | --- |

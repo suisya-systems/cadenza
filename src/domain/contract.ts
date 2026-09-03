@@ -27,6 +27,7 @@ import { DIGEST_PATTERN } from "./digest.js";
 import {
   ForgedContractError,
   InvalidDigestError,
+  InvalidIdentifierError,
   InvalidIdentityError,
   OverlappingCapabilityError,
   SelfIssuedContractError,
@@ -34,22 +35,44 @@ import {
   UnknownVocabularyVersionError,
 } from "./errors.js";
 import { parseIdentifier } from "./identifiers.js";
-import { isControlCharacter, isPythonSpace, pythonAscii, pythonTypeName } from "./python-text.js";
+import {
+  escapeNonAscii,
+  isControlCharacter,
+  isPythonSpace,
+  pythonAscii,
+  pythonTypeName,
+} from "./python-text.js";
 
 /** D-0026 section 1: opaque to cadenza, but not unbounded. Design document section 4.1. */
 export const MAX_IDENTITY_LENGTH = 256;
 
 /**
- * The mark {@link delegationContract} leaves and nothing else can.
+ * The type-level half of the mark {@link delegationContract} leaves.
  *
  * Without it `DelegationContract` is a structural type, so an object literal
  * with the right fields is one as far as the type checker is concerned -- and
  * "valid by construction" would be a claim the types actively fail to make.
- * The symbol is module-private, so no caller can name the property, and it
- * exists at runtime as well as in the type, so a JavaScript caller or a cast is
- * caught too (see {@link isDelegationContract}).
+ * The symbol is module-private, so no caller can name the property.
+ *
+ * It is **declared and never created**, so nothing carries it at runtime. An
+ * earlier version made it a real symbol property, which review found copyable:
+ * `{ ...contract, grantee: "forged" }` carries a symbol-keyed property across,
+ * so a spread produced a value that passed the check while holding fields that
+ * had been through no validation. Provenance that a copy can inherit is not
+ * provenance. {@link ISSUED} is the half that survives a spread.
  */
-const CONTRACT_BRAND: unique symbol = Symbol("cadenza.delegation-contract");
+declare const CONTRACT_BRAND: unique symbol;
+
+/**
+ * The contracts this process actually built.
+ *
+ * A `WeakSet` holds its members by identity and cannot be read, enumerated or
+ * copied from a value: spreading a contract, cloning it, or building a literal
+ * that looks exactly like one all produce an object this set does not contain.
+ * It is weak so that holding a contract for the length of a run does not keep it
+ * alive afterwards.
+ */
+const ISSUED = new WeakSet<object>();
 
 /** A delegation contract, frozen and valid by construction. */
 export interface DelegationContract {
@@ -105,15 +128,14 @@ export function delegationContract(input: DelegationContractInput): DelegationCo
     );
   }
 
-  const projectId = parseIdentifier(input.projectId, "project_id");
+  const projectId = requireProjectId(input.projectId);
   const configDigest = requireDigest(input.configDigest, "config_digest");
   const supersedes =
     input.supersedes === undefined || input.supersedes === null
       ? null
       : requireDigest(input.supersedes, "supersedes");
 
-  return Object.freeze({
-    [CONTRACT_BRAND]: true as const,
+  const contract = Object.freeze({
     vocabularyVersion: version,
     projectId,
     configDigest,
@@ -122,7 +144,9 @@ export function delegationContract(input: DelegationContractInput): DelegationCo
     granted,
     askable,
     supersedes,
-  });
+  }) as DelegationContract;
+  ISSUED.add(contract);
+  return contract;
 }
 
 /**
@@ -135,19 +159,15 @@ export function delegationContract(input: DelegationContractInput): DelegationCo
  * design document says cannot exist (section 4).
  */
 export function isDelegationContract(value: unknown): value is DelegationContract {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as Record<symbol, unknown>)[CONTRACT_BRAND] === true
-  );
+  return typeof value === "object" && value !== null && ISSUED.has(value);
 }
 
 /** Refuse anything that did not come from {@link delegationContract}. */
 export function requireContract(value: unknown): DelegationContract {
   if (!isDelegationContract(value)) {
     throw new ForgedContractError(
-      "value was not produced by delegationContract(): a contract carries a mark " +
-        "no caller can set, and one without it has been through no validation",
+      "value was not produced by delegationContract(): a contract is recognised by " +
+        "identity, and a copy of one has been through no validation",
     );
   }
   return value;
@@ -264,6 +284,27 @@ function requireIdentity(value: unknown, field: string): string {
     );
   }
   return value;
+}
+
+/**
+ * Rule 6, in ASCII.
+ *
+ * The rule itself is G1's and is reused unchanged (design document section 9);
+ * what is added is the escaping. `parseIdentifier` formats the refused value
+ * with `repr`, which keeps printable Unicode -- correct there, because the
+ * ported suite pins those messages against CPython's -- and D-0007 requires
+ * everything G2 prints to be ASCII. So the message is escaped rather than the
+ * shared validator changed.
+ */
+function requireProjectId(value: unknown): string {
+  try {
+    return parseIdentifier(value, "project_id");
+  } catch (error) {
+    if (error instanceof InvalidIdentifierError) {
+      throw new InvalidIdentifierError(escapeNonAscii(error.detail), error.location);
+    }
+    throw error;
+  }
 }
 
 /** Rules 7 and 8. */

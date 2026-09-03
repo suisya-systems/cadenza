@@ -309,6 +309,23 @@ describe("delegationContract", () => {
     refusal(ForgedContractError, () => contractDigest(forged));
   });
 
+  test("does not recognise a copy of a real contract", () => {
+    // The hole a symbol-keyed brand left: a spread carries a symbol property
+    // across, so `{ ...contract, grantee: "run:forged" }` would have passed a
+    // property check while holding a grantee that was never validated -- and
+    // the grantee binding is what stops a contract being a bearer token.
+    // Provenance a copy can inherit is not provenance, so it is identity.
+    const real = delegationContract(valid());
+    const copy = { ...real, grantee: "run:forged" } as unknown as DelegationContract;
+
+    expect(isDelegationContract(copy)).toBe(false);
+    refusal(ForgedContractError, () => contractDigest(copy));
+    // The plain copy too: the point is where the value came from, not whether
+    // the copy happens to differ.
+    expect(isDelegationContract({ ...real } as unknown as DelegationContract)).toBe(false);
+    expect(isDelegationContract(real)).toBe(true);
+  });
+
   // --- D-0007: everything printed is ASCII ---------------------------------
 
   test("keeps a refusal's text ASCII even when the value refused is not", () => {
@@ -329,6 +346,11 @@ describe("delegationContract", () => {
         .message,
       refusal(InvalidDigestError, () =>
         delegationContract(valid({ configDigest: "sha256:\u30c6" })),
+      ).message,
+      // G1's own validator formats with repr, which keeps printable Unicode.
+      // Reusing the rule is right; inheriting the non-ASCII message is not.
+      refusal(InvalidIdentifierError, () =>
+        delegationContract(valid({ projectId: "\u30c6\u30b9\u30c8" })),
       ).message,
     ];
     for (const message of messages) {

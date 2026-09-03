@@ -132,8 +132,22 @@ export function pythonRepr(value: string): string {
  * escaped regardless of its category, which is what CPython does too.
  */
 export function pythonAscii(value: string): string {
+  return escapeNonAscii(pythonRepr(value));
+}
+
+/**
+ * Escape every non-ASCII character of `text`, leaving the rest as it is.
+ *
+ * Split out from {@link pythonAscii} because it is also needed on text that is
+ * already a formatted refusal: G2 reuses G1's `parseIdentifier`, whose message
+ * is built with {@link pythonRepr} and cannot change without changing what the
+ * ported suite pins, so the G2 caller escapes the result instead. Escaping a
+ * message that is already ASCII leaves it byte for byte identical, which is why
+ * doing so costs nothing where it is not needed.
+ */
+export function escapeNonAscii(text: string): string {
   let out = "";
-  for (const character of pythonRepr(value)) {
+  for (const character of text) {
     const code = character.codePointAt(0) as number;
     if (code <= 0x7e) {
       out += character;
