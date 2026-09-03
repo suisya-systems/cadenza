@@ -502,7 +502,12 @@ review.
 object does nothing to a `Set`'s internal slots. These are **validation state on the public surface**:
 `ALLOWED_URL_SCHEMES.add("ftp")` makes every later catalog accept an unauthenticated transport, and a
 clone is code execution. `src/domain/frozen.ts` rebuilds `frozenset` — mutators that throw
-`TypeError`, defined non-enumerable so the value still compares equal to a plain `Set`. The two
+`TypeError`, defined non-enumerable so the value still compares equal to a plain `Set`. That closes
+direct mutation and the cast-based paths, not every path: `Set.prototype.add.call()` still bypasses
+the own-property overrides, and closing it needs a `Proxy`, which would break the `Set`-to-`Set`
+comparison the ported `test_supported_schema_versions_is_exactly_one` relies on — so the hole,
+reachable only through a deliberate detour, is accepted (the human gate in the belt's fifth round;
+recorded here because it was not in #14's body, per #15). The two
 `PathFlavour` objects are frozen for the same reason one level along: `parseCloneSource` reads
 `normpath` and `isRelativeTo` off them for root containment and for the path it persists.
 
