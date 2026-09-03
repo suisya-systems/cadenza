@@ -18,6 +18,7 @@ import { describe, expect, test } from "vitest";
 import {
   canonicalJson,
   compareByCodePoint,
+  NonIntegerNumberError,
   SurrogateInStringError,
 } from "../../src/domain/canonical-json.js";
 
@@ -80,5 +81,43 @@ describe("canonicalJson", () => {
     // The refusal must be about *lone* surrogates: an astral character is a
     // pair, and rejecting it would refuse half the reachable corpus.
     expect(canonicalJson("\u{1f600}")).toBe('"\u{1f600}"');
+  });
+
+  // `null` and integers arrived with `contract_digest`
+  // (`docs/design/g2-delegation-contract.md` section 6), which carries
+  // `supersedes` as a digest or as `null` and `vocabulary_version` as an
+  // integer. No G1 payload holds either, so no oracle vector covers them and
+  // these cases are the only place the spelling is pinned.
+  test("writes null as null, the way json.dumps writes None", () => {
+    expect(canonicalJson(null)).toBe("null");
+    expect(canonicalJson({ supersedes: null })).toBe('{"supersedes":null}');
+    // The distinction the digest depends on: an omitted key and a null key are
+    // different bytes, so a contract that opens a lineage cannot collide with
+    // one that replaces something.
+    expect(canonicalJson({})).not.toBe(canonicalJson({ supersedes: null }));
+  });
+
+  test("writes an integer as its decimal digits", () => {
+    expect(canonicalJson(1)).toBe("1");
+    expect(canonicalJson(0)).toBe("0");
+    expect(canonicalJson(-7)).toBe("-7");
+    expect(canonicalJson({ vocabulary_version: 1 })).toBe('{"vocabulary_version":1}');
+  });
+
+  test("refuses a number that is not a safe integer", () => {
+    // CPython spells `1.0` as `1.0` and JavaScript spells it as `1`, so a float
+    // in a digest would depend on which runtime computed it. `allow_nan=False`
+    // refuses the rest on the Python side, and so does this.
+    expect(() => canonicalJson(1.5)).toThrow(NonIntegerNumberError);
+    expect(() => canonicalJson(Number.NaN)).toThrow(NonIntegerNumberError);
+    expect(() => canonicalJson(Number.POSITIVE_INFINITY)).toThrow(NonIntegerNumberError);
+    expect(() => canonicalJson(Number.MAX_SAFE_INTEGER + 2)).toThrow(NonIntegerNumberError);
+  });
+
+  test("writes negative zero as 0, which is the integer Python would have had", () => {
+    // `Number.isSafeInteger(-0)` is true and `String(-0)` is "0". That is the
+    // right answer rather than a divergence: the payload field this exists for
+    // is an integer, and CPython has no negative zero integer to disagree with.
+    expect(canonicalJson(-0)).toBe("0");
   });
 });

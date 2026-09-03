@@ -92,6 +92,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   two-segment key matched by exact equality, a cumulative vocabulary version
   pinned per contract and refused when unknown, and an initial set of seven
   keys cut where this organisation's own worker delegations are cut.
+- G2's contract as a value (cadenza#32), the belt's second step and its first
+  `src/` code: `src/domain/capability.ts` carries the D-0027 vocabulary as
+  frozen sets, `src/domain/contract.ts` builds a frozen `DelegationContract`
+  through the eight issue-time refusals of the design document's section 5, and
+  `src/domain/contract-digest.ts` computes `contract_digest` over the canonical
+  JSON of its semantics. Each refusal is shown non-vacuous by removal: planting
+  its hole turns red the case that reproduces that hole, one rule at a time.
+- The canonical encoder learned `null` and integers, which `contract_digest`
+  needs for `supersedes` and `vocabulary_version` and no G1 payload has. A
+  number that is not a safe integer is refused rather than encoded, because
+  CPython spells `1.0` as `1.0` where JavaScript spells it as `1`, and a digest
+  that depended on which runtime computed it would be worse than one that could
+  not be computed. `configDigest` and `contractDigest` now share one `sha256:`
+  framing (`digestOf`) rather than spelling it twice.
 
 ### Changed
 
