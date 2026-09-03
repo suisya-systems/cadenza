@@ -109,3 +109,15 @@ export class InvalidDigestError extends CadenzaError {}
 
 /** A value reached a contract-reading function without coming from `delegationContract`. */
 export class ForgedContractError extends CadenzaError {}
+
+/** A successor does not name the contract it replaces, or names one that is not current. */
+export class SupersessionLineageError extends CadenzaError {}
+
+/** A successor is for another run, or over another project, so it is not a successor. */
+export class SupersessionSubjectError extends CadenzaError {}
+
+/** A run tried to delegate without holding `delegation.issue`. */
+export class UngrantedDelegationError extends CadenzaError {}
+
+/** A sub-contract would carry more than the granter holds. */
+export class AmplifiedGrantError extends CadenzaError {}

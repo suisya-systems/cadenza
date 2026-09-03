@@ -4,8 +4,8 @@
  * G2 has begun beside it: the capability vocabulary D-0027 fixes, the delegation
  * contract as a frozen value with its issue-time refusals, `contract_digest`
  * over the same canonical-JSON path `config_digest` takes, and the total
- * three-valued classifier. Supersession is the belt's last step and is not here
- * yet.
+ * three-valued classifier, and supersession with onward delegation. G2's belt is
+ * complete as far as D-0026 and D-0027 fix it.
  *
  * G1's answer to "given a name an operator typed, which project is that?" needs
  * composition and resolution, and both are here now: the digest pilot brought
@@ -70,6 +70,7 @@ export {
 export { contractDigest, contractPayload } from "./domain/contract-digest.js";
 export { canonicalPayload, configDigest, DIGEST_PATTERN, digestOf } from "./domain/digest.js";
 export {
+  AmplifiedGrantError,
   CadenzaError,
   CatalogError,
   ForgedContractError,
@@ -84,7 +85,10 @@ export {
   ProjectNotFoundError,
   SchemaVersionError,
   SelfIssuedContractError,
+  SupersessionLineageError,
+  SupersessionSubjectError,
   TombstoneError,
+  UngrantedDelegationError,
   UnknownCapabilityError,
   UnknownFieldError,
   UnknownVocabularyVersionError,
@@ -100,6 +104,12 @@ export {
 export { getCloseMatches } from "./domain/python-difflib.js";
 export { nativePath, type PathFlavour, posix, windows } from "./domain/python-path.js";
 export { parseBaseBranch } from "./domain/refs.js";
+export {
+  adopt,
+  DELEGATION_CAPABILITY,
+  type DelegationRequest,
+  delegate,
+} from "./domain/supersession.js";
 export {
   type CatalogSource,
   type LayerDocument,
