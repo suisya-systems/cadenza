@@ -381,8 +381,22 @@ function isShadowedOrDeclared(node: ts.Identifier): boolean {
   // equivalent `export function fetch()` passed. The name a module publishes is
   // never a reference to anything; `.propertyName` is the reference, and stays
   // readable here.
-  if (ts.isExportSpecifier(parent) && parent.name === node) {
-    return true;
+  if (ts.isExportSpecifier(parent)) {
+    if (parent.name === node) {
+      return true;
+    }
+    // The property half is a reference only when the export is local. In
+    // `export { fetch as read } from "./client.js"` it is the OTHER module's
+    // exported name -- the same thing an import specifier's property half is,
+    // arriving through a declaration that happens to be spelled `export` -- so
+    // a re-export is read the way an import is and neither half is a reference
+    // to the global.
+    const declaration = parent.parent?.parent;
+    return (
+      declaration !== undefined &&
+      ts.isExportDeclaration(declaration) &&
+      declaration.moduleSpecifier !== undefined
+    );
   }
   return (
     (ts.isPropertyAssignment(parent) ||
@@ -1127,6 +1141,10 @@ test("an export alias named for a global is not a reference to it", () => {
   expect(loaderRoutesIn(from, 'const loaded = require("interlock");\n')).toEqual([
     `${from}:1: require`,
   ]);
+  // A re-export is an import wearing the other keyword: the property half is
+  // the source module's exported name, not a reference to anything here.
+  expect(globalIoReachesIn(from, 'export { fetch as read } from "./client.js";\n')).toEqual([]);
+  expect(loaderRoutesIn(from, 'export { require as load } from "./client.js";\n')).toEqual([]);
 });
 
 test("a destructured constructor is a loader route", () => {
