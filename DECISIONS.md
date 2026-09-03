@@ -57,6 +57,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0024 | The syntax tree comes from the compiler, through one module, and the parse is asserted against its own input | accepted |
 | D-0025 | G2's unfreeze condition is D-0023's candidate 2: it opens on a design decision taken here, not on the port or on lifting the freeze | accepted |
 | D-0026 | What the delegation contract must express: an enumerated grant, a seam that is a document rather than an API, and a total three-valued bound on unattended action | accepted |
+| D-0027 | The capability vocabulary: a two-segment key matched by equality, a cumulative version pinned per contract, and seven keys to start | proposed |
 
 ---
 
@@ -1603,3 +1604,121 @@ permanent capability meanings with a pinned vocabulary version, the grantee bind
 authorisation, supersession lineage, the disjoint askable set, and stale-as-invalid — are in the
 decision above rather than recorded as amendments, because none of them had a version that was
 decided and then changed.
+
+---
+
+## D-0027 — the capability vocabulary: a two-segment key matched by equality, a cumulative version pinned per contract, and seven keys to start
+
+**Status:** proposed (2026-09-04, cadenza#32). This entry is the human-gate item D-0026 §1 called
+for when it left "the capability vocabulary itself" unfixed; it becomes `accepted` when the gate
+takes it, and no `src/` change that depends on it lands before then (Issue #32, "What the belt has
+to settle, and where").
+
+**Context.** D-0026 §1 fixes that authority is a closed, enumerated grant over a capability
+vocabulary, that an unrecognised key refuses the whole contract naming the key, that a key's meaning
+is permanent, and that a contract pins the vocabulary version it was written against and refuses a
+version this build does not know. It deliberately does not say what a key looks like, how the
+version is pinned, or which keys exist. There is no grant without those three, so this entry fixes
+them and nothing else. The implementation they feed is `docs/design/g2-delegation-contract.md`.
+
+### 1. A key is two lowercase segments, and it is matched by equality
+
+**Decision.** A capability key matches `^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$` and is at most 64
+characters: exactly two segments, `<subject>.<action>`, separated by one dot. Recognition is
+**exact string equality against the pinned version's key set**. No prefix match, no hierarchy, no
+wildcard, and no code anywhere may treat the dot as a separator for matching purposes.
+
+**Why exactly two segments.** One segment (`clone`) loses the subject and collides across
+subjects as the set grows. Three or more invites reading the key as a path, and a path invites
+`repo.*` — a wildcard is an open set, and D-0026 §1's whole point is that the grant is closed. Two
+segments give a human scanning a grant the subject and the verb, and give the reader no tree to
+generalise over.
+
+**Why not the G1 identifier shape** (`^[a-z][a-z0-9_-]{0,63}$`). A capability key is not a name in
+G1's flat namespace, and reusing that shape would say the two were the same kind of thing. The dot
+is what keeps them visibly distinct in a record that carries both. Hyphens are excluded so there is
+one word separator, not two spellings of the same key waiting to be typo'd apart.
+
+### 2. The version is an integer, pinned per contract, and versions are cumulative
+
+**Decision.**
+
+- A contract carries `vocabulary_version`, a positive integer, and it is part of the contract's
+  semantics and so of its `contract_digest`.
+- This build knows a frozen set of versions. A contract pinning a version outside it is refused as
+  a whole, naming the version and the versions this build knows — the treatment G1 §5.2 gives an
+  unknown `schema_version`, which D-0026 §1 names as the precedent.
+- Every key in a contract is recognised **against the version that contract pins**, never against
+  the newest the build knows. A contract pinned at version 1 listing a key introduced in version 2
+  is refused.
+- Versions are **cumulative and append-only**: version `n+1` contains every key of version `n` with
+  the same meaning, plus what it adds. A key is never removed and never narrowed. A key that turns
+  out to be a mistake is superseded by a narrower *new* key and discouraged in documentation; it
+  keeps meaning what it meant.
+
+**Why per-contract and not per-build.** A grant read back a month later has to mean what it meant
+when it was issued. If the key set were the build's, upgrading the build would re-read every stored
+contract against a set it was not written against — the drift D-0026 §1 refuses in the sentence "a
+later release could widen every contract already issued at an unchanged digest", arriving through
+the vocabulary instead of through a redefinition.
+
+**Why cumulative.** It makes "the set this contract's keys are read against" a lookup rather than a
+reconstruction, and it makes moving a contract to a newer version a widening of *vocabulary* only,
+never of authority: the keys already listed keep meaning what they meant, and the contract still
+grants exactly what it enumerates.
+
+### 3. Version 1's key set: seven keys, cut where this repository's own delegations are cut
+
+**Decision.** Version 1 is exactly:
+
+| key | what it covers |
+| --- | --- |
+| `repo.clone` | materialise the contract's pinned clone source (G1 §3.1) |
+| `worktree.write` | create, modify or delete files in the run's own worktree |
+| `command.run` | execute a command in the worktree |
+| `commit.create` | record a commit on the run's branch |
+| `branch.push` | publish commits to a remote |
+| `pull_request.create` | open a pull request |
+| `delegation.issue` | issue a further delegation contract to a sub-run (D-0026 §1, attenuated) |
+
+**Why these seven.** Issue #32 asks for "the smallest set that lets a real delegation be written,
+not a taxonomy", so the set is cut where a real delegation this repository already writes is cut.
+A worker brief in this organisation grants a run its worktree, its commands and its commits, and
+withholds `branch.push` and `pull_request.create`, which go through a human-facing desk instead:
+that is the boundary these keys have to be able to draw, and with these seven it is drawn by
+enumeration rather than by prose. `delegation.issue` is present because D-0026 §1 fixes what onward
+delegation may carry, and a run that cannot be told whether it may delegate at all leaves that rule
+with nothing to bind.
+
+**What is deliberately not in it.** Anything cadenza cannot yet be asked about: network access,
+secret reading, issue and comment writing, merging, deploying. Each is a key someone adds in
+version 2 the day a contract needs it, which costs one entry in a cumulative set and changes no
+contract already issued.
+
+**The known coarseness.** `command.run` is broad — it covers running a test suite and running
+anything else — and by section 2 it can never be narrowed. If a delegation needs "may run the test
+suite, may not run arbitrary commands", that is expressed by adding a narrower key and leaving
+`command.run` out of the grant, not by redefining it. This is the cost of permanent meanings and it
+is accepted knowingly rather than discovered later.
+
+**What would falsify it.**
+
+- **Against section 1.** A delegation whose authority genuinely cannot be written as a flat set of
+  two-segment keys because it needs a parameter — "may push, but only this branch", "may write, but
+  only under this directory". That is scoping, not naming, and it would mean a key is not the unit
+  of authority and the vocabulary needs a value beside the key.
+- **Against section 2.** A key that must be narrowed after issue because leaving it broad is
+  actively unsafe, with no workable path through adding a narrower key. That would mean permanence
+  and growth are not compatible in the form fixed here.
+- **Against section 3.** A real delegation that cannot be written at all with these seven plus
+  additions — in particular one that needs `command.run` split rather than supplemented, which is
+  the coarseness named above turning into a defect.
+
+**Consequences.**
+
+- `docs/design/g2-delegation-contract.md` §3 implements this and adds nothing to it; where the two
+  disagree, this entry is what was decided.
+- The vocabulary lives in `src/domain/capability.ts` as frozen sets (D-0015), one per version, and
+  the refusals it raises are named in that document's §5.
+- No key here names a control plane, a provider or interlock, and none may: the vocabulary is
+  provider-agnostic in the same sense G1 is (G1 §1).

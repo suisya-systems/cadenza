@@ -64,7 +64,11 @@ Explicitly **not** here yet:
   contract rather than a widening of the running one. What D-0026 deliberately
   leaves open - the capability vocabulary, budgets, expiry, signing - it names.
   The argument behind the entry is `docs/design/g2-delegation-contract-proposal.md`.
-  No G2 code is here yet. Interlock recorded the same question - its open issue
+  G2's own design document - the contract the implementation is written against,
+  taking G1's document's role for G2 - is
+  `docs/design/g2-delegation-contract.md` (cadenza#32), and the capability
+  vocabulary it is closed over is D-0027. No G2 code is here yet. Interlock
+  recorded the same question - its open issue
   #63, "Operating-layer delegation contract" - and left it unanswered; that
   reference is where the question came from, not an answer in transit, and
   answering it here is what D-0023 said cadenza would have to do.
@@ -219,6 +223,9 @@ a boundary review harder than it needs to be.
 
 - `docs/design/g1-project-registry.md` - the G1 contract: identity, clone source
   union, merge rules, digest, resolution.
+- `docs/design/g2-delegation-contract.md` - the G2 contract: capability keys,
+  the delegation contract value and its digest, the three-valued classifier, and
+  supersession. Written against D-0026, which it cites rather than restates.
 - `docs/design/g2-delegation-contract-proposal.md` - the argument behind D-0026:
   the options weighed for the delegation contract, and what each would cost.
   D-0026 is the decision; this is why it is that one.
