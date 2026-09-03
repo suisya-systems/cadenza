@@ -1690,10 +1690,12 @@ enumeration rather than by prose. `delegation.issue` is present because D-0026 �
 delegation may carry, and a run that cannot be told whether it may delegate at all leaves that rule
 with nothing to bind.
 
-**What is deliberately not in it.** Anything cadenza cannot yet be asked about: network access,
-secret reading, issue and comment writing, merging, deploying. Each is a key someone adds in
-version 2 the day a contract needs it, which costs one entry in a cumulative set and changes no
-contract already issued.
+**What is deliberately not in it.** Every act no delegation here has yet had to be granted: reading
+a secret, reaching a network endpoint of the run's own choosing, writing an issue or a comment,
+merging, deploying. Reaching the remote a clone or a push is *for* is not on this list — it is part
+of those keys' own acts (below). Each missing act is a key someone adds in version 2 the day a
+contract needs it, which costs one entry in a cumulative set and changes no contract already
+issued.
 
 **`command.run` names the execution and never an effect.** A command is a way of causing an effect,
 not an effect, so "may run commands" must not be readable as "may cause whatever a command causes":
@@ -1703,30 +1705,40 @@ meant to withhold. So `command.run` is fixed to the narrow half of that: **it pe
 command and permits nothing about what the command does.** That meaning is permanent and it does not
 move when the vocabulary grows, which is what section 2 requires of every key.
 
-The other half is a rule about actions, not about keys: **an action names one key for every effect it
-will have, plus `command.run` when it is carried out by executing a command.** A command that pushes
-a branch is `{command.run, branch.push}`, and a contract holding only `command.run` refuses it
-(`docs/design/g2-delegation-contract.md` §7.1, where the strictest key wins). There is no residual
-key and no key that means "anything else".
+The other half is a rule about actions, not about keys: **an action names every key of the pinned
+version whose act it performs.** A command that pushes a branch performs two: executing a command
+and publishing commits, so it is `{command.run, branch.push}`, and a contract holding only
+`command.run` refuses it (`docs/design/g2-delegation-contract.md` §7.1, where the strictest key
+wins). There is no residual key and no key that means "anything else".
 
-**An effect this version cannot name is refused, not allowed.** Version 1 has no key for reading a
-secret, for network access, for merging or for deploying, so an action with one of those effects
-names a key that version 1 does not contain — and an unrecognised key is refused
-(`docs/design/g2-delegation-contract.md` §7). Deny-by-default therefore reaches effects the
+**A key covers what its act necessarily requires.** `repo.clone` on a `git_url` source reaches a
+remote, and `branch.push` and `pull_request.create` reach one too; that access is part of the act
+each key names, not a separate act needing a separate key. This is what keeps the naming rule finite:
+an action names the keys whose *acts* it performs, not every physical consequence someone could
+describe. Without it, version 1 could not authorise the clone it exists to authorise.
+
+**An act this version cannot name is refused, not allowed.** Version 1 has no key for reading a
+secret, for reaching a network endpoint of the run's own choosing, for merging or for deploying, so
+an action doing one of those names a key version 1 does not contain — and an unrecognised key is
+refused (`docs/design/g2-delegation-contract.md` §7). Deny-by-default therefore reaches acts the
 vocabulary has not learned yet: the way to authorise one is to add its key in version 2 and issue a
 contract pinned there, never to let it through under a key that means something else. This is why
 the set can be seven keys without being a hole: what is missing is refused rather than implied.
 
 **Mapping a concrete action to its keys is the caller's.** Cadenza never sees the command, and
 D-0026 §2 puts everything cadenza cannot compute purely on the caller. What cadenza fixes is that
-the mapping cannot be used to widen anything: naming fewer keys does not grant the effects left
+the mapping cannot be used to widen anything: naming fewer keys does not grant the acts left
 unnamed, it only means nobody asked about them, and naming a key the version lacks is a refusal.
 
-**The known coarseness that remains.** `command.run` does not distinguish running a test suite from
-running any other command, and by section 2 it can never be narrowed by redefinition. A delegation
-needing "may run the test suite, may not run other commands" is written by adding a narrower key in
-a later version and leaving `command.run` out of the grant. This is the cost of permanent meanings,
-accepted knowingly rather than discovered later.
+**What this vocabulary cannot express, and will not learn to.** `command.run` is all-or-nothing:
+running a test suite is executing a command, so it names `command.run` like any other, and no later
+key changes that — a narrower `test.run` would be a second key naming the same act, which section 2's
+permanence forbids, and it would not withhold `command.run` from the action anyway. "May run the
+test suite and nothing else" is therefore not a grant this vocabulary can write. It is **scoping** —
+a bound on *which* command, not on *what act* — and scoping is exactly what section 1's falsifier
+names: it would mean a key is not the unit of authority and the vocabulary needs a value beside the
+key. Recording it here rather than promising a narrower key later, because the promise would be one
+this design cannot keep.
 
 **What would falsify it.**
 
@@ -1738,11 +1750,12 @@ accepted knowingly rather than discovered later.
   actively unsafe, with no workable path through adding a narrower key. That would mean permanence
   and growth are not compatible in the form fixed here.
 - **Against section 3.** A real delegation that cannot be written at all with these seven plus
-  additions — in particular one that needs `command.run` split rather than supplemented, which is
-  the coarseness named above turning into a defect.
-- **Against the naming rule.** Callers that cannot reliably name every effect a concrete action
-  will have, so that an under-named action is answered `allowed` on the part that was named while
-  the unnamed effect happens anyway. That would mean the unit of authority has to be the observable
+  additions — in particular one that turns out to need "may run this command and not that one",
+  which is section 1's scoping falsifier arriving through the key set rather than through the key
+  shape.
+- **Against the naming rule.** Callers that cannot reliably name every key whose act a concrete
+  action performs, so that an under-named action is answered `allowed` on the part that was named
+  while the unnamed act happens anyway. That would mean the unit of authority has to be the observable
   effect at an enforcement point rather than a key the caller selects, and no vocabulary fixed here
   would close it.
 
