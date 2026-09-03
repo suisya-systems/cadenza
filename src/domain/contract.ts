@@ -339,9 +339,17 @@ function hasLoneSurrogate(value: string): boolean {
   return false;
 }
 
-/** A value in a refusal message: quoted if it is a string, named if it is not. */
+/**
+ * A value in a refusal message: quoted if it is a string, named if it is not.
+ *
+ * Both branches escape. A non-string is reached only from a JavaScript caller or
+ * a cast, and `String(value)` on one can still carry any text at all --
+ * `Symbol("\u30c6")` stringifies to `Symbol(\u30c6)` -- so the branch that
+ * exists for malformed input is exactly the branch that must not be the one that
+ * puts non-ASCII on a cp932 console (D-0007).
+ */
 function describe(value: unknown): string {
-  return typeof value === "string" ? pythonAscii(value) : `${String(value)}`;
+  return typeof value === "string" ? pythonAscii(value) : escapeNonAscii(String(value));
 }
 
 function known(versions: ReadonlySet<number>): string {

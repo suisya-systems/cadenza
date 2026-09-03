@@ -352,6 +352,14 @@ describe("delegationContract", () => {
       refusal(InvalidIdentifierError, () =>
         delegationContract(valid({ projectId: "\u30c6\u30b9\u30c8" })),
       ).message,
+      // The branch that exists for malformed input is the one most likely to
+      // carry arbitrary text: a symbol's description survives `String()`.
+      refusal(UnknownCapabilityError, () =>
+        delegationContract(valid({ granted: [Symbol("\u30c6") as unknown as string] })),
+      ).message,
+      refusal(UnknownVocabularyVersionError, () =>
+        delegationContract(valid({ vocabularyVersion: Symbol("\u30c6") as unknown as number })),
+      ).message,
     ];
     for (const message of messages) {
       expect(message).toMatch(/^[\x20-\x7e]*$/);
