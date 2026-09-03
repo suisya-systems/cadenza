@@ -269,7 +269,7 @@ checked before the grant is consulted at all:
 | --- | --- | --- | --- |
 | 1 | `context.configDigest !== contract.configDigest` | `refused` | `stale_subject` |
 | 2 | `context.runId !== contract.grantee` | `refused` | `grantee_mismatch` |
-| 3 | `action.capabilities` is empty | `refused` | `no_capability` |
+| 3 | `action.capabilities` is empty, or is not a list at all | `refused` | `no_capability` |
 | 4 | otherwise, per key, combined by §7.1 | | |
 
 Per key, against the version the contract pins (§3):
@@ -282,8 +282,10 @@ Per key, against the version the contract pins (§3):
 | otherwise | `refused` | `not_in_contract` |
 
 Steps 1 and 2 both refuse, so their order changes no outcome — only which reason
-is reported, and D-0026 §3 says which comes first. Step 3 refuses rather than
-allowing: an action that names no capability is an action nobody said anything
+is reported, and D-0026 §3 says which comes first. Step 3 covers "not a list"
+alongside "empty" because the two mean the same thing here and because the
+classifier may not throw: only a list is a set of keys, so anything else names no
+capability. It refuses rather than allowing: an action that names no capability is an action nobody said anything
 about, and D-0026 §1's "absent means not granted" reads the same for the action
 side as for the grant. The unknown-key case is a refusal rather than a thrown
 error on purpose: the keys are arbitrary caller input, and a classifier that
@@ -307,8 +309,13 @@ about. The alternatives — the weakest key winning, or the first — would let 
 `command.run` grant carry a `branch.push` the contract deliberately withheld,
 which is exactly the hole D-0027 §3's naming rule exists to close.
 
-**Totality.** `classify` returns one of exactly three outcomes for every input
-and throws for none. The falsifier Issue #32 asks for is a property-style test
+**Totality.** `classify` returns one of exactly three outcomes for every action
+and context, and throws for neither. The contract is the one argument it does not
+take on trust: it is a value this package built (§4), so `classify` requires the
+provenance §4 describes and refuses a forgery with `ForgedContractError` rather
+than classifying something that went through no validation. Totality is a claim
+about the inputs a caller composes freely — the action and the context — and it
+is unconditional over those. The falsifier Issue #32 asks for is a property-style test
 over arbitrary `runId` / `configDigest` strings and arbitrary **sets** of
 capability strings — junk, empty, oversized, non-ASCII, lone surrogates, keys
 that exist only in another vocabulary version, and mixtures of recognised and
