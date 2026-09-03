@@ -230,8 +230,10 @@ const CODE_EVALUATION_GLOBALS = ["eval", "Function"];
  *
  * `constructor` is refused with them, as a PROPERTY name rather than a global:
  * `Object.constructor("return import(...)")()` reaches the `Function`
- * constructor from any value at all, without ever naming it. Nothing under
- * `src/` reads `.constructor`.
+ * constructor from any value at all, without ever naming it -- and so does
+ * `const { constructor: F } = () => {}`, which writes the same property name in
+ * a binding pattern instead of an expression (cadenza#19). Nothing under `src/`
+ * reads `constructor` in any of the three spellings.
  *
  * **What this is not.** It is not a sandbox, and it cannot become one. A static
  * scan of JavaScript cannot prove that a module loads nothing, because the
@@ -365,10 +367,36 @@ function isShadowedOrDeclared(node: ts.Identifier): boolean {
   // import as global network I/O. The property half of a rename is the exported
   // name, never a reference to the global that shares its spelling.
   if (
-    (ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent) || ts.isBindingElement(parent)) &&
+    (ts.isImportSpecifier(parent) || ts.isBindingElement(parent)) &&
     parent.propertyName === node
   ) {
     return true;
+  }
+  // An export specifier has the two halves the other way round, and reading it
+  // like an import one was a false alarm in the safe direction: for
+  // `export { local as fetch }` TypeScript puts `local` in `.propertyName` and
+  // `fetch` in `.name`, so the check above suppressed the local reference and
+  // reported the *published* name as the network global. A pure module that
+  // performs no I/O failed for a word it only spells an export with, while the
+  // equivalent `export function fetch()` passed. The name a module publishes is
+  // never a reference to anything; `.propertyName` is the reference, and stays
+  // readable here.
+  if (ts.isExportSpecifier(parent)) {
+    if (parent.name === node) {
+      return true;
+    }
+    // The property half is a reference only when the export is local. In
+    // `export { fetch as read } from "./client.js"` it is the OTHER module's
+    // exported name -- the same thing an import specifier's property half is,
+    // arriving through a declaration that happens to be spelled `export` -- so
+    // a re-export is read the way an import is and neither half is a reference
+    // to the global.
+    const declaration = parent.parent?.parent;
+    return (
+      declaration !== undefined &&
+      ts.isExportDeclaration(declaration) &&
+      declaration.moduleSpecifier !== undefined
+    );
   }
   return (
     (ts.isPropertyAssignment(parent) ||
@@ -965,6 +993,119 @@ parametrize("the application performs no I/O", PER_APPLICATION_MODULE, (module) 
   expect(offenders, `${module} reaches ${offenders.join(", ")}`).toEqual([]);
 });
 
+/**
+ * Every global I/O API `source` reaches, as `module:line: spelling`.
+ *
+ * Separated from the case below so the sweep can be pointed at a source that is
+ * not a file in the tree: what a rule does to code nobody would commit is the
+ * half a sweep over `src/` cannot state, and the half that regresses silently.
+ */
+function globalIoReachesIn(module: string, source: string): string[] {
+  const found: string[] = [];
+  const tree = parseSourceFile(module, source);
+  const report = (node: ts.Node, what: string): void => {
+    const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
+    found.push(`${module}:${line}: ${what}`);
+  };
+  const visit = (node: ts.Node): void => {
+    if (ts.isIdentifier(node) && !isShadowedOrDeclared(node)) {
+      if (FORBIDDEN_GLOBALS.includes(node.text)) {
+        report(node, node.text);
+      } else if (node.text === "process") {
+        const misuse = processMisuse(node, module);
+        if (misuse !== null) {
+          report(node, misuse);
+        }
+      }
+    }
+    node.forEachChild(visit);
+  };
+  visit(tree);
+  return found;
+}
+
+/**
+ * Every loader route `source` manufactures, as `module:line: spelling`.
+ *
+ * The imports half of the case below stays there: it reads the file from disk
+ * through `unapprovedExternalsIn`, and this reads a string.
+ */
+function loaderRoutesIn(module: string, source: string): string[] {
+  const found: string[] = [];
+  const tree = parseSourceFile(module, source);
+  const report = (node: ts.Node, what: string): void => {
+    const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
+    found.push(`${module}:${line}: ${what}`);
+  };
+  const visit = (node: ts.Node): void => {
+    // `.constructor` and `["constructor"]` reach the Function constructor from
+    // any value, naming neither `Function` nor a global, so they are matched
+    // as property names rather than as references.
+    if (ts.isPropertyAccessExpression(node) && node.name.text === CONSTRUCTOR_PROPERTY) {
+      report(node, `.${CONSTRUCTOR_PROPERTY}`);
+    }
+    if (ts.isElementAccessExpression(node)) {
+      const argument = node.argumentExpression;
+      const key =
+        ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument)
+          ? argument.text
+          : null;
+      if (key !== null && (key === CONSTRUCTOR_PROPERTY || LOADER_ROUTE_GLOBALS.includes(key))) {
+        report(node, `["${key}"]`);
+      }
+    }
+    // `const { constructor: F } = () => {}` is the same property reached by a
+    // third spelling: a destructuring pattern, which is neither expression form
+    // above. The name is written where a *declaration* puts one, so
+    // `isShadowedOrDeclared` reads it as somebody else's property name and the
+    // identifier branch below never sees it -- and `F` is then the Function
+    // constructor with nothing said about it. A binding pattern is matched here
+    // for the same reason the two expression forms are: the key is written out,
+    // so it can be read. The shorthand `const { constructor } = x` reaches it
+    // just as squarely and is matched with it.
+    if (ts.isBindingElement(node)) {
+      // The shorthand branch is narrower than "a binding element with an
+      // identifier name", because an array element and a rest element are the
+      // same node and neither names a property: `const [constructor] = values`
+      // binds element 0 and `const { ...constructor } = record` binds what is
+      // left over, so reading a key off either would refuse ordinary code for a
+      // property it never touches. Only an object pattern's own element is a
+      // property access, and a hole in an array pattern -- `const [a, , b] = xs`
+      // -- arrives here with no name at all, which is asked about before it is
+      // read.
+      const shorthand = node.name;
+      const parent = node.parent;
+      const namesAProperty =
+        node.dotDotDotToken === undefined &&
+        parent !== undefined &&
+        ts.isObjectBindingPattern(parent);
+      const key = !namesAProperty
+        ? null
+        : node.propertyName !== undefined
+          ? propertyNameOf(node.propertyName)
+          : shorthand !== undefined && ts.isIdentifier(shorthand)
+            ? shorthand.text
+            : null;
+      if (key === CONSTRUCTOR_PROPERTY) {
+        report(node, `{ ${CONSTRUCTOR_PROPERTY} }`);
+      }
+    }
+    if (ts.isIdentifier(node) && !isShadowedOrDeclared(node)) {
+      if (LOADER_ROUTE_GLOBALS.includes(node.text)) {
+        report(node, node.text);
+      } else if (node.text === "process") {
+        const misuse = processMisuse(node, module);
+        if (misuse !== null) {
+          report(node, misuse);
+        }
+      }
+    }
+    node.forEachChild(visit);
+  };
+  visit(tree);
+  return found;
+}
+
 test("no module in a pure layer reaches a global I/O API", () => {
   // Target-only, and a surface the port created rather than inherited. An
   // import allowlist is a complete answer in Python, where reaching the network
@@ -980,27 +1121,56 @@ test("no module in a pure layer reaches a global I/O API", () => {
   // bare `process` that cannot be attributed to one, is a violation.
   const offenders: string[] = [];
   for (const module of PURE_LAYER_MODULES) {
-    const tree = parseSourceFile(module, sourceOf(module));
-    const report = (node: ts.Node, what: string): void => {
-      const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
-      offenders.push(`${module}:${line}: ${what}`);
-    };
-    const visit = (node: ts.Node): void => {
-      if (ts.isIdentifier(node) && !isShadowedOrDeclared(node)) {
-        if (FORBIDDEN_GLOBALS.includes(node.text)) {
-          report(node, node.text);
-        } else if (node.text === "process") {
-          const misuse = processMisuse(node, module);
-          if (misuse !== null) {
-            report(node, misuse);
-          }
-        }
-      }
-      node.forEachChild(visit);
-    };
-    visit(tree);
+    offenders.push(...globalIoReachesIn(module, sourceOf(module)));
   }
   expect(offenders, `these reach I/O without importing it: ${offenders.join(", ")}`).toEqual([]);
+});
+
+test("an export alias named for a global is not a reference to it", () => {
+  // Target-only, and the direction a sweep over `src/` cannot state: every
+  // module in the tree satisfies these rules, so what the rules *refuse* is
+  // asserted here or nowhere. `export { local as fetch }` was a false alarm --
+  // the exported name read as the network global -- and the fix has to leave
+  // the real thing reported, which is why both directions are one case.
+  const from = "src/domain/probe.ts";
+  expect(globalIoReachesIn(from, "const local = 1;\nexport { local as fetch };\n")).toEqual([]);
+  expect(globalIoReachesIn(from, "export const read = (url: string) => fetch(url);\n")).toEqual([
+    `${from}:1: fetch`,
+  ]);
+  expect(loaderRoutesIn(from, "const local = 1;\nexport { local as require };\n")).toEqual([]);
+  expect(loaderRoutesIn(from, 'const loaded = require("interlock");\n')).toEqual([
+    `${from}:1: require`,
+  ]);
+  // A re-export is an import wearing the other keyword: the property half is
+  // the source module's exported name, not a reference to anything here.
+  expect(globalIoReachesIn(from, 'export { fetch as read } from "./client.js";\n')).toEqual([]);
+  expect(loaderRoutesIn(from, 'export { require as load } from "./client.js";\n')).toEqual([]);
+});
+
+test("a destructured constructor is a loader route", () => {
+  // Target-only, for the reason above. `const { constructor: F } = () => {}`
+  // binds the Function constructor without naming `Function`, and the binding
+  // pattern is neither expression form the sweep matched -- so nothing was
+  // reported at all until this case.
+  const from = "src/domain/probe.ts";
+  expect(
+    loaderRoutesIn(
+      from,
+      "const { constructor: F } = () => {};\nF('return import(\"interlock\")')();\n",
+    ),
+  ).toEqual([`${from}:1: { constructor }`]);
+  // The shorthand reaches the same property, and a key that is not it is left
+  // alone -- an ordinary destructuring stays ordinary.
+  expect(loaderRoutesIn(from, "const { constructor } = value;\n")).toEqual([
+    `${from}:1: { constructor }`,
+  ]);
+  expect(loaderRoutesIn(from, "const { source: read } = value;\n")).toEqual([]);
+  // An array element and a rest element are the same node as an object
+  // pattern's, and neither reads a property: the first binds by position and
+  // the second binds what is left over, so a variable that happens to be
+  // spelled `constructor` is ordinary code in both.
+  expect(loaderRoutesIn(from, "const [constructor] = values;\n")).toEqual([]);
+  expect(loaderRoutesIn(from, "const { value, ...constructor } = record;\n")).toEqual([]);
 });
 
 test("no module manufactures a loader or an unapproved dependency", () => {
@@ -1021,40 +1191,7 @@ test("no module manufactures a loader or an unapproved dependency", () => {
     for (const specifier of unapprovedExternalsIn(module)) {
       offenders.push(`${module}: ${specifier}`);
     }
-    const tree = parseSourceFile(module, sourceOf(module));
-    const visit = (node: ts.Node): void => {
-      // `.constructor` and `["constructor"]` reach the Function constructor from
-      // any value, naming neither `Function` nor a global, so they are matched
-      // as property names rather than as references.
-      if (ts.isPropertyAccessExpression(node) && node.name.text === CONSTRUCTOR_PROPERTY) {
-        const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
-        offenders.push(`${module}:${line}: .${CONSTRUCTOR_PROPERTY}`);
-      }
-      if (ts.isElementAccessExpression(node)) {
-        const argument = node.argumentExpression;
-        const key =
-          ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument)
-            ? argument.text
-            : null;
-        if (key !== null && (key === CONSTRUCTOR_PROPERTY || LOADER_ROUTE_GLOBALS.includes(key))) {
-          const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
-          offenders.push(`${module}:${line}: ["${key}"]`);
-        }
-      }
-      if (ts.isIdentifier(node) && !isShadowedOrDeclared(node)) {
-        const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
-        if (LOADER_ROUTE_GLOBALS.includes(node.text)) {
-          offenders.push(`${module}:${line}: ${node.text}`);
-        } else if (node.text === "process") {
-          const misuse = processMisuse(node, module);
-          if (misuse !== null) {
-            offenders.push(`${module}:${line}: ${misuse}`);
-          }
-        }
-      }
-      node.forEachChild(visit);
-    };
-    visit(tree);
+    offenders.push(...loaderRoutesIn(module, sourceOf(module)));
   }
   expect(offenders.sort(), `unapproved: ${offenders.join(", ")}`).toEqual([]);
 });
@@ -1117,7 +1254,13 @@ function posixOnlyLiteral(node: ts.Expression): string | null {
     } else if (
       ts.isAsExpression(value) ||
       ts.isSatisfiesExpression(value) ||
-      ts.isTypeAssertion(value)
+      ts.isTypeAssertion(value) ||
+      // `"/srv"!` is a fourth wrapper with the same runtime value as the three
+      // above and none of their spellings: it makes the initializer a
+      // `NonNullExpression`, which this loop did not unwrap, so the literal
+      // inside was never read and the guard stayed green until a windows-latest
+      // cell failed -- the exact failure this case exists to prevent.
+      ts.isNonNullExpression(value)
     ) {
       value = value.expression;
     } else {
@@ -1159,6 +1302,34 @@ function testFiles(directory = "test"): string[] {
   return found.sort();
 }
 
+/**
+ * The `baseDir` anchors in one source: how many there are, and which of them
+ * are absolute on POSIX only.
+ *
+ * Separated from the case below for the reason the two sweeps above are: a rule
+ * that is only ever run against code that satisfies it states nothing about
+ * what it refuses, which is the half that goes quiet when an AST shape stops
+ * being unwrapped.
+ */
+function posixAnchorsIn(path: string, source: string): { anchors: number; offenders: string[] } {
+  const tree = parseSourceFile(path, source);
+  const offenders: string[] = [];
+  let anchors = 0;
+  const visit = (node: ts.Node): void => {
+    if (ts.isPropertyAssignment(node) && propertyNameOf(node.name) === "baseDir") {
+      anchors += 1;
+      const literal = posixOnlyLiteral(node.initializer);
+      if (literal !== null) {
+        const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
+        offenders.push(`${path}:${line}: ${JSON.stringify(literal)}`);
+      }
+    }
+    node.forEachChild(visit);
+  };
+  visit(tree);
+  return { anchors, offenders };
+}
+
 test("no test anchors a layer on a posix-only literal", () => {
   // A drive-less literal like "/srv/catalog" is absolute on POSIX and
   // drive-RELATIVE on Windows, so a test using one passes everywhere except the
@@ -1168,19 +1339,9 @@ test("no test anchors a layer on a posix-only literal", () => {
   const offenders: string[] = [];
   let anchors = 0;
   for (const path of testFiles()) {
-    const tree = parseSourceFile(path, readFileSync(join(ROOT, path), "utf8"));
-    const visit = (node: ts.Node): void => {
-      if (ts.isPropertyAssignment(node) && propertyNameOf(node.name) === "baseDir") {
-        anchors += 1;
-        const literal = posixOnlyLiteral(node.initializer);
-        if (literal !== null) {
-          const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
-          offenders.push(`${path}:${line}: ${JSON.stringify(literal)}`);
-        }
-      }
-      node.forEachChild(visit);
-    };
-    visit(tree);
+    const found = posixAnchorsIn(path, readFileSync(join(ROOT, path), "utf8"));
+    anchors += found.anchors;
+    offenders.push(...found.offenders);
   }
   // The sweep's own subject has to exist, or this passes by finding nothing to
   // look at. The source case cannot check this and neither could a reviewer:
@@ -1190,4 +1351,22 @@ test("no test anchors a layer on a posix-only literal", () => {
     offenders,
     `these anchors are absolute on POSIX only; build them with support.absolute() instead: ${offenders.join(", ")}`,
   ).toEqual([]);
+});
+
+test("a non-null assertion does not hide a posix-only anchor", () => {
+  // Target-only, and the case that makes the sweep above say something on the
+  // ubuntu cell about a shape it used to miss. `baseDir: "/srv"!` makes the
+  // initializer a `NonNullExpression`, which was not unwrapped, so the literal
+  // inside went unread and the guard stayed green until windows-latest failed --
+  // a slow and expensive way to learn that the guard has a hole in it.
+  const path = "test/probe.test.ts";
+  const asserted = posixAnchorsIn(path, 'const options = { baseDir: "/srv"! };\n');
+  expect(asserted.anchors).toBe(1);
+  expect(asserted.offenders).toEqual([`${path}:1: "/srv"`]);
+  // The sanctioned builder is still not unwrapped through one: `absolute()`'s
+  // whole job is to produce an anchor that is absolute on the running platform,
+  // and reporting it would be reporting it for being the fix.
+  const built = posixAnchorsIn(path, 'const options = { baseDir: absolute("srv")! };\n');
+  expect(built.anchors).toBe(1);
+  expect(built.offenders).toEqual([]);
 });

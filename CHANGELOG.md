@@ -162,6 +162,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The TOML loader no longer swallows a leading byte-order mark. `TextDecoder`
   strips one by default, so a BOM-prefixed catalog parsed cleanly here while
   `tomllib` rejects it at line 1.
+- Three gaps in the import-boundary sweep (cadenza#19). A `constructor`
+  destructured out of any value - `const { constructor: F } = () => {}` - is
+  reported as a loader route, where the binding pattern used to be read as a
+  declaration and pass. An export alias named for a global no longer trips the
+  sweep for the name it publishes: `export { local as fetch }` puts `local` in
+  the specifier's property half and `fetch` in its name half, the opposite way
+  round from an import, so a pure module that performs no I/O was failing for a
+  word it only spells an export with. And `baseDir: "/srv"!` is unwrapped like
+  the parenthesised and asserted forms beside it, so a POSIX-only anchor written
+  with a non-null assertion is caught on every runner rather than by a
+  windows-latest failure. Each is asserted against sources written for the
+  purpose, which is the direction a sweep over a tree that satisfies its own
+  rules cannot state.
 
 ### Dependencies
 
