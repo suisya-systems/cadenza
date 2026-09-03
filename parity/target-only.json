@@ -44,6 +44,10 @@
     {
       "path": "test/domain/classification.test.ts",
       "why": "The three-valued classifier (docs/design/g2-delegation-contract.md section 7). Target-only: there is no Python G2 and none is coming (#25). Two halves. The first pins one case per row of the section 7 tables, so a failure names the row that moved. The second is the falsifier cadenza#32 asks for -- a deterministic property sweep asserting that no input reaches a fourth state and none throws, seeded with a constant so it cannot become flaky under the double-green rule (D-0006), and required to reach every outcome and every reason so a corpus that degenerated into 20,000 identical refusals would fail rather than pass quietly. It earned its place immediately: it found that sorting the keys for a deterministic reason handed a non-string to a code-point collation, which threw -- a fourth state wearing an exception, on an input no hand-written case had thought to try."
+    },
+    {
+      "path": "test/domain/supersession.test.ts",
+      "why": "Supersession and onward delegation (docs/design/g2-delegation-contract.md section 8). Target-only: there is no Python G2 and none is coming (#25). The cases are written against what each rule is for rather than against its shape -- \"at most one current contract per run\" is what makes \"under which contract did it do that\" answerable, and the subset rule in both directions is what stops a run widening itself by delegating to a helper and reading the answer back. Two of them exist because the mutation check found the rule they cover was uncovered: an askable set reaching past everything the granter holds, and a sub-contract inheriting a lineage that belongs to its granter's grantee."
     }
   ]
 }

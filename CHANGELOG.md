@@ -123,6 +123,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it cannot pass by degenerating into one refusal repeated. It found a real hole
   on its first run - sorting the keys for a deterministic reason handed a
   non-string to a code-point collation, which threw.
+- G2's supersession and onward delegation (cadenza#32), the belt's last step:
+  `adopt(current, next)` replaces the contract a run holds only when the
+  successor names the digest it replaces and keeps the same grantee and
+  project, so a run holds at most one current contract and the chain is a line
+  rather than a set; narrowing, including to nothing, is accepted, and that is
+  how authority is taken back while revocation without a successor stays
+  deferred. `delegate(held, request)` issues a sub-contract that requires
+  `delegation.issue` in the granter's granted set and carries a subset of what
+  the granter holds - `granted` from `granted`, `askable` from either, so
+  narrowing is allowed in the safe direction and amplification is refused in
+  the other.
+- `README.md`'s G2 bullet now says what is implemented and what G2 deliberately
+  does not do, rather than that G2 is designed and not implemented.
 
 ### Changed
 

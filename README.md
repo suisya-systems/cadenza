@@ -48,30 +48,43 @@ Early. This repository currently contains:
   covering all 330 collected pytest cases, a differential oracle that compares
   the TypeScript `config_digest` against CPython's byte for byte, and the pilot
   port of `tests/test_digest.py`. See `DECISIONS.md` and `docs/porting.md`.
+- **G2 delegation contract** - implemented as far as `DECISIONS.md` D-0026 and
+  D-0027 fix it, and TypeScript only (there is no Python G2). What is here: a
+  capability vocabulary of seven keys, versioned and closed, where a key is
+  matched by exact equality and read against the version its contract pinned
+  (D-0027); the contract as a frozen value carrying its project, that project's
+  `config_digest`, an issuer, the run it was issued for, a granted set, a
+  disjoint askable set and the digest of the contract it replaces, with eight
+  named refusals at issue time and a `contract_digest` over its semantics; a
+  classifier that answers allowed, needs-approval or refused for every input,
+  checks staleness before it reads the grant, and carries the digest it answered
+  under on every answer including refusals; and supersession, where a successor
+  names what it replaces, narrowing to nothing is how authority is taken back,
+  and what a run passes onward is a subset of what it holds and requires
+  `delegation.issue` to pass on at all.
+
+  The contract is `docs/design/g2-delegation-contract.md`; where the code and
+  that document disagree, the document is the defect report, and where the
+  document and D-0026 disagree, the entry is what was decided. The argument
+  behind D-0026 - the options weighed and the alternatives rejected - is
+  `docs/design/g2-delegation-contract-proposal.md`. Interlock recorded the same
+  question in its open issue #63, "Operating-layer delegation contract", and
+  left it unanswered; that reference is where the question came from, not an
+  answer in transit, and answering it here is what D-0023 said cadenza would
+  have to do.
+
+  **What G2 does not do, deliberately.** It does not enforce: cadenza returns a
+  classification and a control plane transports, stores and acts on it, so a
+  system that asks and then ignores the answer is not defended against here
+  (D-0026 section 2). It reads no clock and mints no identity - the run
+  presenting a contract and the catalog's current digest are supplied by the
+  caller. And it has no serialisation: a contract is an in-memory value, so how
+  one is written down at the edge is undecided (D-0026 section 2), as are
+  expiry, revocation with no successor, budgets, who approves, and gate
+  management (G3).
 
 Explicitly **not** here yet:
 
-- **G2 delegation contract** - designed, not implemented. The question - what a
-  delegated run may do, on whose authority, and how that is expressed at the
-  seam to a control plane - is answered by `DECISIONS.md` D-0026, which is the
-  entry D-0025 set as G2's unfreeze condition, so G2 is no longer frozen. It
-  fixes three things: authority is a closed, enumerated grant bound to a
-  `project_id`, a `config_digest` and the run it was issued for, never a role
-  name; the seam is a contract document and its digest rather than an API, with
-  the control plane depending on cadenza and never the reverse; and every
-  intended action classifies as exactly one of allowed, needs-approval or
-  refused, where silence is never consent and an approval is a superseding
-  contract rather than a widening of the running one. What D-0026 deliberately
-  leaves open - the capability vocabulary, budgets, expiry, signing - it names.
-  The argument behind the entry is `docs/design/g2-delegation-contract-proposal.md`.
-  G2's own design document - the contract the implementation is written against,
-  taking G1's document's role for G2 - is
-  `docs/design/g2-delegation-contract.md` (cadenza#32), and the capability
-  vocabulary it is closed over is D-0027. No G2 code is here yet. Interlock
-  recorded the same question - its open issue
-  #63, "Operating-layer delegation contract" - and left it unanswered; that
-  reference is where the question came from, not an answer in transit, and
-  answering it here is what D-0023 said cadenza would have to do.
 - **any dependency on interlock** - not in `pyproject.toml`, not as an extra.
   Interlock's control-plane API and SQLite schema are marked throwaway on
   interlock's own side, and interlock is frozen, so no later stabilisation is
