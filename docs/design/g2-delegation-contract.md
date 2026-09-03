@@ -1,7 +1,12 @@
 # G2 — Delegation contract
 
-Status: accepted (belt scope)
+Status: proposed (belt scope)
 Applies to: `src/domain/` (TypeScript only — there is no Python G2, #25)
+
+This document is closed over the capability vocabulary D-0027 fixes, and D-0027
+is itself `proposed` until cadenza's human gate takes it. Both statuses move
+together: this document becomes `accepted` when D-0027 does, and no `src/` change
+that depends on either lands before then (Issue #32).
 
 This document is the contract for G2, taking for G2 the role
 `docs/design/g1-project-registry.md` takes for G1 (D-0001, and D-0026's
@@ -118,7 +123,14 @@ fix is the shape, because a contract that carries an empty or whitespace-padded
 identity is not a contract that names anybody:
 
 - a string, non-empty, at most 256 characters;
-- no ASCII control characters, and no leading or trailing whitespace.
+- no ASCII control characters, and no leading or trailing whitespace;
+- **no unpaired surrogate.** This one is not taste. `contractDigest` (§6) encodes
+  the identity through `canonicalJsonBytes`, which refuses a lone surrogate by
+  throwing `SurrogateInStringError` (D-0013). An identity that passed validation
+  and then made the digest throw would be a contract that exists and cannot be
+  classified, since every classification carries the digest — the totality
+  guarantee of §7 broken by a value the type system calls a string. It is
+  refused at issue time, where a refusal is what the caller is expecting.
 
 Nothing else. In particular the shape is deliberately not the G1 identifier
 shape: run identities are the control plane's to mint (D-0026 §2) and cadenza
@@ -135,7 +147,7 @@ refused, in the style G1 §5.6 and §7 fix for the catalog: nothing is a bare
 | 1 | the pinned vocabulary version is one this build does not know | `UnknownVocabularyVersionError` | D-0026 §1 |
 | 2 | a key in `granted` or `askable` is not in the pinned version's set | `UnknownCapabilityError` | D-0026 §1 |
 | 3 | a key is in both `granted` and `askable` | `OverlappingCapabilityError` | D-0026 §3 |
-| 4 | `issuer` or `grantee` is absent or malformed (§4.1) | `InvalidIdentityError` | D-0026 §1 |
+| 4 | `issuer` or `grantee` is absent or malformed - empty, over-long, control characters, padded, or carrying an unpaired surrogate (§4.1) | `InvalidIdentityError` | D-0026 §1 |
 | 5 | `issuer` equals `grantee` | `SelfIssuedContractError` | D-0026 §1 |
 | 6 | `projectId` is not a G1 identifier | `InvalidIdentifierError` (G1's) | D-0026 §1 |
 | 7 | `configDigest` is not `sha256:<64 hex>` | `InvalidDigestError` | D-0026 §1 |
@@ -197,10 +209,19 @@ Every field of §4 is in the payload, and nothing else is. In particular:
 classify(contract, action, context) -> Classification
 ```
 
-- `action`: `{ capability: string }` — a bare key. The finer **action
-  vocabulary** (parameters, targets) is left unfixed by D-0026 §3 and stays
-  unfixed here: G2 classifies the capability, and the caller says which
-  capability its intended action needs.
+- `action`: `{ capabilities: readonly string[] }` — the **set** of capability
+  keys the intended action needs, in the sense §4 gives sets (order and
+  repetition are not semantics). It is a set and not a single key because one
+  concrete action can have more than one effect the vocabulary names: running
+  `git push` in a worktree is a `command.run` *and* a `branch.push`, and a
+  contract granting only the first must not authorise it (D-0027 §3, the
+  residual rule). The finer **action vocabulary** — parameters, targets, and
+  which concrete command carries which effects — is left unfixed by D-0026 §3
+  and stays unfixed here: **naming the keys an action needs is the caller's**,
+  which is where D-0026 §2 puts everything cadenza cannot compute purely. What
+  cadenza fixes is that a key left out is not thereby granted: it is simply not
+  asked about, and the control plane that under-names an action has not been
+  answered about the part it did not name.
 - `context`: `{ runId: string, configDigest: string }` — the run presenting the
   contract, and the subject's digest **now**. Both are the caller's to supply;
   cadenza mints neither and reads neither from anywhere (D-0026 §2).
@@ -215,24 +236,51 @@ checked before the grant is consulted at all:
 | --- | --- | --- | --- |
 | 1 | `context.configDigest !== contract.configDigest` | `refused` | `stale_subject` |
 | 2 | `context.runId !== contract.grantee` | `refused` | `grantee_mismatch` |
-| 3 | `action.capability` not in the pinned vocabulary | `refused` | `unknown_capability` |
-| 4 | in `granted` | `allowed` | `granted` |
-| 5 | in `askable` | `needs_approval` | `askable` |
-| 6 | otherwise | `refused` | `not_in_contract` |
+| 3 | `action.capabilities` is empty | `refused` | `no_capability` |
+| 4 | otherwise, per key, combined by §7.1 | | |
+
+Per key, against the version the contract pins (§3):
+
+| condition | outcome | `reason` |
+| --- | --- | --- |
+| not in the pinned vocabulary | `refused` | `unknown_capability` |
+| in `granted` | `allowed` | `granted` |
+| in `askable` | `needs_approval` | `askable` |
+| otherwise | `refused` | `not_in_contract` |
 
 Steps 1 and 2 both refuse, so their order changes no outcome — only which reason
-is reported, and D-0026 §3 says which comes first. Step 3 is a refusal rather
-than a thrown error on purpose: `action.capability` is arbitrary caller input,
-and a classifier that throws on some inputs is not total. Step 6 is D-0026 §3's
-"anything in neither set is `refused` outright and is not escalatable": there is
-no path from `not_in_contract` to `needs_approval`, which is what stops a run
-escalating its way toward arbitrary authority.
+is reported, and D-0026 §3 says which comes first. Step 3 refuses rather than
+allowing: an action that names no capability is an action nobody said anything
+about, and D-0026 §1's "absent means not granted" reads the same for the action
+side as for the grant. The unknown-key case is a refusal rather than a thrown
+error on purpose: the keys are arbitrary caller input, and a classifier that
+throws on some inputs is not total. The last row is D-0026 §3's "anything in
+neither set is `refused` outright and is not escalatable": there is no path from
+`not_in_contract` to `needs_approval`, which is what stops a run escalating its
+way toward arbitrary authority.
+
+### 7.1 Combining a set: the strictest key wins
+
+`refused` > `needs_approval` > `allowed`. The action's outcome is the strictest
+of its keys' outcomes, and the reported `reason` is that of the **first key, in
+code-point order, that produced the strictest outcome** — so the answer is a
+function of the action's set and nothing else, not of the order the caller
+happened to write it in.
+
+Strictest-wins is the only combination that keeps §1's bound: an action whose
+effects include one the contract refuses is refused whatever else it also does,
+and an action needing one thing granted and one thing askable has to be asked
+about. The alternatives — the weakest key winning, or the first — would let a
+`command.run` grant carry a `branch.push` the contract deliberately withheld,
+which is exactly the hole D-0027 §3's residual rule exists to close.
 
 **Totality.** `classify` returns one of exactly three outcomes for every input
 and throws for none. The falsifier Issue #32 asks for is a property-style test
-over arbitrary `runId` / `capability` / `configDigest` strings — junk, empty,
-oversized, non-ASCII, keys that exist in another vocabulary version — asserting
-that the result is always a member of the three-value set. A fourth state, or a
+over arbitrary `runId` / `configDigest` strings and arbitrary **sets** of
+capability strings — junk, empty, oversized, non-ASCII, lone surrogates, keys
+that exist only in another vocabulary version, and mixtures of recognised and
+unrecognised keys — asserting that the result is always a member of the
+three-value set. A fourth state, or a
 throw, is the failure it exists to catch.
 
 **What classification is not.** It does not stop anything. A system that asks
@@ -274,20 +322,35 @@ What a run passes onward carries a **subset** of what it holds (D-0026 §1).
 
 | rule | error |
 | --- | --- |
+| `delegation.issue` is not in `held.granted` | `UngrantedDelegationError` |
 | `request.granted` not a subset of `held.granted` | `AmplifiedGrantError` |
 | `request.askable` not a subset of `held.granted ∪ held.askable` | `AmplifiedGrantError` |
 
-The second is deliberately the wider union: turning something the parent may do
-unattended into something the child must ask about is a *narrowing*, and
+The first rule is what makes `delegation.issue` (D-0027 §3) mean anything.
+Without it, a run holding nothing but `worktree.write` could hand that same key
+onward and pass both subset checks: delegating would be an authority every
+contract carried implicitly, which is precisely what D-0026 §1's "absent means
+not granted" denies. `delegation.issue` in `askable` is not enough — asking is
+answered by a superseding contract (§8.1), not by proceeding — so the rule reads
+`held.granted`.
+
+The last rule is deliberately the wider union: turning something the parent may
+do unattended into something the child must ask about is a *narrowing*, and
 refusing it would be refusing the safe direction. The reverse — a child granted
 what its parent may only ask about — is amplification and is refused by the
-first rule.
+middle rule.
 
 The sub-contract's `issuer` is the delegating run (`held.grantee`), its
-`projectId` and `configDigest` are the parent's, and its `supersedes` is `null`:
-it opens a new lineage for a new grantee rather than continuing the parent's.
-Every §5 rule applies to it as to any other contract, so a run delegating to
-itself is refused by rule 5, and disjointness by rule 3.
+`projectId` and `configDigest` are the parent's, its `vocabularyVersion` is the
+parent's, and its `supersedes` is `null`: it opens a new lineage for a new
+grantee rather than continuing the parent's. The version is **inherited and not
+chosen** — the subset rules compare key sets, and comparing them across two
+vocabularies would be comparing sets whose members are read against different
+definitions. A sub-contract at a newer version is a contract the granter issues
+directly, not a delegation.
+
+Every §5 rule applies to the sub-contract as to any other contract, so a run
+delegating to itself is refused by rule 5, and disjointness by rule 3.
 
 ## 9. Errors
 

@@ -1675,7 +1675,7 @@ grants exactly what it enumerates.
 | --- | --- |
 | `repo.clone` | materialise the contract's pinned clone source (G1 §3.1) |
 | `worktree.write` | create, modify or delete files in the run's own worktree |
-| `command.run` | execute a command in the worktree |
+| `command.run` | execute a command in the worktree whose effects no other key of the pinned version names (the residual, below) |
 | `commit.create` | record a commit on the run's branch |
 | `branch.push` | publish commits to a remote |
 | `pull_request.create` | open a pull request |
@@ -1695,11 +1695,28 @@ secret reading, issue and comment writing, merging, deploying. Each is a key som
 version 2 the day a contract needs it, which costs one entry in a cumulative set and changes no
 contract already issued.
 
-**The known coarseness.** `command.run` is broad — it covers running a test suite and running
-anything else — and by section 2 it can never be narrowed. If a delegation needs "may run the test
-suite, may not run arbitrary commands", that is expressed by adding a narrower key and leaving
-`command.run` out of the grant, not by redefining it. This is the cost of permanent meanings and it
-is accepted knowingly rather than discovered later.
+**`command.run` is the residual, and that is part of its permanent meaning.** A command is a way of
+causing an effect, not an effect, so "may run commands" would otherwise swallow every other key in
+the table: pushing a branch and opening a pull request are both done by running a command, and a
+grant of `command.run` alone would authorise exactly what withholding `branch.push` and
+`pull_request.create` was meant to withhold. So the key is defined by subtraction from the start:
+**`command.run` covers a command whose effects no other key of the pinned version names, and an
+action carries every key its effects name.** A command that pushes a branch needs `command.run` —
+for the running — *and* `branch.push` — for the effect — and a contract holding only the first
+refuses it (`docs/design/g2-delegation-contract.md` §7.1, where the strictest key wins).
+
+Two things follow, and both are deliberate. **Mapping a concrete action to its keys is the
+caller's**, because cadenza never sees the command: D-0026 §2 puts everything cadenza cannot compute
+purely on the caller, and this is one of those things. And **adding a key in a later version narrows
+`command.run` without redefining it** — the residual shrinks as the vocabulary grows, by
+construction, and every contract already issued keeps meaning what it meant, because a contract is
+read against the version it pinned (section 2).
+
+**The known coarseness that remains.** Within the residual, `command.run` does not distinguish
+running a test suite from running anything else, and by section 2 it can never be narrowed by
+redefinition. A delegation needing "may run the test suite, may not run arbitrary commands" is
+written by adding a narrower key in a later version and leaving `command.run` out of the grant.
+This is the cost of permanent meanings, accepted knowingly rather than discovered later.
 
 **What would falsify it.**
 
@@ -1713,6 +1730,11 @@ is accepted knowingly rather than discovered later.
 - **Against section 3.** A real delegation that cannot be written at all with these seven plus
   additions — in particular one that needs `command.run` split rather than supplemented, which is
   the coarseness named above turning into a defect.
+- **Against the residual rule.** Callers that cannot reliably name every key a concrete action's
+  effects fall under, so that an under-named action is answered `allowed` on the part that was named
+  while the withheld part happens anyway. That would mean the unit of authority has to be the
+  observable effect at an enforcement point rather than a key the caller selects, and the residual is
+  a convention the seam cannot carry.
 
 **Consequences.**
 
