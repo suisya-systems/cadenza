@@ -36,9 +36,30 @@
  * (`docs/porting.md` section 4).
  */
 
-/** Values this encoder accepts. Deliberately narrow: it is not a general codec. */
+/**
+ * Values this encoder accepts. Deliberately narrow: it is not a general codec.
+ *
+ * `null` and `number` are here for `contract_digest`, whose payload carries
+ * `supersedes` as a digest or as `null` and `vocabulary_version` as an integer
+ * (`docs/design/g2-delegation-contract.md` section 6). `null` encodes as `null`
+ * and an integer as its decimal digits, which is what `json.dumps` produces for
+ * `None` and for an `int`, so the byte-for-byte claim this module exists to make
+ * is unaffected.
+ *
+ * **Only integers.** A non-integer is refused rather than encoded, because the
+ * two runtimes disagree on how to spell one: CPython's `json.dumps(1.0)` is
+ * `1.0` and JavaScript's `String(1.0)` is `1`, and `float` carries `NaN` and the
+ * infinities, which `allow_nan=False` refuses on the Python side. Nothing in
+ * this repository needs a float in a digest, so the safe half is accepted and
+ * the rest is a named refusal. See {@link NonIntegerNumberError}.
+ *
+ * No G1 payload contains either, which is why no oracle vector covers them and
+ * `test/domain/canonical-json.test.ts` pins them directly instead.
+ */
 export type CanonicalValue =
   | string
+  | number
+  | null
   | readonly CanonicalValue[]
   | { readonly [key: string]: CanonicalValue };
 
@@ -53,6 +74,20 @@ export class SurrogateInStringError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "SurrogateInStringError";
+  }
+}
+
+/**
+ * A number that is not an integer reached the encoder.
+ *
+ * Refused rather than encoded, for the reason the module comment gives: the two
+ * runtimes spell a float differently, and a digest that depended on which
+ * runtime computed it is worse than one that could not be computed.
+ */
+export class NonIntegerNumberError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NonIntegerNumberError";
   }
 }
 
@@ -90,8 +125,14 @@ export function canonicalJsonBytes(value: CanonicalValue): Uint8Array {
 
 /** The text CPython's `json.dumps` would produce for `value`. */
 export function canonicalJson(value: CanonicalValue): string {
+  if (value === null) {
+    return "null";
+  }
   if (typeof value === "string") {
     return encodeString(value);
+  }
+  if (typeof value === "number") {
+    return encodeInteger(value);
   }
   if (Array.isArray(value)) {
     return `[${value.map((element) => canonicalJson(element)).join(",")}]`;
@@ -105,6 +146,17 @@ export function canonicalJson(value: CanonicalValue): string {
     return `${encodeString(key)}:${canonicalJson(object[key] as CanonicalValue)}`;
   });
   return `{${members.join(",")}}`;
+}
+
+function encodeInteger(value: number): string {
+  if (!Number.isSafeInteger(value)) {
+    throw new NonIntegerNumberError(
+      `cannot encode ${String(value)} as JSON: only safe integers are canonical`,
+    );
+  }
+  // `Number.isSafeInteger` excludes -0, NaN and the infinities, so `String` here
+  // is CPython's `repr(int)`: decimal digits with an optional leading minus.
+  return String(value);
 }
 
 function encodeString(value: string): string {

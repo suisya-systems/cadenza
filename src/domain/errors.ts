@@ -73,3 +73,39 @@ export class TombstoneError extends CatalogError {}
  * Not a `CatalogError`: the catalog is fine, the typed name is not.
  */
 export class ProjectNotFoundError extends CadenzaError {}
+
+/**
+ * G2's refusals (`docs/design/g2-delegation-contract.md` section 9).
+ *
+ * They extend `CadenzaError` directly rather than `CatalogError`, because a
+ * delegation contract is not a file in this belt: serialisation at the edge is
+ * unfixed (D-0026 section 2), so there is no location to carry and a `location`
+ * that was always `null` would be a field pretending to be evidence. What each
+ * carries instead is what it refused -- the key, the version, the identity --
+ * in the message, in ASCII (D-0007).
+ *
+ * `InvalidIdentifierError` above is reused unchanged for a contract's
+ * `project_id`: it is the same shape from the same G1 rule, and a second error
+ * type for it would say the shape had two meanings.
+ */
+
+/** A contract pinned a capability-vocabulary version this build does not know. */
+export class UnknownVocabularyVersionError extends CadenzaError {}
+
+/** A granted or askable key is not in the vocabulary version the contract pinned. */
+export class UnknownCapabilityError extends CadenzaError {}
+
+/** A key is both granted and askable, which would leave an action classifiable two ways. */
+export class OverlappingCapabilityError extends CadenzaError {}
+
+/** An issuer or grantee is absent or malformed. */
+export class InvalidIdentityError extends CadenzaError {}
+
+/** A contract's issuer is its own grantee. */
+export class SelfIssuedContractError extends CadenzaError {}
+
+/** A `sha256:<hex>` digest field is not one. */
+export class InvalidDigestError extends CadenzaError {}
+
+/** A value reached a contract-reading function without coming from `delegationContract`. */
+export class ForgedContractError extends CadenzaError {}

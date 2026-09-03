@@ -39,8 +39,31 @@ export function canonicalPayload(value: Project): Readonly<Record<string, Canoni
   };
 }
 
+/**
+ * What a digest field looks like, for the fields that carry one.
+ *
+ * Lowercase hex and exactly 64 of it, because that is what {@link digestOf}
+ * produces: a validator that accepted uppercase would accept a string this
+ * repository never writes, and two spellings of one digest would compare unequal
+ * while meaning the same thing.
+ */
+export const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
+
+/**
+ * `sha256:<hex>` over the canonical JSON encoding of `payload`.
+ *
+ * The framing lives here, in one place, because `contract_digest`
+ * (`docs/design/g2-delegation-contract.md` section 6) is computed the way
+ * `config_digest` is and reuses this path rather than re-deriving it (D-0011,
+ * D-0017). Two implementations of "sha256 colon hex" would be two things that
+ * could drift apart while both looking right.
+ */
+export function digestOf(payload: CanonicalValue): string {
+  const encoded = canonicalJsonBytes(payload);
+  return `sha256:${createHash("sha256").update(encoded).digest("hex")}`;
+}
+
 /** `sha256:<hex>` over the canonical JSON encoding of the payload. */
 export function configDigest(value: Project): string {
-  const encoded = canonicalJsonBytes(canonicalPayload(value));
-  return `sha256:${createHash("sha256").update(encoded).digest("hex")}`;
+  return digestOf(canonicalPayload(value));
 }

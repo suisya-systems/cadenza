@@ -97,6 +97,23 @@ which validates every rule in §5 before it returns. **There is no route to an
 invalid contract**, which is how "classifying against an invalid contract is
 `refused`" (D-0026 §3) is realised: the classifier cannot be handed one.
 
+"Constructed only through" is a claim the type has to make rather than the prose,
+and it takes two halves. A structural interface is satisfied by any object
+literal with the right fields, so the type carries a **brand** keyed by a
+module-private symbol that is declared and never created: nothing outside the
+module can name it, so a literal does not type-check, and nothing carries it at
+runtime. Runtime provenance is **identity** — the factory records what it built
+in a module-private `WeakSet`, and every function that reads a contract's
+semantics asks that set and refuses what is not in it (`ForgedContractError`).
+
+Identity rather than a mark on the value, because a mark can be copied: a spread
+carries a symbol-keyed property across, so `{ ...contract, grantee: other }`
+would satisfy a property check while holding a grantee that was never validated
+— and the grantee binding is what stops a contract being a bearer token
+(D-0026 §1). Provenance a copy can inherit is not provenance. A value that went
+through no validation is exactly the invalid contract this section says cannot
+exist, which is why the check is at every reader rather than at the edge.
+
 | field | type | meaning |
 | --- | --- | --- |
 | `vocabularyVersion` | positive integer | the vocabulary this contract's keys are read against (§3) |
@@ -107,6 +124,11 @@ invalid contract**, which is how "classifying against an invalid contract is
 | `granted` | set of keys | may be done unattended |
 | `askable` | set of keys | may be asked about; disjoint from `granted` (D-0026 §3) |
 | `supersedes` | `sha256:<64 hex>` or `null` | the `contract_digest` this replaces (D-0026 §3) |
+
+The brand is not in the table because it is not a field a caller supplies or
+reads; it is how the value says where it came from, and it is outside the digest
+payload (§6) for the same reason.
+
 
 `granted` and `askable` are **sets**: they are given as arrays for convenience,
 and neither order nor repetition is semantics. The canonical form is sorted by
@@ -140,7 +162,15 @@ does not get to dictate their spelling.
 
 Every rule below is a **named refusal with its own error type**, carrying what it
 refused, in the style G1 §5.6 and §7 fix for the catalog: nothing is a bare
-`Error` and nothing is silent. Message text is ASCII (D-0007).
+`Error` and nothing is silent.
+
+Message text is ASCII (D-0007), and G2 has to *make* it so rather than inherit
+it. G1's refusals quote values its own shape rules already confined to ASCII;
+G2's quote a run identity, which may legitimately hold any printable Unicode
+(§4.1), and a refused capability key or digest, which may hold anything at all.
+So G2 formats quoted values with Python's `ascii()` rather than its `repr()` --
+the same choice CPython offers for the same reason -- and every non-ASCII
+character reaches the console as an escape.
 
 | # | rule | error | source |
 | --- | --- | --- | --- |
@@ -367,6 +397,10 @@ identity, the digest — in the message, in ASCII (D-0007).
 `InvalidIdentifierError` is reused unchanged for `projectId`: it is the same
 identifier shape, from the same G1 rule, and a second error type for it would
 say the shape had two meanings.
+
+`ForgedContractError` is the one refusal that is not about a contract's content:
+it is raised when a value that never came from `delegationContract` is handed to
+something that reads one (§4).
 
 ## 10. Verification
 

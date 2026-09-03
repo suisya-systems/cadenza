@@ -28,6 +28,18 @@
     {
       "path": "test/domain/python-semantics.test.ts",
       "why": "The contracts of the other Python built-ins the port had to rebuild: `str.isspace()`, `repr`, `difflib.get_close_matches` and `urlsplit`. Each is a place where the obvious JavaScript spelling gives a different answer -- `/\\s/` disagrees with `str.isspace()` in both directions, an edit-distance library is not `SequenceMatcher.ratio`, and `new URL` normalises where `urlsplit` splits -- and what they decide is which catalogs are accepted and what an operator is told when a name is wrong. The Python suite asserts none of it, for the reason `test/domain/canonical-json.test.ts` records: in Python it is all true by construction. The file also carries the frozen-constant cases: `ReadonlySet` is a compile-time claim and `Object.freeze` does nothing to a Set's internal slots, so the `frozenset` the Python side spells had to be rebuilt (DECISIONS.md D-0015). Same reason for being target-only -- the Python suite asserts none of it, because in Python a `frozenset` simply cannot be added to."
+    },
+    {
+      "path": "test/domain/capability.test.ts",
+      "why": "G2's capability vocabulary (DECISIONS.md D-0027). There is no Python G2 and none is coming (#25), so this file translates no source case by construction. What it asserts is what an implementation drifts away from silently: that a key is matched by exact equality and never by prefix, that version 1 is exactly the seven keys the entry fixed rather than at least them, that every known version contains its predecessor, and that the frozen set cannot be added to at runtime -- the last because a ReadonlySet is a compile-time claim and Object.freeze does nothing to a Set's internal slots (D-0015), so VOCABULARY_VERSION_1.add(...) would widen every contract pinned at version 1 at an unchanged digest."
+    },
+    {
+      "path": "test/domain/contract.test.ts",
+      "why": "The delegation contract's issue-time refusals (docs/design/g2-delegation-contract.md section 5). Target-only for the same reason: no Python G2 exists to have written these cases. Each case is built against one rule's hole and is valid in every other respect, which is the bar cadenza#32 sets -- a refusal is covered only if removing it turns red the case that reproduces that hole, not merely some case somewhere."
+    },
+    {
+      "path": "test/domain/contract-digest.test.ts",
+      "why": "contract_digest (docs/design/g2-delegation-contract.md section 6). Target-only: no Python G2. The cases are written as distinctions -- two contracts differing only in one field must not share a digest -- because a digest that quietly ignored grantee or supersedes would let two parties agree on a digest while meaning different contracts, which is the one job it has. It also pins config_digest against a fixed value, so that G2 reusing the sha256 framing shows up here as well as in the CPython oracle if it ever stops being invisible."
     }
   ]
 }
