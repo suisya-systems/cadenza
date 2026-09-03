@@ -1050,12 +1050,24 @@ function loaderRoutesIn(module: string, source: string): string[] {
     // so it can be read. The shorthand `const { constructor } = x` reaches it
     // just as squarely and is matched with it.
     if (ts.isBindingElement(node)) {
-      // A hole in an array pattern -- `const [a, , b] = xs` -- arrives here as a
-      // binding element with NO name at all, so the shorthand branch has to ask
-      // before it reads one.
+      // The shorthand branch is narrower than "a binding element with an
+      // identifier name", because an array element and a rest element are the
+      // same node and neither names a property: `const [constructor] = values`
+      // binds element 0 and `const { ...constructor } = record` binds what is
+      // left over, so reading a key off either would refuse ordinary code for a
+      // property it never touches. Only an object pattern's own element is a
+      // property access, and a hole in an array pattern -- `const [a, , b] = xs`
+      // -- arrives here with no name at all, which is asked about before it is
+      // read.
       const shorthand = node.name;
-      const key =
-        node.propertyName !== undefined
+      const parent = node.parent;
+      const namesAProperty =
+        node.dotDotDotToken === undefined &&
+        parent !== undefined &&
+        ts.isObjectBindingPattern(parent);
+      const key = !namesAProperty
+        ? null
+        : node.propertyName !== undefined
           ? propertyNameOf(node.propertyName)
           : shorthand !== undefined && ts.isIdentifier(shorthand)
             ? shorthand.text
@@ -1135,6 +1147,12 @@ test("a destructured constructor is a loader route", () => {
     `${from}:1: { constructor }`,
   ]);
   expect(loaderRoutesIn(from, "const { source: read } = value;\n")).toEqual([]);
+  // An array element and a rest element are the same node as an object
+  // pattern's, and neither reads a property: the first binds by position and
+  // the second binds what is left over, so a variable that happens to be
+  // spelled `constructor` is ordinary code in both.
+  expect(loaderRoutesIn(from, "const [constructor] = values;\n")).toEqual([]);
+  expect(loaderRoutesIn(from, "const { value, ...constructor } = record;\n")).toEqual([]);
 });
 
 test("no module manufactures a loader or an unapproved dependency", () => {
