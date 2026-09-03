@@ -212,16 +212,19 @@ classify(contract, action, context) -> Classification
 - `action`: `{ capabilities: readonly string[] }` — the **set** of capability
   keys the intended action needs, in the sense §4 gives sets (order and
   repetition are not semantics). It is a set and not a single key because one
-  concrete action can have more than one effect the vocabulary names: running
-  `git push` in a worktree is a `command.run` *and* a `branch.push`, and a
-  contract granting only the first must not authorise it (D-0027 §3, the
-  residual rule). The finer **action vocabulary** — parameters, targets, and
+  concrete action can have more than one effect the vocabulary names: a command
+  that pushes a branch is a `command.run` — the execution — *and* a
+  `branch.push` — the effect — and a contract granting only the first must not
+  authorise it (D-0027 §3). The finer **action vocabulary** — parameters, targets, and
   which concrete command carries which effects — is left unfixed by D-0026 §3
   and stays unfixed here: **naming the keys an action needs is the caller's**,
   which is where D-0026 §2 puts everything cadenza cannot compute purely. What
-  cadenza fixes is that a key left out is not thereby granted: it is simply not
-  asked about, and the control plane that under-names an action has not been
-  answered about the part it did not name.
+  cadenza fixes is that the naming cannot widen anything. A key left out is not
+  thereby granted — it is simply not asked about, and the control plane that
+  under-names an action has not been answered about the part it did not name.
+  And an effect whose key the pinned version does not contain is refused rather
+  than waved through, since an unrecognised key refuses: deny-by-default reaches
+  effects the vocabulary has not learned yet (D-0027 §3).
 - `context`: `{ runId: string, configDigest: string }` — the run presenting the
   contract, and the subject's digest **now**. Both are the caller's to supply;
   cadenza mints neither and reads neither from anywhere (D-0026 §2).
@@ -272,7 +275,7 @@ effects include one the contract refuses is refused whatever else it also does,
 and an action needing one thing granted and one thing askable has to be asked
 about. The alternatives — the weakest key winning, or the first — would let a
 `command.run` grant carry a `branch.push` the contract deliberately withheld,
-which is exactly the hole D-0027 §3's residual rule exists to close.
+which is exactly the hole D-0027 §3's naming rule exists to close.
 
 **Totality.** `classify` returns one of exactly three outcomes for every input
 and throws for none. The falsifier Issue #32 asks for is a property-style test

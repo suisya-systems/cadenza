@@ -1675,7 +1675,7 @@ grants exactly what it enumerates.
 | --- | --- |
 | `repo.clone` | materialise the contract's pinned clone source (G1 §3.1) |
 | `worktree.write` | create, modify or delete files in the run's own worktree |
-| `command.run` | execute a command in the worktree whose effects no other key of the pinned version names (the residual, below) |
+| `command.run` | execute a command in the worktree; it names the execution and never an effect (below) |
 | `commit.create` | record a commit on the run's branch |
 | `branch.push` | publish commits to a remote |
 | `pull_request.create` | open a pull request |
@@ -1695,28 +1695,38 @@ secret reading, issue and comment writing, merging, deploying. Each is a key som
 version 2 the day a contract needs it, which costs one entry in a cumulative set and changes no
 contract already issued.
 
-**`command.run` is the residual, and that is part of its permanent meaning.** A command is a way of
-causing an effect, not an effect, so "may run commands" would otherwise swallow every other key in
-the table: pushing a branch and opening a pull request are both done by running a command, and a
-grant of `command.run` alone would authorise exactly what withholding `branch.push` and
-`pull_request.create` was meant to withhold. So the key is defined by subtraction from the start:
-**`command.run` covers a command whose effects no other key of the pinned version names, and an
-action carries every key its effects name.** A command that pushes a branch needs `command.run` —
-for the running — *and* `branch.push` — for the effect — and a contract holding only the first
-refuses it (`docs/design/g2-delegation-contract.md` §7.1, where the strictest key wins).
+**`command.run` names the execution and never an effect.** A command is a way of causing an effect,
+not an effect, so "may run commands" must not be readable as "may cause whatever a command causes":
+pushing a branch and opening a pull request are both done by running a command, and a key that
+swallowed them would authorise exactly what withholding `branch.push` and `pull_request.create` was
+meant to withhold. So `command.run` is fixed to the narrow half of that: **it permits executing a
+command and permits nothing about what the command does.** That meaning is permanent and it does not
+move when the vocabulary grows, which is what section 2 requires of every key.
 
-Two things follow, and both are deliberate. **Mapping a concrete action to its keys is the
-caller's**, because cadenza never sees the command: D-0026 §2 puts everything cadenza cannot compute
-purely on the caller, and this is one of those things. And **adding a key in a later version narrows
-`command.run` without redefining it** — the residual shrinks as the vocabulary grows, by
-construction, and every contract already issued keeps meaning what it meant, because a contract is
-read against the version it pinned (section 2).
+The other half is a rule about actions, not about keys: **an action names one key for every effect it
+will have, plus `command.run` when it is carried out by executing a command.** A command that pushes
+a branch is `{command.run, branch.push}`, and a contract holding only `command.run` refuses it
+(`docs/design/g2-delegation-contract.md` §7.1, where the strictest key wins). There is no residual
+key and no key that means "anything else".
 
-**The known coarseness that remains.** Within the residual, `command.run` does not distinguish
-running a test suite from running anything else, and by section 2 it can never be narrowed by
-redefinition. A delegation needing "may run the test suite, may not run arbitrary commands" is
-written by adding a narrower key in a later version and leaving `command.run` out of the grant.
-This is the cost of permanent meanings, accepted knowingly rather than discovered later.
+**An effect this version cannot name is refused, not allowed.** Version 1 has no key for reading a
+secret, for network access, for merging or for deploying, so an action with one of those effects
+names a key that version 1 does not contain — and an unrecognised key is refused
+(`docs/design/g2-delegation-contract.md` §7). Deny-by-default therefore reaches effects the
+vocabulary has not learned yet: the way to authorise one is to add its key in version 2 and issue a
+contract pinned there, never to let it through under a key that means something else. This is why
+the set can be seven keys without being a hole: what is missing is refused rather than implied.
+
+**Mapping a concrete action to its keys is the caller's.** Cadenza never sees the command, and
+D-0026 §2 puts everything cadenza cannot compute purely on the caller. What cadenza fixes is that
+the mapping cannot be used to widen anything: naming fewer keys does not grant the effects left
+unnamed, it only means nobody asked about them, and naming a key the version lacks is a refusal.
+
+**The known coarseness that remains.** `command.run` does not distinguish running a test suite from
+running any other command, and by section 2 it can never be narrowed by redefinition. A delegation
+needing "may run the test suite, may not run other commands" is written by adding a narrower key in
+a later version and leaving `command.run` out of the grant. This is the cost of permanent meanings,
+accepted knowingly rather than discovered later.
 
 **What would falsify it.**
 
@@ -1730,11 +1740,11 @@ This is the cost of permanent meanings, accepted knowingly rather than discovere
 - **Against section 3.** A real delegation that cannot be written at all with these seven plus
   additions — in particular one that needs `command.run` split rather than supplemented, which is
   the coarseness named above turning into a defect.
-- **Against the residual rule.** Callers that cannot reliably name every key a concrete action's
-  effects fall under, so that an under-named action is answered `allowed` on the part that was named
-  while the withheld part happens anyway. That would mean the unit of authority has to be the
-  observable effect at an enforcement point rather than a key the caller selects, and the residual is
-  a convention the seam cannot carry.
+- **Against the naming rule.** Callers that cannot reliably name every effect a concrete action
+  will have, so that an under-named action is answered `allowed` on the part that was named while
+  the unnamed effect happens anyway. That would mean the unit of authority has to be the observable
+  effect at an enforcement point rather than a key the caller selects, and no vocabulary fixed here
+  would close it.
 
 **Consequences.**
 
