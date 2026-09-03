@@ -269,7 +269,7 @@ checked before the grant is consulted at all:
 | --- | --- | --- | --- |
 | 1 | `context.configDigest !== contract.configDigest` | `refused` | `stale_subject` |
 | 2 | `context.runId !== contract.grantee` | `refused` | `grantee_mismatch` |
-| 3 | `action.capabilities` is empty, or is not a list at all | `refused` | `no_capability` |
+| 3 | `action.capabilities` is empty, or is not a list at all (D-0028) | `refused` | `no_capability` |
 | 4 | otherwise, per key, combined by §7.1 | | |
 
 Per key, against the version the contract pins (§3):
@@ -309,8 +309,8 @@ about. The alternatives — the weakest key winning, or the first — would let 
 `command.run` grant carry a `branch.push` the contract deliberately withheld,
 which is exactly the hole D-0027 §3's naming rule exists to close.
 
-**Totality.** `classify` returns one of exactly three outcomes for every action
-and context, and throws for neither. The contract is the one argument it does not
+**Totality (D-0028).** `classify` returns one of exactly three outcomes for every
+action and context, and throws for neither. The contract is the one argument it does not
 take on trust: it is a value this package built (§4), so `classify` requires the
 provenance §4 describes and refuses a forgery with `ForgedContractError` rather
 than classifying something that went through no validation. Totality is a claim

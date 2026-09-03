@@ -113,6 +113,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   grant is read at all, an action names the set of capability keys whose acts it
   performs, and the strictest key wins - so a contract granting `command.run`
   and withholding `branch.push` refuses a command that pushes a branch.
+- D-0028, recording what the classifier's totality ranges over: the action and
+  the context unconditionally, with malformed input answered rather than thrown
+  about, and the contract outside the range because a value that never came
+  from `delegationContract` is refused rather than classified.
 - The classifier's totality is measured rather than described: a deterministic
   property sweep asserts that no action or context reaches a fourth state or an
   exception, and requires the corpus to reach every outcome and every reason so
