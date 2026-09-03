@@ -81,6 +81,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a superseding contract rather than a widening of the running one.
   `docs/design/g2-delegation-contract-proposal.md` records the options weighed
   and the alternatives rejected (cadenza#9).
+- G2's design document, `docs/design/g2-delegation-contract.md` (cadenza#32):
+  the contract the G2 implementation is written against, taking G1's document's
+  role for G2 (D-0001). It cites D-0026 for every fixed point rather than
+  restating it, and specifies what D-0026 left to the belt - the contract value
+  and its issue-time refusals, the `contract_digest` payload, the total
+  three-valued classifier and its order, and supersession and onward
+  delegation. No `src/` code yet.
+- D-0027, the capability vocabulary D-0026 section 1 left unfixed: a
+  two-segment key matched by exact equality, a cumulative vocabulary version
+  pinned per contract and refused when unknown, and an initial set of seven
+  keys cut where this organisation's own worker delegations are cut.
 
 ### Changed
 
