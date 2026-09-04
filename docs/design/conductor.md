@@ -536,7 +536,8 @@ AgentType
   askable              capability keys the conductor puts in the contract's askable set
   vocabularyVersion    the vocabulary version the two sets are written against
   loopPolicy           read by the conductor: review rounds, halt / no-progress thresholds
-  executorPolicy       an opaque bag nobody in cadenza interprets: model tier, reporting duties
+  executorPolicy       read only by the invocation adapter: executor role, model tier,
+                       reporting duties. Opaque to domain, application, ports and the loop
   agentTypeDigest      over all of the above, computed the way config_digest is
 ```
 
@@ -544,9 +545,22 @@ AgentType
 contract. The two policy bags are split because they have different interpreters, and conflating
 them was this section's own first mistake: **`loopPolicy` is the conductor's** — §4 gives it review
 and §6.3 gives it no-progress, so a round budget and a halt threshold have a real reader — while
-**`executorPolicy` is carried and never interpreted**, which is what keeps a model tier expressible
-without naming an executor (§6.8). Neither bag is ever seen by `classify()`, and neither is
-authority: an action a `loopPolicy` permits is still `refused` if the contract refuses it.
+**`executorPolicy` is interpreted in exactly one place — the continuo-invocation adapter of §2.3's
+bundled replaceable unit** — and nowhere else, which is what keeps a model tier expressible without
+naming an executor anywhere in `domain`, `application` or `ports` (§6.8). Neither bag is ever seen by
+`classify()`, and neither is authority: an action a `loopPolicy` permits is still `refused` if the
+contract refuses it.
+
+**That adapter has one mapping it cannot avoid: the role.** `run admit --role` is required, and its
+value must be one of the four roles in continuo's bundled role document — `worker`, `curator`,
+`dispatcher`, `secretary` — because that is what `lap perform` renders the fence from. Admission does
+**not** check it: any non-empty string is accepted and persisted, and the mismatch is only found much
+later, after the topic branch and worktree already exist (continuo#126, `lap-1-dogfood.md:126-131`).
+So the agent type names an **executor-neutral role name of cadenza's own**, `executorPolicy` carries
+it, and the adapter maps it onto whatever roster the executor behind the bundle has — refusing an
+unmapped name *before* admission rather than letting continuo pay for it late. Which roster that is
+and what refuses an unmapped name is decision **C-15**; a second executor with different roles
+changes the adapter and nothing above it, which is the whole point of §2.3's boundary.
 
 **The record is a frozen value with its own digest** (D-0015 for the freezing, and the
 `config_digest` / `contract_digest` technique for the digest — D-0011, D-0017 for its oracle), and a
@@ -555,6 +569,18 @@ that, the same `agentTypeId` under an unchanged `contract_digest` could denote d
 rounds, halt thresholds or tier a month later, and "under what policy did it do that" would be
 unanswerable from the record — the same reconstructability argument D-0026 §1 makes for the grant.
 The digest is the agent type's own; it does **not** enter `config_digest`, for the reason in §7.2.
+
+**A digest alone does not make a past run reconstructable, and the design must not pretend it does.**
+A stored `agent_type_digest` proves only that the record has or has not changed; it does not hand
+back the review limit, halt threshold or tier the run actually ran under. So the digest is the
+*detection* half, and it needs a retention half beside it: **agent-type records are immutable, and
+editing one mints a new record rather than mutating the old** — the same move D-0015 makes for value
+objects and D-0026 §1 makes for contracts, where "an approval is a superseding contract, not a
+widening of the running one". A run's `agent_type_digest` then addresses a record that still exists.
+What that retention costs — whether superseded records live in the catalog, in a content-addressed
+store, or only in git history — is the durability question cadenza does not answer for itself
+(D-0026 §2: what cadenza cannot compute purely is the control plane's), so this document names the
+requirement and leaves the mechanism to whoever owns the store.
 
 ### 7.2 Where it lives, and the trap that decides it
 
@@ -828,6 +854,8 @@ per AGENTS.md §6 an issue carrying open decisions is not started until they are
 | **C-12** | Should the placement premise — "the conductor lives in cadenza", taken with the human on 2026-09-04 and recorded only in cadenza#40 — become a `D-` entry? | **Yes**, as its own entry, before any conductor code is written | AGENTS.md §3 requires a `DECISIONS.md` entry for any settled design question, and an architectural premise recorded only in an issue is the drift D-0001's oracle order exists to prevent. This document may not create it (propose-only), so it names it instead |
 | **C-13** | Who terminates the gate when an iteration aborts before an answer, and as what outcome? | **`gate close --outcome withdrawn`, written by the conductor** | It is the only outcome writable from the `received` stage (`gates.ts:277-284`, `gate/operator.ts:102-116`), and it is explicitly *not* an approval — so it cannot be confused with one. It is nonetheless a write on a gate, which is why it is asked here rather than assumed (§10 step 5) |
 | **C-14** | How does a cadenza run pin and record which continuo revision it drove? | **Record it per run** — the continuo revision the invocation adapter used, persisted beside the run's other identifying digests — and treat pinning the checkout as part of whatever C-8's interim is | C-8's CLI boundary answers "which continuo is this" worse than any of the three npm options, which is the property §9.1 used to reject option C; approving C-8 without this leaves the question hidden (§9.2) |
+| **C-15** | Where does the agent-type role name map onto the executor's role roster, and what refuses an unmapped name? | **In the continuo-invocation adapter, refusing before admission** — the agent type carries cadenza's own role name; the adapter maps it and refuses an unmapped one | `run admit --role` is required but unvalidated: a wrong role is accepted, persisted, and paid for only when `lap perform` renders the fence, after the branch and worktree exist (continuo#126). Refusing in the adapter is the only place that costs nothing, and it keeps the roster out of `domain` (§7.1) |
+| **C-16** | How are superseded agent-type records retained, so a run's `agent_type_digest` still addresses something? | **Immutably, by minting a new record on every edit**; where superseded records are stored is the store owner's, not cadenza's | A digest detects change but does not hand back the policy a past run used. Immutability is D-0015's and D-0026 §1's existing move; durability is what D-0026 §2 assigns to the control plane rather than to cadenza (§7.1) |
 
 Two things that are **not** cadenza decisions and are recorded here only so the design does not
 silently depend on them: continuo's S1 promotion (the "would you accept these settings?" question
