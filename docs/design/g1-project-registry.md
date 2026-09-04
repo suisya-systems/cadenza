@@ -1,8 +1,9 @@
 # G1 — Project Registry
 
 Status: accepted (bootstrap scope)
-Applies to: `cadenza.domain`, `cadenza.application`, `cadenza.ports`,
-`cadenza.adapters.toml_catalog`
+Applies to: `src/domain/`, `src/application/`, `src/ports/`,
+`src/adapters/toml-catalog/` (the Python spellings `cadenza.domain` and friends
+until `DECISIONS.md` D-0030 retired that implementation)
 
 This document is the contract for G1. The code implements what is written here;
 where the two disagree, this document is the defect report.
@@ -243,36 +244,47 @@ project, or `ProjectNotFoundError` naming the closest candidates.
 
 ## 7. Errors
 
-Every refusal is a typed exception under `cadenza.domain.errors`, carrying the
-file and the key at fault. Nothing is refused via a bare `ValueError` and
-nothing is refused silently — a catalog that half-loads is worse than one that
-does not load.
+Every refusal is a typed error under `src/domain/errors.ts`, carrying the file
+and the key at fault. Nothing is refused via a bare `Error` and nothing is
+refused silently — a catalog that half-loads is worse than one that does not
+load.
+
+The Python spelling of this section named `cadenza.domain.errors` and a bare
+`ValueError`; `DECISIONS.md` D-0030 retired that implementation, and only the
+spelling changed here. What is required is unchanged: typed, located, never
+silent.
 
 ## 8. Layout
 
 ```
-src/cadenza/
+src/
   domain/        identities, clone sources, project, digest, errors  (no I/O)
   application/   composition and resolution                          (no I/O)
-  ports/         protocols the outside world implements
+  ports/         interfaces the outside world implements
   adapters/
-    toml_catalog/   TOML files -> raw layer documents
-    interlock/      placeholder; see §9
-    claude_code/    placeholder
+    toml-catalog/   TOML files -> raw layer documents
 ```
 
 Dependency direction is inward only: `adapters -> application -> domain`, and
-`ports` is depended on, never depends. `tests/test_import_boundaries.py`
-enforces this in CI rather than in review.
+`ports` is depended on, never depends.
+`test/architecture/import-boundaries.test.ts` enforces this in CI rather than in
+review.
 
-The package is `cadenza`, and no module under it is named `core` or `runtime` —
-those names belong to interlock's vocabulary and reusing them makes a boundary
-review harder than it needs to be.
+No module is named `core` or `runtime` — those names belong to interlock's
+vocabulary and reusing them makes a boundary review harder than it needs to be.
+
+This section described `src/cadenza/` and a `tests/test_import_boundaries.py`
+until `DECISIONS.md` D-0030 retired the Python implementation. The **shape** is
+what this section fixes and it is unchanged: the same four layers, the same
+inward-only direction, the same naming refusal, enforced by a scan in CI. The
+two `placeholder` adapter directories (`interlock/`, `claude_code/`) were empty
+Python packages and have no TypeScript counterpart, because a directory cannot
+be empty and tracked here; §9 says what still holds the interlock seam.
 
 ## 9. On interlock
 
 Cadenza is designed to sit on top of interlock, and **does not depend on it** —
-not in `pyproject.toml`, not in an extra, not in a comment that says
+not in `package.json`, not as an optional dependency, not in a comment that says
 "temporarily". Interlock's control-plane API and SQLite schema are marked
 throwaway on interlock's own side (interlock D-0026), and interlock is frozen,
 so importing them would convert a deliberate spike into a dependency by inertia
@@ -280,7 +292,14 @@ and no later stabilisation is coming to change that. Whether cadenza takes a
 control-plane dependency at all, and against what, is decided here
 (`DECISIONS.md` D-0023) rather than settled elsewhere.
 
-`cadenza/adapters/interlock/` therefore exists and is empty: the seam is
-reserved so that the first real integration is a new file in a place already
-agreed, and `tests/test_import_boundaries.py` fails the build the day anything
-under `cadenza` imports `claude_org_runtime`.
+The seam is therefore reserved rather than occupied: the first real integration
+is a new file at `src/adapters/interlock/`, a place already agreed, and
+`test/architecture/import-boundaries.test.ts` fails the build the day anything
+under `src/` imports `interlock` or `claude-org-runtime` — in any spelling, by
+any loader route.
+
+Under the Python implementation the seam was held open by an empty
+`cadenza/adapters/interlock/` package directory. D-0030 retired it, and nothing
+replaces the directory itself: what reserves the seam is this section plus
+`DECISIONS.md` D-0023, and what enforces the boundary is the scan, which never
+depended on the directory existing.

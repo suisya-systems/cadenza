@@ -2308,6 +2308,15 @@ node ids from 127 test functions across 8 files).
 - `README.md`'s Status and Layout sections, `docs/repository-policy.md` §2/§3/§5, and
   `docs/porting.md` §3.2/§3.3/§4.2/§4.5/§7 are updated to match. `docs/porting.md` §7's table is
   final: every file in its first column is deleted.
+- **`docs/design/g1-project-registry.md` is updated in the same change**, and this is not
+  housekeeping. D-0001 makes that document the primary oracle and a disagreement with it a defect
+  **in the code**; its §7, §8 and §9 named `cadenza.domain.errors`, `src/cadenza/`'s layout, an empty
+  Python interlock package and `tests/test_import_boundaries.py`. Deleting those without touching the
+  contract would have left the only surviving implementation nonconforming by the repository's own
+  rule. Only the spellings change: the four layers, the inward-only direction, the refusal of the
+  names `core` and `runtime`, the typed-and-located error requirement, and the reserved interlock
+  seam are all exactly as they were. The two placeholder adapter directories have no counterpart,
+  because an empty tracked directory does not exist here; §9 and D-0023 hold the seam instead.
 - D-0011 and D-0017 gain forward pointers to this entry. Neither is superseded: both faces still
   run, and what changed is what stands behind each one.
 - D-0014 deferred exactly this deletion, on the reasoning that removing the Python implementation in
