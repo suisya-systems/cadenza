@@ -175,6 +175,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   windows-latest failure. Each is asserted against sources written for the
   purpose, which is the direction a sweep over a tree that satisfies its own
   rules cannot state.
+- A `constructor` destructured by *assignment* is a loader route too
+  (cadenza#37). `({ constructor: F } = () => {})` reaches the same `Function`
+  constructor as the declaration form above, and reaches it with no binding
+  pattern in the tree at all: an assignment writes its target as an ordinary
+  object literal, so the pattern branch never ran and the key read as somebody
+  else's property name. The literal is now classified by what encloses it - the
+  target half of an `=`, or a pattern nested inside one - which is what tells it
+  apart from `const x = { constructor: f }`, the identical node on the other
+  side of the `=`. Nested targets are covered; the declaration form and a
+  literal that is nobody's target each have a case saying they must not trip.
+  The sweep's documented scope is unchanged: it is not a sandbox, and the list
+  of spellings does not terminate.
 
 ### Dependencies
 
