@@ -1910,10 +1910,14 @@ the one the human raised.
 
 **The price, stated rather than buried.** Two, both real.
 
-- **Two packages must become consumable instead of one.** cadenza is `private: true` at `0.0.0`
-  exactly as continuo is, so this decision does not inherit the publication problem of
-  `conductor.md` §9 — it doubles it. It is a price in the same currency as continuo D-0045 rather
-  than a new kind of problem.
+- **Two packages must become consumable instead of one, and cadenza is the further of the two from
+  it.** cadenza is `private: true` at `0.0.0` exactly as continuo is, so this decision does not
+  inherit the publication problem of `conductor.md` §9 — it doubles it. It is not the same problem
+  twice: continuo at least builds a `dist/` and declares `main`, while cadenza's `package.json`
+  declares no `main`, no `exports`, no `types` and no `files`, and D-0008 records "no build output
+  yet" as a decision rather than an oversight. Before rondo can import cadenza, D-0008's deferral has
+  to be revisited — **that is cadenza's own decision, not taken here**, and it is the concrete shape
+  of this price rather than an aside. It is a price in the same currency as continuo D-0045.
 - **A third repository needs a third ledger and a rule for what it may decide alone.** continuo
   records that neither repository's `DECISIONS.md` can hold a decision binding both
   (`minimal-operating-loop.md` §8), and a third repository multiplies that defect rather than

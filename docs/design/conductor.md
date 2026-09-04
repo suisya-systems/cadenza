@@ -755,9 +755,13 @@ Two disciplines come with it, both already cadenza's:
 - **Ledger cost.** A new `src/domain/*.ts` produces five `unmapped` parity ids (D-0022) and must be
   declared in `parity/target-only.json` with a reason.
 
-**What the test cannot prove**, and the document should say so where the test lives: this is a static
-property, exactly as continuo's is. It proves that no cadenza module names an executor and that a
-contract is digest-stable across executors. It does not prove that a second executor can actually
+**What the test cannot prove**, and the document should say so where each half lives: this is a
+static property, exactly as continuo's is. Under D-0029 the halves prove different things in
+different repositories. Rondo's half proves that no **rondo** conductor module names an executor and
+that a contract built through either executor adapter is digest-identical. Cadenza's half proves only
+that the digest is determined by the agent type, the project and the grantee — determinism over
+cadenza's own inputs, which is all cadenza can observe, since it never sees an executor and cannot
+assert a boundary drawn in someone else's tree. It does not prove that a second executor can actually
 drive a lap to a gate — that is continuo's cell, and today it is untested there too (§2.2). It also
 does not measure §2.3's bundle itself: the `SessionProvider` implementation, the fence renderer and
 the terminal-report fact vocabulary all live in continuo (`src/session/`, `src/fencing/renderer.ts`,
@@ -788,10 +792,27 @@ cadenza writes supersedes continuo's entries; cadenza's numbering space is its o
 
 ### 9.1 What is actually open
 
-**None of the three options is executable today**, and the reasons are facts rather than preferences.
-They are stated below for continuo, which is where they were measured; under D-0029 each applies a
-second time, to cadenza, which is `private: true` at `0.0.0` for the same reason and has no published
-package either. That doubling is D-0029's stated price.
+**None of the three options is executable today**, and the reasons are facts rather than
+preferences. The table below is about **continuo**, which is where they were measured.
+
+**Cadenza's own blockers are not continuo's, and the table does not carry over to it.** D-0029 makes
+rondo consume both, so this must be said separately rather than by generalisation, and cadenza is the
+*further* of the two from consumable:
+
+| | continuo | cadenza |
+|---|---|---|
+| published? | no — `E404`, `private: true` at `0.0.0` | no — `private: true` at `0.0.0` |
+| entry point | `main: ./dist/index.js`, and `src/index.ts` re-exports the lap surface | **none**: `package.json` declares no `main`, no `exports`, no `types` and no `files` (read 2026-09-05) |
+| build | a seven-command `build` producing `dist/`, gitignored and absent from a fresh checkout | **none**: `typecheck` is `tsc --noEmit`, and D-0008 records "no build output yet" as a decision, not an oversight |
+| `prepare` | none, which is what breaks option B | none, and adding one collides with D-0004 exactly as it does for continuo (D-0009) |
+
+So option A needs a publication step in each repository; option B is broken in both for the same
+`prepare`/`--ignore-scripts` reason, and in cadenza it would install a package with no entry point at
+all; option C's lockfile objection applies to whoever holds the lockfile, which is rondo. **What
+cadenza owes before rondo can import it is therefore a decision D-0008 deliberately deferred — that
+it emits build output and declares an entry point.** That is not taken here and is not C-8: it is
+cadenza's own, and it is the concrete shape of D-0029's "two packages must become consumable instead
+of one".
 
 | Option | Status today |
 |---|---|
@@ -1055,14 +1076,21 @@ below carries the outcome in place of the recommendation. Two rows change status
 without being decided: **C-9**'s condition is left unreached, and **C-8** is demoted from central to
 an interim question that is rondo's rather than cadenza's (§9.2).
 
-**The other fourteen rows are unchanged in substance, and D-0029 splits them by subject.** Five are
-about things cadenza holds and stay at cadenza's gate: **C-1**, **C-2**, **C-10**, **C-12** and
-**C-16**, all of them the agent-type record or the contract. The rest are about the conductor and go
-with it — **C-6**'s `--cli-arg` allowlist and **C-15**'s role mapping locate logic in rondo's
-invocation adapter, **C-7**'s capacity ledger and identifier allocator would be rondo's, **C-4** and
-**C-13** are about who may invoke a continuo verb on a human's behalf, **C-11** is continuo's by this
-document's own recommendation, and **C-14** is about what a rondo run records. Their text below is
-updated to say rondo where it said cadenza; the recommendations and the reasons are untouched.
+**The other fourteen rows are unchanged in substance, and D-0029 splits them by subject. All
+fourteen are listed, because a row with no stated gate is a row nobody picks up.**
+
+- **Cadenza's gate, six rows** — the agent-type record and the contract, which D-0029 leaves here:
+  **C-1**, **C-2**, **C-3**, **C-10**, **C-12**, **C-16**. C-3 is on this side because its subject is
+  what the *record* carries (`executorPolicy`, carried and not read by cadenza), not what the
+  conductor does with it; the adapter that would eventually interpret it is rondo's, and that is C-15.
+- **Rondo's gate, seven rows** — they go with the conductor: **C-4**, **C-5**, **C-6**, **C-7**,
+  **C-13**, **C-14**, **C-15**. C-5 is conductor behaviour (does it perform step 11 after approval),
+  and C-4 and C-13 are about who may invoke a continuo verb on a human's behalf.
+- **Continuo's gate, one row** — **C-11**, which this document already recommends treating as
+  continuo's rather than answering.
+
+Their text below is updated to say rondo where it said cadenza; the recommendations and the reasons
+are untouched, and no row's outcome changes by being assigned a gate.
 
 **What is not settled here is the gate itself.** Those rows go to rondo's gate, and rondo has no
 ledger yet and no rule for what it may decide alone — D-0029's second stated price. Establishing both
