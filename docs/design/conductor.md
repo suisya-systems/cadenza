@@ -134,7 +134,17 @@ Two consequences follow immediately, and both become open decisions:
   `--add-dir` are **not** on that list (continuo#133, "open by construction"). A conductor that
   composes `run admit --cli-arg` freely is a documented-verb path that can make the human gate
   advisory — this document's own inference from `materializer.ts:628-634`, not a continuo statement.
-  See decision **C-6**.
+
+  **The allowlist this document proposes is empty.** Not "small": empty. Every `--cli-arg` the
+  dogfood needed was a workaround for a fence defect that has since been fixed — F-1's
+  `--setting-sources ''` / `--strict-mcp-config` and F-2's hand-passed
+  `--allowedTools Edit,Write,...` were both closed by continuo D-0081 (continuo#119, #120), and lap 3
+  went through at `aa87f35` with no `--cli-arg` at all (`lap-1-dogfood.md:646-745`). So the
+  conductor admits runs with **no** `--cli-arg`, and adding a first entry is its own decision with
+  its own reason, taken at cadenza's gate rather than by whoever writes the adapter. Three spellings
+  are refused outright and permanently, because each one disables the fence the human gate rests on:
+  `--dangerously-skip-permissions`, `--allowedTools` / `--disallowedTools`, and `--add-dir`.
+  Decision **C-6**.
 - **The seam's own hole.** continuo D-0059 records that `root.ts` *cannot* pre-reject an intent whose
   `cliArgs` carry a provider-owned flag, because reading that list would import a backend; such a run
   spends its identifier and recovery is a fresh run id. Closing it means the session contract gaining
@@ -805,6 +815,11 @@ Putting §§3-9 together, one conductor iteration for one request:
    failure to the human on its own path.
 4. **Verify.** The conductor's own ground-truth check (§6.2). A verify that did not run is `no_run`;
    one whose result could not be read is `indeterminate`; neither is `passed`.
+   **Anything but `passed` ends the iteration here**, on the same path as an aborted review below: no
+   review, no presentation, no publish. §6.2's rule is that only `passed` makes a run commit-worthy,
+   and putting an unverified artefact in front of a human as an approvable gate would spend the one
+   human contact this loop is rationing. The gate opened in step 3 is settled the way step 5 settles
+   it, and the conductor reports the verdict and its detail.
 5. **Review.** The Codex gate and whatever the agent type's policy names. A blocking review **ends
    the iteration without marking the run commit-worthy** (§5.1). It does not return to step 3:
    `lap perform` cannot be re-entered on an admitted run — the run id is taken, the topic branch and
@@ -815,11 +830,18 @@ Putting §§3-9 together, one conductor iteration for one request:
    it belongs to cannot be retried. Only three outcomes are a hand's to write —
    `withdrawn`, `expired`, `unanswerable` (`gate/operator.ts:102-116`) — and only `withdrawn` may be
    written from the `received` stage (`gates.ts:277-284`), which is where an un-presented gate sits.
-   This document therefore recommends `gate close --outcome withdrawn` on an aborted iteration, and
-   records the choice as decision **C-13** rather than taking it: `withdrawn` is not an approval
-   (`minimal-operating-loop.md:349-353`), which is exactly the property an abort wants, but the
-   question of who may write it is C-4's neighbour.
+   `withdrawn` is not an approval (`minimal-operating-loop.md:349-353`), which is exactly the property
+   an abort wants. **But the conductor must not write it**, for C-4's reason one file along:
+   `closeOpenGate` hard-codes `actorKind: "human"` (`gate/operator.ts:991`), so a conductor-issued
+   close records an agent action as a person's, in the same way a conductor-composed answer body
+   would. The close belongs to the #22 surface, on the same rule and for the same reason. Decision
+   **C-13**.
 6. **No-progress.** Key on the verify detail (§6.3). A repeated failure signature halts and reports.
+   **In lap 1 this step and `loopPolicy`'s round budget are dormant, and the document says so rather
+   than implying they work**: with one lap per request and no allocator for the next identifier tuple
+   (§6.7, step 5), no signature can repeat and no second round can run. Both become live the moment
+   C-7's allocator exists — they are specified here so the design does not have to be reopened then,
+   not because they fire today.
 7. **Gate.** On the gate opened in step 3: `gate present` →
    `gate deliver` → `gate ack` → **a human answers** → `gate deliver` → `gate ack`. The gate closes
    as `answered_and_forwarded` only via the forward relay's ack; the conductor cannot write that
@@ -845,14 +867,14 @@ per AGENTS.md §6 an issue carrying open decisions is not started until they are
 | **C-3** | Do tiered models per stage belong to the conductor? | **No.** Tier goes in `executorPolicy`: carried, and never read by cadenza *or* by the conductor — unlike `loopPolicy`, which the conductor does read (§7.1) | G1 §1 and D-0027 forbid naming an executor in `domain`/`application`/`ports`, and the one adapter seam that would host the tier-to-model mapping, `src/adapters/interlock/`, is closed by D-0014 (§6.8) |
 | **C-4** | May the conductor author a human's answer — a gate-answer body, or the widening that answers a `needs_approval`? | **No** — it may carry a human's answer verbatim, never compose one. `gate answer` should be invoked by the #22 surface, and a widening successor should be issued only on an answer that surface recorded, with that surface as issuer | Neither side records who answered: continuo derives the actor kind from the verb (§6.5), and `adopt()` does not refuse widening — G2 hands that to the control plane (§6.1) |
 | **C-5** | Does the conductor perform step 11 mechanically after approval? | **No** for lap 1: it holds no push credentials and stops at the closed gate | continuo executes no git or GitHub call, has no verb that moves `run.status` (F-7, "Workaround. None"), and defers the privileged publisher to lap 2 (§6.6) |
-| **C-6** | May the conductor compose `run admit --cli-arg` freely? | **No** — only from an allowlist the conductor owns, recorded in the design and spelled in the invocation adapter | `FENCE_OWNED_FLAGS` does not cover `--dangerously-skip-permissions`, `--allowedTools`, `--disallowedTools`, `--add-dir` (continuo#133), so a documented-verb path can make the human gate advisory (§2.3) |
+| **C-6** | May the conductor compose `run admit --cli-arg` freely? | **No — the allowlist starts empty.** The conductor admits with no `--cli-arg`; a first entry is its own decision at this gate; `--dangerously-skip-permissions`, `--allowedTools` / `--disallowedTools` and `--add-dir` are permanently refused (§2.3) | `FENCE_OWNED_FLAGS` does not cover `--dangerously-skip-permissions`, `--allowedTools`, `--disallowedTools`, `--add-dir` (continuo#133), so a documented-verb path can make the human gate advisory (§2.3) |
 | **C-7** | Address the concurrency residual first, or stay single-flight? | **Single-flight for lap 1**; parallel admission waits on continuo's post-lap entry or a cadenza-side capacity ledger designed on its own evidence | `minimal-operating-loop.md:989-995` makes the residual unreachable at zero cost under one provider instance per run and bands it post-lap; and the verbs refuse on existence, so a retry needs an identifier allocator nothing provides (§6.7) |
 | **C-8** | How does cadenza consume continuo? | **Across the CLI process boundary for lap 1**; the published package (continuo D-0045) is the destination for a typed surface | It is the only option executable today: the package is unpublished (`E404`, `private: true`), a git dep has no `prepare` and collides with `--ignore-scripts`, and a workspace defeats D-0004's lockfile property (§9); its own cost is that it answers "which continuo is this" worse still, and that pinning question stays open (§9.2) |
 | **C-9** | If cadenza ever does take the npm dependency, are the three consequent entries acceptable? | Take them **explicitly, as three separate entries** (native transitive dependency vs D-0004's falsifier; D-0016's "one runtime dependency"; the `ALLOWED_EXTERNALS_BY_LAYER` widening), and note the macOS-first-exercise risk | Each is a named falsifier of an accepted entry, and D-0004 says so in its own words (§9.1) |
 | **C-10** | Which tree hosts the conductor and the record — TypeScript `src/` or Python `src/cadenza/`? | **TypeScript**, alongside G2 | G2 is TypeScript-only (cadenza#25), the boundary suite that would police the record runs over the TS graph, and C-8's boundary is an npm/CLI question either way |
 | **C-11** | Which recipient does the gate relay address? | Treat it as **continuo's** open decision; the conductor's read path is `gate show`, not the dropbox | continuo already calls it "a decision, not a detail"; `external-notify` writes `\uXXXX`-escaped `.effect.json` files a person cannot read (F-5, still reproducing), and the other handler delivers nothing by design (§3) |
 | **C-12** | Should the placement premise — "the conductor lives in cadenza", taken with the human on 2026-09-04 and recorded only in cadenza#40 — become a `D-` entry? | **Yes**, as its own entry, before any conductor code is written | AGENTS.md §3 requires a `DECISIONS.md` entry for any settled design question, and an architectural premise recorded only in an issue is the drift D-0001's oracle order exists to prevent. This document may not create it (propose-only), so it names it instead |
-| **C-13** | Who terminates the gate when an iteration aborts before an answer, and as what outcome? | **`gate close --outcome withdrawn`, written by the conductor** | It is the only outcome writable from the `received` stage (`gates.ts:277-284`, `gate/operator.ts:102-116`), and it is explicitly *not* an approval — so it cannot be confused with one. It is nonetheless a write on a gate, which is why it is asked here rather than assumed (§10 step 5) |
+| **C-13** | Who terminates the gate when an iteration aborts before an answer, and as what outcome? | **`gate close --outcome withdrawn`, invoked by the #22 surface — not by the conductor**; the conductor asks for the close and reports why | `withdrawn` is the only outcome writable from the `received` stage (`gates.ts:277-284`, `gate/operator.ts:102-116`) and is explicitly not an approval. But `closeOpenGate` hard-codes `actorKind: "human"` (`gate/operator.ts:991`), so a conductor-issued close records an agent action as a person's — C-4's problem exactly, one verb along (§10 step 5) |
 | **C-14** | How does a cadenza run pin and record which continuo revision it drove? | **Record it per run** — the continuo revision the invocation adapter used, persisted beside the run's other identifying digests — and treat pinning the checkout as part of whatever C-8's interim is | C-8's CLI boundary answers "which continuo is this" worse than any of the three npm options, which is the property §9.1 used to reject option C; approving C-8 without this leaves the question hidden (§9.2) |
 | **C-15** | Where does the agent-type role name map onto the executor's role roster, and what refuses an unmapped name? | **In the continuo-invocation adapter, refusing before admission** — the agent type carries cadenza's own role name; the adapter maps it and refuses an unmapped one | `run admit --role` is required but unvalidated: a wrong role is accepted, persisted, and paid for only when `lap perform` renders the fence, after the branch and worktree exist (continuo#126). Refusing in the adapter is the only place that costs nothing, and it keeps the roster out of `domain` (§7.1) |
 | **C-16** | How are superseded agent-type records retained, so a run's `agent_type_digest` still addresses something? | **Immutably, by minting a new record on every edit**; where superseded records are stored is the store owner's, not cadenza's | A digest detects change but does not hand back the policy a past run used. Immutability is D-0015's and D-0026 §1's existing move; durability is what D-0026 §2 assigns to the control plane rather than to cadenza (§7.1) |
