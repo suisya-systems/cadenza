@@ -8,31 +8,38 @@ CI job name), and where this file and that evidence disagree, the evidence wins.
 
 `README.md` says what cadenza is. This file says how work on it is done.
 
-## 1. Two implementations coexist, and neither is dead yet
+## 1. There is one implementation now, and one piece of Python
 
-`src/cadenza/` (Python) and `src/` + `test/` (TypeScript) are both live. The
-TypeScript rewrite of G1 has reached 330 of 330 collected node ids, but
-`.github/branch-protection.json` still requires the `pytest (...)` cells *and*
-`ts-gate`, so `main` is enforced by both at once. **Retiring the Python side,
-and deciding which side becomes the enforcing one, is issue #25 and is not
-settled.** Do not pre-empt it: a change touching behaviour covered on
-both sides keeps both green. "Keep both green" is not "make them agree by
-copying", though - where the two disagree, section 2 says which one is wrong.
+TypeScript is the whole of cadenza: `src/` and `test/`. `src/cadenza/` (Python)
+and `tests/` (its pytest suite) were deleted by **D-0032** once the port reached
+330 of 330 collected node ids and `main`'s required checks became `ts-gate` +
+`dependency-review`. Earlier sections of this file used to say the two coexisted
+and both had to be kept green; that is over, and a PR that adds a `.py` file
+under `src/` is doing something that needs saying out loud.
 
-Which one an issue means is usually explicit in its acceptance criteria. When it
-is not, ask on the issue rather than choosing.
+**One piece of Python survives, deliberately**:
+`scripts/oracle/dump_config_digest.py`. It imports the standard library and
+nothing else, and CI runs it in the `oracle` job. It is not a leftover - it is
+the live half of a differential oracle, and section 5 says what it is for.
 
-`test/` is the TypeScript suite and `tests/` is the Python one - one character
-apart on purpose, which is why both runners are pointed at their directory
-explicitly (`README.md`, "Layout").
+The `test/` versus `tests/` trap is gone with `tests/`, but the ported tests
+still cite `tests/test_*.py` in their headers. Those are provenance, not live
+paths: they say where a case came from, and they are the reason a ledger entry
+can be read years later.
 
-## 2. When the port and the code disagree (D-0001)
+## 2. When the port and the design document disagree (D-0001)
 
-Authorities, in order: `docs/design/g1-project-registry.md`, then `tests/` (the
-Python suite), then `src/cadenza/`. A disagreement with the design document is a
-defect **in the port**. A disagreement with a Python test, where the document is
-silent or agrees with the port, is a finding: record it in the ledger entry's
-`reason` and raise it. Do not transcribe it into the TypeScript side.
+Authorities, in order: `docs/design/g1-project-registry.md`, then `src/` +
+`test/`. A disagreement with the design document is a defect **in the code**;
+the document is the primary oracle and always was.
+
+The middle authority is gone. Until D-0032 this order ran document, then
+`tests/` (the Python suite), then `src/cadenza/`, and a disagreement with a
+Python test was a *finding* to be recorded in a ledger `reason` rather than
+transcribed. There is no Python test to disagree with now, so that step falls
+away and the document carries the weight alone. The findings already recorded in
+the ledgers stay exactly as they are - they are history, and D-0032 did not
+re-open any of them.
 
 This is the reverse of continuo's order, so do not carry that habit over
 (`docs/porting.md` section 2).
@@ -81,11 +88,14 @@ Add the ID to the index table at the top of the file as well as the body.
 
 | Run locally | What it gates in CI |
 |---|---|
-| `python -m pytest` (plus `ruff check .`, `ruff format --check .`, `mypy src`) | `pytest (<os> / py<version>)` in `.github/workflows/test.yml` |
 | `npm run verify` (lint, knip, typecheck, test, parity, inventory) | the `checks` and `double-green` jobs in `.github/workflows/typescript.yml`, aggregated by `ts-gate` |
+| `python3 scripts/oracle/dump_config_digest.py parity/oracle/config-digest-vector.json --check` | the `oracle` job in the same workflow |
 
-Required checks are `pytest (ubuntu-latest / py3.10)`,
-`pytest (ubuntu-latest / py3.12)`, `ts-gate` and `dependency-review`
+There is no `pytest` / `ruff` / `mypy` row any more, and no `.github/workflows/test.yml`:
+D-0032 deleted all four. `shellcheck` moved to `.github/workflows/hygiene.yml`
+and, as in its old home, is deliberately **not** a required check.
+
+Required checks are `ts-gate` and `dependency-review`
 (`.github/branch-protection.json`). **Those job `name:` strings are
 load-bearing**: the ruleset matches them literally, so renaming a job without
 editing that file leaves `main` waiting on a check that never reports
@@ -110,12 +120,15 @@ Specific to this repository:
   print rather than at the bug, and a test harness capturing UTF-8 will not see
   it. Markdown prose is exempt.
 - **Nothing under `cadenza` may import interlock, in any spelling** -
-  `claude_org_runtime` and `interlock` on the Python side,
-  `claude-org-runtime` and `interlock` on the TypeScript - and dependencies
-  point inward only (`adapters -> application -> domain`). Enforced by
-  `tests/test_import_boundaries.py` and
-  `test/architecture/import-boundaries.test.ts`, both of which get their own
-  named CI step. No module is named `core` or `runtime`.
+  `claude-org-runtime` and `interlock`, and the underscore spellings
+  `claude_org_runtime` / `interlock` are still refused because a package name
+  can arrive either way - and dependencies point inward only
+  (`adapters -> application -> domain`). Enforced by
+  `test/architecture/import-boundaries.test.ts`, which gets its own named CI
+  step. Its Python counterpart `tests/test_import_boundaries.py` was the other
+  half of this until D-0032 deleted it; the TypeScript file now covers the whole
+  of `src/`, including the `src/cadenza/` carve-out it used to leave to the
+  Python scan. No module is named `core` or `runtime`.
 
 **Green is not enough when you touch a check.** If a PR adds or repairs a check,
 it is expected to show the check is not vacuous - typically by mutation: plant
@@ -131,16 +144,31 @@ and issue #19 makes it an acceptance criterion.
   the test function (D-0010): a parametrised function of seven cases is seven
   entries. Every collected test must belong to a ledger's target file or be
   declared in `parity/target-only.json` with a stated reason. The ledgers
-  outlive the code they measured - #25 keeps them after the Python side is
-  retired. Do not edit one to make `npm run parity` quiet.
+  outlive the code they measured, which is no longer hypothetical: D-0032
+  deleted that code and kept every ledger. They are now the only account of what
+  the Python suite asserted. Do not edit one to make `npm run parity` quiet.
 - **`parity/source-inventory/*.txt` and `parity/source-inventory.manifest.json`.**
-  A committed snapshot of pytest's collection, in collection order. It is
-  regenerated only by re-running the collection, per the procedure in
-  `docs/porting.md` section 3.3 - never by hand-editing to match.
-- **`parity/oracle/*.json`.** Vectors produced by CPython. The `oracle` CI job
-  regenerates and compares them each run precisely so they cannot become
-  fossils; if a change moves a digest, that is the finding, not the vectors'
-  fault.
+  A committed snapshot of pytest's collection, in collection order. **It can no
+  longer be regenerated**: the procedure in `docs/porting.md` section 3.3 ran
+  the collection, and D-0032 deleted the suite it collected. It is now a closed
+  historical record. `npm run inventory` still checks it for internal
+  consistency; the one check that re-derived a figure from the Python source
+  (`test_functions` against `def test_`) is retired and says so in
+  `scripts/source-inventory-check.mjs`.
+- **`parity/oracle/*.json`.** Vectors produced by CPython, and after D-0032 the
+  two are no longer alike - do not treat them as one kind of file.
+  - `config-digest-vector.json` is **live**. The `oracle` CI job regenerates and
+    compares it every run, so it cannot become a fossil, because what it
+    questions is CPython's encoder - a third party that outlived the port and
+    can still move. If a change moves a digest, that is the finding, not the
+    vector's fault.
+  - `compose-digest-vector.json` is **frozen**. It questioned cadenza's own
+    Python, which no longer exists and so can no longer move; its generator was
+    deleted and nothing regenerates it.
+    `test/application/compose-oracle.test.ts` still checks all 13 cases against
+    it every run, which catches TypeScript regressions and nothing else. **Do
+    not add a case to it** - there is no CPython left to ask for the expected
+    value, so a new row would only assert that the code agrees with itself.
 - **`DECISIONS.md`.** Append-only. See section 3.
 - **`config/projects.local.toml`.** Gitignored, one operator's machine. Never
   add it or its paths to the tracked layer.
@@ -157,7 +185,9 @@ Issues carry up to three headings, and they mean different things:
 - **`## Open decisions`** - questions that are *not yet answered*.
   **An issue with `Open decisions` must not be started.** The decision is not
   the implementer's to make; picking one silently is how the repository acquires
-  a decision nobody took. Issues #9, #22 and #25 are in this state today.
+  a decision nobody took. Issues #9 and #22 are in this state today. (#25 was
+  too, until its open decision was settled at the human gate and closed by
+  D-0032.)
 
 The labels say the same at a glance: `ready-to-start` ("acceptance criteria are
 settled and nothing is waiting on a decision"), `needs-decision` ("has

@@ -1,11 +1,12 @@
 name: typescript
 
-# The TypeScript port's gate. Deliberately a SEPARATE workflow from
-# `tests.yml`, which is the Python suite's: the two have different matrices,
-# different toolchains and different lifetimes (the Python jobs are retired when
-# `src/cadenza/` is, DECISIONS.md D-0014). Keeping them apart means a change to
-# either cannot break the other by editing a shared file, and the required
-# check names in `.github/branch-protection.json` stay stable on both sides.
+# The gate. This was deliberately a SEPARATE workflow from `tests.yml`, which
+# was the Python suite's, on the reasoning that the two had different matrices,
+# different toolchains and different lifetimes -- the Python jobs to be retired
+# when `src/cadenza/` was (DECISIONS.md D-0014). That happened in D-0032:
+# `tests.yml` is gone, and this file is now the whole of the merge gate. The
+# separation did its job on the way out, which is why `.github/branch-protection.json`
+# needed one context swapped rather than a rewrite.
 #
 # The merge gate for this half is the `ts-gate` job at the bottom. Read that
 # first: everything above it exists to give it something to aggregate.
@@ -39,7 +40,7 @@ jobs:
       # the diagnosis, and cancelling them destroys it.
       fail-fast: false
       matrix:
-        # The same three operating systems the Python suite runs on. Windows is
+        # The same three operating systems the Python suite ran on. Windows is
         # a required cell from day one rather than a nightly extra: the cp932
         # console is where the ASCII-only output policy is actually observed
         # (D-0007), and path handling is where a port from `os.path` goes wrong.
@@ -142,11 +143,11 @@ jobs:
         run: npm run inventory
 
       - name: import boundary check (no interlock edge)
-        # Named separately for the reason `tests.yml` records about the Python
-        # half: this file is what the build exists to defend, so it gets its own
-        # line in the log rather than passing as one of 386 in `npm test`. It
-        # has already run there -- twice per cell, under the shuffle -- so this
-        # step is visibility, not coverage.
+        # Named separately for the reason `tests.yml` used to record about the
+        # Python half: this file is what the build exists to defend, so it gets
+        # its own line in the log rather than passing as one of 386 in
+        # `npm test`. It has already run there -- twice per cell, under the
+        # shuffle -- so this step is visibility, not coverage.
         #
         # The seed is explicit because `CI` is set here and an unset seed under
         # CI is a hard error by design (D-0006). A fixed value is right for this
@@ -158,13 +159,21 @@ jobs:
         run: npx vitest run test/architecture/import-boundaries.test.ts
 
   oracle:
-    # The differential oracle's Python half -- BOTH faces -- re-run against the
-    # committed vectors. Without this, a vector is a fossil: the TypeScript suite
-    # would keep agreeing with what CPython said on the day somebody generated
-    # it, including after a change to `src/cadenza/domain/digest.py` or to the
-    # composition path moved the answer. Comparing only `cases` is deliberate --
-    # see the scripts' --check branch for why the interpreter version is
-    # excluded.
+    # The differential oracle's CPython half, re-run against the committed
+    # vector. Without this the vector is a fossil: the TypeScript suite would
+    # keep agreeing with whatever CPython said on the day somebody generated it.
+    #
+    # ONE face runs here, not two, and that is the state D-0032 left behind.
+    # `dump_config_digest.py` questions CPython -- `json.dumps` under
+    # `sort_keys=True` / `ensure_ascii=False`, code-point collation, sha256 --
+    # which is a third party that outlived `src/cadenza/` and can still move
+    # under a Python upgrade. The compose face questioned cadenza's OWN Python,
+    # which no longer exists and therefore can no longer move, so its vector was
+    # frozen and its generator deleted; `test/application/compose-oracle.test.ts`
+    # still checks all 13 of its cases against that frozen vector on every run.
+    #
+    # Comparing only `cases` is deliberate -- see the script's --check branch for
+    # why the interpreter version is excluded.
     name: oracle vector is current
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -181,8 +190,6 @@ jobs:
         run: |
           python scripts/oracle/dump_config_digest.py \
             parity/oracle/config-digest-vector.json --check
-          python scripts/oracle/dump_compose_digest.py \
-            parity/oracle/compose-digest-vector.json --check
 
   ts-gate:
     # The single stable check name for the TypeScript half, referenced by

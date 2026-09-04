@@ -22,20 +22,17 @@
 /config/projects.local.toml
 
 # --- Python ---
+# Trimmed to what the one remaining Python file can produce (DECISIONS.md
+# D-0032). There is no package to build, no venv to create, and no pytest,
+# mypy or ruff to leave a cache behind; `scripts/oracle/dump_config_digest.py`
+# is a stdlib-only script CI runs under PYTHONDONTWRITEBYTECODE=1. These two
+# stay because a local run without that variable still writes bytecode, and an
+# ignored artefact is cheaper than a stray file in a diff.
 __pycache__/
 *.py[cod]
-*.egg-info/
-.venv*/
-build/
-dist/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
 
 # --- TypeScript / Node ---
-# `dist/` is already ignored above, under Python.
 node_modules/
+dist/
 *.tsbuildinfo
 .vitest-cache/

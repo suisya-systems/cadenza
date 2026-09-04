@@ -21,9 +21,14 @@
  *     PYTHONDONTWRITEBYTECODE=1 python3 scripts/oracle/dump_config_digest.py \
  *         parity/oracle/config-digest-vector.json
  *
- * Unlike continuo's oracles, this one needs no second checkout: the Python
- * implementation it questions is in this repository, at `src/cadenza/`, until
- * the port retires it.
+ * Unlike continuo's oracles, this one needs no second checkout -- and after
+ * D-0032 it needs no cadenza Python either. `src/cadenza/` is gone, and the
+ * generator was rewritten to import nothing but the standard library, because
+ * the implementation this oracle really questions was never cadenza's: it is
+ * CPython's `json.dumps` under `sort_keys=True` / `ensure_ascii=False`, its
+ * code-point collation, and `hashlib.sha256`. Those outlived the port and can
+ * still move under a Python upgrade, which is why this face still regenerates
+ * on every CI run while the composition face's vector is frozen.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";

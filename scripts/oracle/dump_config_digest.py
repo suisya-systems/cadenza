@@ -11,7 +11,7 @@ So the claim this oracle makes is narrower and harder than any ported test's:
     are the same bytes, and therefore the digests are the same string.
 
 **Why this file outlived the implementation it was written beside.** Until
-``DECISIONS.md`` D-0030 it imported ``cadenza.domain.digest`` from ``src/``, and
+``DECISIONS.md`` D-0032 it imported ``cadenza.domain.digest`` from ``src/``, and
 retiring the Python G1 would ordinarily have retired it too. It did not, because
 what this oracle actually questions is not cadenza's Python -- it is
 **CPython's**. ``json.dumps`` under ``sort_keys=True`` and

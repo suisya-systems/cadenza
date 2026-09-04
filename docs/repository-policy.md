@@ -15,18 +15,25 @@ JSON carries no comments, so the choices are explained here:
 - **Required status checks**, `strict: true` (a branch must be up to date with
   `main` before it merges). The required contexts are the *check-run* names,
   not workflow names, which is why they read as they do:
-  - `pytest (ubuntu-latest / py3.10)` — the minimum supported interpreter, and
-    the only row that exercises the `tomli` fallback rather than stdlib
-    `tomllib`. If that path breaks, it breaks here or nowhere.
-  - `pytest (ubuntu-latest / py3.12)` — the newest supported interpreter.
+  - `ts-gate` — one aggregating job in `.github/workflows/typescript.yml`,
+    standing for the whole TypeScript gate: the six `double-green` matrix cells,
+    `checks`, and `oracle`. It is a single required context on purpose, so that
+    adding or dropping a matrix cell never means editing this ruleset, and it
+    fails on any upstream result other than `success` — `skipped` and
+    `cancelled` included, which `needs` alone would let through.
   - `dependency-review`.
 
-  The other fifteen matrix rows run and are visible, but are not required: a
-  macOS or Windows runner outage should not be able to freeze `main`, and the
-  two required rows bracket the interpreter range the package claims to
-  support. The `pytest` job in `.github/workflows/test.yml` sets an explicit
-  `name:` precisely so these strings are stable; changing one without changing
-  the other leaves `main` waiting for a check that never reports.
+  Two `pytest (...)` contexts stood beside these until `DECISIONS.md` D-0032
+  retired the Python implementation; they were removed from the ruleset by hand
+  at the human gate, and this file and `.github/branch-protection.json` were
+  updated to match. `shellcheck` (now in `.github/workflows/hygiene.yml`) runs
+  and is visible but is deliberately not required, as it was not before.
+
+  The matrix rows `ts-gate` aggregates run and are visible, but are not
+  individually required: a macOS or Windows runner outage should not be able to
+  freeze `main`. The jobs set an explicit `name:` precisely so these strings are
+  stable; changing one without changing the other leaves `main` waiting for a
+  check that never reports.
 - **`required_pull_request_reviews`** with one approval and
   `dismiss_stale_reviews: true`. On a repository with a single maintainer this
   cannot be satisfied by the author, which is deliberate: `enforce_admins` is
@@ -48,9 +55,14 @@ push to `main`, to apply the settings in `.github/branch-protection.json`.
 Cadenza follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the major version is `0`, the public API may break in a minor release.
 
-The single source of truth for the current version is
-`src/cadenza/__about__.py`. Nothing else (docs, packaging metadata, CI)
-declares the version independently; they derive from it.
+The single source of truth for the current version is the `version` field of
+`package.json`. Nothing else (docs, CI) declares the version independently;
+they derive from it.
+
+It was `src/cadenza/__about__.py` until `DECISIONS.md` D-0032 deleted the Python
+package along with `pyproject.toml`, which is what read it. The field currently
+reads `0.0.0` and the package is `private: true`: nothing has been released, and
+what a published cadenza would look like is still deferred by D-0008.
 
 ## 4. Releases
 
@@ -68,7 +80,9 @@ designed to sit on top of it. `docs/design/g1-project-registry.md` section 9
 explains why: interlock's control-plane API and SQLite schema are marked
 throwaway on interlock's own side and interlock is frozen, so depending on them
 would turn a deliberate spike into a dependency by inertia and nothing there is
-going to stabilise later. `src/cadenza/adapters/interlock/` exists as a
-reserved, empty seam for the first real integration, and taking that step is a
-cadenza decision (`DECISIONS.md` D-0023), not one this repository is waiting on
-someone else to take.
+going to stabilise later. The reserved, empty seam for the first real
+integration was `src/cadenza/adapters/interlock/` and went with the Python
+package (D-0032); the boundary it marked is not gone, and is now enforced for
+the whole of `src/` by `test/architecture/import-boundaries.test.ts`. Taking
+that step is a cadenza decision (`DECISIONS.md` D-0023), not one this repository
+is waiting on someone else to take.

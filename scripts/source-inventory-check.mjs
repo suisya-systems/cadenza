@@ -34,12 +34,19 @@
  *                         reaches 330 while holding fewer distinct cases.
  *  6. **baseline**     -- the per-file counts must sum to the recorded suite
  *                         total, and the breakdown must add up to it.
- *  7. **functions**    -- the recorded `test_functions` must match the source
- *                         file's `def test_` count. Cadenza can check this and
- *                         continuo cannot, because the Python source is in this
- *                         repository: it is what ties the kickoff's figure of
- *                         127 to the 330 node ids the ledger counts, so neither
- *                         number can drift without the other being re-derived.
+ *  7. **functions**    -- RETIRED by DECISIONS.md D-0032, and named here rather
+ *                         than deleted so a reader of a green run knows what it
+ *                         stopped covering. It re-derived each manifest entry's
+ *                         `test_functions` from its Python file's `def test_`
+ *                         count, which cadenza could do and continuo could not,
+ *                         because the Python source was in this repository. That
+ *                         source is gone, so the count can no longer be
+ *                         re-derived from anything: `test_functions` is now a
+ *                         recorded historical figure, checked only for internal
+ *                         consistency by (6). Nothing replaces it and nothing
+ *                         needs to -- the number it guarded against drift can no
+ *                         longer drift, because the file it was derived from can
+ *                         no longer change.
  *  8. **unclassified** -- an inventory with no status, or one the manifest's own
  *                         status vocabulary does not define. Being in the
  *                         inventory is evidence, not a commitment to port, and
@@ -148,30 +155,20 @@ for (const entry of manifest.files) {
     owner.set(line, entry.path);
   }
 
-  // (7): the function count is re-derived from the source file rather than
-  // trusted. `^def test_` is pytest's own default collection rule for a
-  // module-level test, and every one of these files uses it.
-  let source;
-  try {
-    source = read(entry.source);
-  } catch {
-    fail("stray", `${MANIFEST} names source file ${entry.source}, which does not exist`);
-    source = undefined;
-  }
-  if (source !== undefined) {
-    const functions = (source.match(/^def test_/gm) ?? []).length;
-    if (functions !== entry.test_functions) {
-      fail(
-        "functions",
-        `${entry.source} declares ${functions} test functions but the manifest records ${entry.test_functions}`,
-      );
-    }
-    if (entry.collected < functions) {
-      fail(
-        "count",
-        `${entry.path} holds ${entry.collected} node ids for ${functions} test functions; a parametrized function yields more ids, never fewer`,
-      );
-    }
+  // (7) was here: the function count re-derived from `entry.source` by counting
+  // `^def test_`. D-0032 deleted `tests/`, so `entry.source` names a file that
+  // is deliberately absent and reading it would fail every run. It is NOT
+  // reintroduced as a "the file should be missing" assertion, which would be a
+  // check on the deletion rather than on the inventory.
+  //
+  // What survives is the arithmetic, which never needed the file: a
+  // parametrized function yields more node ids than functions, never fewer, so
+  // a recorded pair that inverts is wrong on its face whatever the source said.
+  if (entry.collected < entry.test_functions) {
+    fail(
+      "count",
+      `${entry.path} holds ${entry.collected} node ids for ${entry.test_functions} test functions; a parametrized function yields more ids, never fewer`,
+    );
   }
 
   // (8): every file is classified, in the manifest's own vocabulary.

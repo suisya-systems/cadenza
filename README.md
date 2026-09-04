@@ -40,18 +40,30 @@ returns for its gate (`DECISIONS.md` D-0029).
 Early. This repository currently contains:
 
 - **bootstrap** - package layout, licence, security policy, CI, release policy.
-- **G1 project registry** - implemented and tested. Name resolution to an
-  immutable `project_id`, a tagged-union clone source, a validated base branch,
-  a two-layer catalog (tracked plus operator-local) with field-level merge,
-  tombstones, collision refusal, provenance and a config digest. The contract is
-  `docs/design/g1-project-registry.md`; where the code and that document
-  disagree, the document is the defect report.
-- **a TypeScript rewrite of G1, in progress** (cadenza#8). The rewrite happens
-  in place: the Python implementation and its suite stay here, and stay green in
-  CI, until a later PR retires them. So far the toolchain, the parity ledger
-  covering all 330 collected pytest cases, a differential oracle that compares
-  the TypeScript `config_digest` against CPython's byte for byte, and the pilot
-  port of `tests/test_digest.py`. See `DECISIONS.md` and `docs/porting.md`.
+- **G1 project registry** - implemented and tested, in TypeScript. Name
+  resolution to an immutable `project_id`, a tagged-union clone source, a
+  validated base branch, a two-layer catalog (tracked plus operator-local) with
+  field-level merge, tombstones, collision refusal, provenance and a config
+  digest. The contract is `docs/design/g1-project-registry.md`; where the code
+  and that document disagree, the document is the defect report.
+- **the TypeScript rewrite of G1 is complete, and the Python G1 is retired**
+  (cadenza#8, cadenza#25). G1 was written in Python first; the port ran in place
+  beside it, with both halves green in CI, until it reached all 330 collected
+  pytest cases and `main`'s required checks became `ts-gate` +
+  `dependency-review`. `DECISIONS.md` D-0032 then deleted `src/cadenza/`,
+  `tests/` and the Python toolchain in one revertible change.
+
+  **What the retirement kept.** The `parity/` ledgers and source inventory stay
+  as the closed record of what happened to each of those 330 cases - they now
+  hold the only account of what the Python suite asserted, and the ported tests
+  still name the `tests/test_*.py` case each came from. So does one differential
+  oracle: `scripts/oracle/dump_config_digest.py` still runs in CI, rewritten to
+  import nothing but the Python standard library, because what it questions is
+  CPython's JSON encoder and code-point collation rather than any cadenza code -
+  a third party that outlived the port and can still move under an upgrade. The
+  composition oracle's vector is kept and still checked, but frozen: it
+  questioned cadenza's own Python, which can no longer change. See
+  `DECISIONS.md` D-0032 and `docs/porting.md`.
 - **G2 delegation contract** - implemented as far as `DECISIONS.md` D-0026 and
   D-0027 fix it, and TypeScript only (there is no Python G2). What is here: a
   capability vocabulary of seven keys, versioned and closed, where a key is
@@ -89,26 +101,18 @@ Early. This repository currently contains:
 
 Explicitly **not** here yet:
 
-- **any dependency on interlock** - not in `pyproject.toml`, not as an extra.
-  Interlock's control-plane API and SQLite schema are marked throwaway on
+- **any dependency on interlock** - not in `package.json`, not as an optional
+  one. Interlock's control-plane API and SQLite schema are marked throwaway on
   interlock's own side, and interlock is frozen, so no later stabilisation is
   coming: adopting them would turn a deliberate spike into a dependency by
-  inertia. `src/cadenza/adapters/interlock/` reserves the seam and stays empty;
-  `tests/test_import_boundaries.py` fails the build the day anything under
-  `cadenza` imports `claude_org_runtime`. Whether cadenza ever takes that
-  dependency is decided here (D-0023).
+  inertia. `test/architecture/import-boundaries.test.ts` fails the build the day
+  anything under `src/` imports `interlock` or `claude-org-runtime`, in any
+  spelling and by any loader route. Whether cadenza ever takes that dependency
+  is decided here (D-0023).
 
 ## Install
 
-```console
-$ python -m pip install -e ".[dev]"
-$ python -m pytest
-```
-
-Python 3.10 or newer. The only runtime dependency is `tomli`, and only on 3.10,
-where the standard library has no `tomllib`.
-
-The TypeScript half needs Node 22 or 24:
+Node 22 or 24. The only runtime dependency is `smol-toml`.
 
 ```console
 $ npm ci --ignore-scripts
@@ -117,6 +121,17 @@ $ npm run verify
 
 `verify` is lint, unused-export analysis, type-check, the test suite, the parity
 ledger and the source inventory, in that order.
+
+One CI job runs Python, and it is not a build step: the differential oracle at
+`scripts/oracle/dump_config_digest.py` re-derives what CPython's JSON encoder
+says about the digest corpus and compares it with the committed vector. It needs
+only a Python 3 interpreter - no package, no virtualenv, no dependencies - and
+you can run it the way CI does:
+
+```console
+$ python3 scripts/oracle/dump_config_digest.py \
+    parity/oracle/config-digest-vector.json --check
+```
 
 ## The catalog
 
@@ -202,33 +217,29 @@ that half-loads is worse than one that does not load.
 ## Layout
 
 ```
-src/cadenza/       the Python implementation, retired by a later PR
-  domain/        identifiers, clone sources, project, digest, errors  (no I/O)
-  application/   composition and resolution                          (no I/O)
-  ports/         protocols the outside world implements
+src/               the implementation
+  domain/        canonical JSON, identifiers, clone sources, project, digest,
+                 refs, contract, capability, classification    (no I/O)
+  application/   composition and resolution                    (no I/O)
+  ports/         interfaces the outside world implements
   adapters/
-    toml_catalog/   TOML files -> raw layer documents
-    interlock/      reserved seam, empty
-    claude_code/    reserved seam, empty
-tests/             the Python suite
-
-src/               the TypeScript port
-  domain/        canonical JSON, clone sources, project, digest
-test/              the TypeScript suite
+    toml-catalog/   TOML files -> raw layer documents
+test/              the test suite
   testkit/       pytest constructs, vendored from continuo
-  oracle/        the differential oracle's corpus
+  oracle/        the differential oracles' corpora
+  architecture/  the import-boundary scan over the whole of `src/`
 parity/            the source inventory, the ledgers and the oracle vectors
-scripts/           the parity and inventory checks, and the oracle's Python half
+scripts/           the parity and inventory checks, and the oracle generator
 
 config/            catalog data
 docs/              design documents and policy
 ```
 
-The two trees coexist at the root on purpose: that is where the TypeScript tree
-finally lives, so the PR that retires the Python one deletes rather than moves
-(`DECISIONS.md` D-0012). The one-character gap between `test/` and `tests/` is
-why both runners are pointed at their directory explicitly rather than left to
-search.
+`src/` held two trees at once for the length of the port: `src/cadenza/` (Python)
+beside `src/` (TypeScript). They shared a root on purpose, because that is where
+the TypeScript tree finally lives, so retiring the Python one deleted rather than
+moved (`DECISIONS.md` D-0012, carried out in D-0032). The one-character gap
+between `test/` and `tests/` went with it.
 
 Dependencies point inward only: `adapters -> application -> domain`, and `ports`
 is depended on but depends on nothing. `tests/test_import_boundaries.py`
@@ -249,7 +260,7 @@ a boundary review harder than it needs to be.
 - `docs/design/conductor.md` - the conductor proposal: how a one-line request
   becomes admitted continuo runs and comes back as gate and merge decisions.
   Propose-only; its decisions C-1..C-17 are the human gate's to take. Seven
-  have been taken: C-17 (D-0029: the host is `rondo`), C-12 (D-0030) and
+  have been taken: C-17 (D-0029: the host is `rondo`), C-12 (D-0032) and
   C-1/C-2/C-3/C-10/C-16 (D-0031, the agent-type record). The nine still open
   are rondo's and continuo's, and C-9 is retired unreached.
 - `DECISIONS.md` - the append-only record of design decisions. Cadenza's own

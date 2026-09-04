@@ -1,0 +1,40 @@
+name: hygiene
+
+# Repo hygiene that belongs to no language's gate.
+#
+# This file exists because `tests.yml` was deleted with the Python G1
+# (DECISIONS.md D-0032) and it carried one job that had nothing to do with
+# Python: shellcheck over the tracked shell scripts. Deleting the workflow
+# wholesale would have retired that check silently, which is exactly the kind
+# of quiet loss the retirement entry is supposed to account for -- so the job
+# moved here rather than dying with its old neighbours.
+#
+# Deliberately NOT part of `ts-gate`, and deliberately not listed in
+# `.github/branch-protection.json`. That preserves the status it had in
+# `tests.yml`, which recorded the same thing about itself: the hygiene jobs
+# were never required checks, and promoting one to a merge blocker is a
+# separate and explicit decision rather than a side effect of moving a file.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hygiene-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      # shellcheck is preinstalled on the ubuntu runner image.
+      - name: shellcheck all tracked *.sh files
+        run: git ls-files '*.sh' | xargs --no-run-if-empty shellcheck
