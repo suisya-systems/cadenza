@@ -170,7 +170,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   consumes both libraries, section 9.3 and the C-17 row record the outcome, and
   the rows that turn on who consumes what - C-8, C-9 - change status without
   being decided. Section 11 now marks the six cadenza-gate rows DECIDED against
-  D-0030 and D-0031; the seven rondo rows and continuo's C-11 stay open.
+  D-0030 and D-0031; the eight rondo rows - the seven that go with the
+  conductor, plus the demoted C-8 - and continuo's C-11 stay open.
 - `scripts/parity-check.mjs` runs its `unmapped` sweep after reading every
   ledger, so a ledger entry may claim a target test in another belt's file
   without the result depending on ledger order.

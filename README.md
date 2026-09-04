@@ -248,8 +248,10 @@ a boundary review harder than it needs to be.
   D-0026 is the decision; this is why it is that one.
 - `docs/design/conductor.md` - the conductor proposal: how a one-line request
   becomes admitted continuo runs and comes back as gate and merge decisions.
-  Propose-only; its decisions C-1..C-17 are the human gate's to take. C-17 has
-  been taken (D-0029: the host is `rondo`); the rest are still open.
+  Propose-only; its decisions C-1..C-17 are the human gate's to take. Seven
+  have been taken: C-17 (D-0029: the host is `rondo`), C-12 (D-0030) and
+  C-1/C-2/C-3/C-10/C-16 (D-0031, the agent-type record). The nine still open
+  are rondo's and continuo's, and C-9 is retired unreached.
 - `DECISIONS.md` - the append-only record of design decisions. Cadenza's own
   numbering space, starting at D-0001.
 - `docs/porting.md` - the TypeScript rewrite: the oracle order, the parity

@@ -8,11 +8,13 @@ This document is a proposal, not a contract. It takes the role
 one it recommends and why, and stops. Every decision it identifies is listed in section 11. They
 were all cadenza's human gate's to take (D-0023) when this was written; D-0029 has since moved the
 conductor-side ones to rondo's future gate, and §11 says which are which. A reader who finds a sentence here that reads like a
-decision should read it as a recommendation that has not yet been taken — **with one exception, and
-the text says so wherever it bears**: **C-17** was taken at the human gate on 2026-09-05 and is
-recorded as **D-0029** — the host application is a third repository, **rondo**, consuming cadenza and
-continuo as libraries. The entry is the decision; this document is updated to it, and creates no
-`D-` entry of its own. The other sixteen rows are still open.
+decision should read it as a recommendation that has not yet been taken — **except where the text
+says otherwise, which it does wherever it bears**. Seven rows were taken at cadenza's human gate on
+2026-09-05: **C-17**, recorded as **D-0029** — the host application is a third repository, **rondo**,
+consuming cadenza and continuo as libraries — and the six this document leaves at cadenza's own gate,
+**C-12** as **D-0030** and **C-1**/**C-2**/**C-3**/**C-10**/**C-16** as **D-0031**. The entries are
+the decisions; this document is updated to them and creates no `D-` entry of its own. Nine rows are
+still open, all of them rondo's or continuo's, and **C-9** is retired unreached (§11).
 
 **Measured against.** cadenza `9220acb`, continuo `6529085`, `happy-ryo/loop-agent` `d03e29f`,
 claude-org-ja `6889d66`, all read on 2026-09-05. Every claim about another repository below carries
@@ -1087,16 +1089,18 @@ Two rows change status as a consequence of D-0029 without being decided: **C-9**
 unreached, and **C-8** is demoted from central to an interim question that is rondo's rather than
 cadenza's (§9.2).
 
-**Cadenza's gate is clear; the eight rows still open are rondo's and continuo's. All seventeen are
-listed, because a row with no stated gate is a row nobody picks up.**
+**Cadenza's gate is clear; the nine rows still open are rondo's and continuo's — the eight below,
+counting the demoted C-8, and continuo's one. All seventeen are listed, because a row with no stated
+gate is a row nobody picks up.**
 
 - **Cadenza's gate, six rows — all decided** (D-0030, D-0031, above): **C-1**, **C-2**, **C-3**,
   **C-10**, **C-12**, **C-16**. C-3 was on this side because its subject is what the *record* carries
   (`executorPolicy`, carried and not read by cadenza), not what the conductor does with it; the
   adapter that would eventually interpret it is rondo's, and that is C-15.
-- **Rondo's gate, seven rows** — they go with the conductor: **C-4**, **C-5**, **C-6**, **C-7**,
-  **C-13**, **C-14**, **C-15**. C-5 is conductor behaviour (does it perform step 11 after approval),
-  and C-4 and C-13 are about who may invoke a continuo verb on a human's behalf.
+- **Rondo's gate, eight rows** — they go with the conductor: **C-4**, **C-5**, **C-6**, **C-7**,
+  **C-13**, **C-14**, **C-15**, and **C-8**, which D-0029 demoted from central to an interim
+  question and reassigned rather than answered. C-5 is conductor behaviour (does it perform step 11
+  after approval), and C-4 and C-13 are about who may invoke a continuo verb on a human's behalf.
 - **Continuo's gate, one row** — **C-11**, which this document already recommends treating as
   continuo's rather than answering.
 

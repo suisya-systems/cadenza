@@ -2189,7 +2189,7 @@ cadenza's role name onto, which is rondo's gate's under D-0029.
 - `docs/design/conductor.md` §11's **C-1**, **C-2**, **C-3**, **C-10** and **C-16** rows are marked
   DECIDED against this entry, each taking the document's recommendation as written. No row's text or
   reason changes, and no other C-n row is touched: **C-11** is continuo's, and C-4, C-5, C-6, C-7,
-  C-13, C-14 and C-15 are rondo's under D-0029.
+  C-8, C-13, C-14 and C-15 are rondo's under D-0029, with C-9 retired unreached.
 - **G2 is not reopened.** Nothing here changes `classify()`, the contract, or the D-0027 vocabulary;
   the record consumes the vocabulary and produces contract inputs.
 - **The record is now admissible work.** A belt may implement it against this entry; a question this
