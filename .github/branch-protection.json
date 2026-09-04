@@ -2,8 +2,6 @@
   "required_status_checks": {
     "strict": true,
     "contexts": [
-      "pytest (ubuntu-latest / py3.10)",
-      "pytest (ubuntu-latest / py3.12)",
       "ts-gate",
       "dependency-review"
     ]

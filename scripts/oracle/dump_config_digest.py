@@ -1,4 +1,4 @@
-"""The Python half of the config_digest differential oracle.
+"""The CPython half of the config_digest differential oracle.
 
 ``config_digest`` is a *persisted* value (design doc section 4): a run records
 it, and a later audit reads a changed digest as "the catalog moved underneath a
@@ -10,14 +10,27 @@ So the claim this oracle makes is narrower and harder than any ported test's:
     given the same project, the bytes CPython encodes and the bytes Node encodes
     are the same bytes, and therefore the digests are the same string.
 
-A ported test cannot make that claim. ``tests/test_digest.py`` asserts the
-encoding for exactly one project, spelled in ASCII; everything Python's
-``json.dumps`` does that the TypeScript side had to reimplement -- escaping,
-``ensure_ascii=False``, ``sort_keys`` under a non-ASCII collation -- is
-unexercised by it, and both suites would go green while the two implementations
-disagreed on the first project with a non-ASCII path in it.
+**Why this file outlived the implementation it was written beside.** Until
+``DECISIONS.md`` D-0030 it imported ``cadenza.domain.digest`` from ``src/``, and
+retiring the Python G1 would ordinarily have retired it too. It did not, because
+what this oracle actually questions is not cadenza's Python -- it is
+**CPython's**. ``json.dumps`` under ``sort_keys=True`` and
+``ensure_ascii=False``, Python's code-point collation, and ``hashlib.sha256``
+are the three things ``src/domain/canonical-json.ts`` had to reimplement by
+hand, and all three are still here, still maintained by someone else, and still
+able to move under a Python upgrade. That is a live difference worth re-deriving
+on every CI run, so the generator was rewritten to stand alone instead: it
+imports nothing but the standard library, and the forty lines below restate the
+payload shape and the digest rule directly.
 
-The corpus below is built **independently on each side**: this file states it in
+That rewrite has a cost, stated plainly: the payload shape below is now a
+*transcription* of what ``canonical_payload`` used to compute, not a call into
+it, so a change to the TypeScript payload shape would have to be mirrored here
+by hand or the oracle would compare the wrong thing. The corpus's id list is
+what catches that -- see below -- and ``test/domain/digest.test.ts`` pins the
+shape on the TypeScript side.
+
+The corpus is built **independently on each side**: this file states it in
 Python and ``test/oracle/digest-corpus.ts`` states it in TypeScript, and the
 comparison checks that the ids line up before it compares anything else. Reading
 the inputs out of the vector instead would let a wrong corpus agree with itself.
@@ -31,29 +44,91 @@ Run, from the repository root:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-# The oracle has to be runnable without installing the package: an installed
-# copy is exactly the stale-install hazard CLAUDE.md's src-layout rule is about,
-# and a vector generated from a stale install would be silently wrong.
-sys.path.insert(0, str(ROOT / "src"))
-
-from cadenza.domain.clone_source import (  # noqa: E402
-    GitUrlSource,
-    LocalPathSource,
-    NewRepositorySource,
-)
-from cadenza.domain.digest import canonical_payload, config_digest  # noqa: E402
-from cadenza.domain.project import Project  # noqa: E402
-
 WEB_URL = "https://example.invalid/org/web.git"
 
 
-def corpus() -> list[tuple[str, Project]]:
-    """The vector's inputs, in a fixed order.
+# -- the three source shapes, restated ------------------------------------
+#
+# These were `GitUrlSource`, `LocalPathSource` and `NewRepositorySource`, and
+# each function returns exactly what that class's `to_canonical()` returned.
+# The tagged union is the whole of the shape: `kind` names the member, and the
+# member's one field follows it. `new` carries no field, which is why the
+# payload can differ in its KEYS and not merely in its values -- the case
+# `new-repository` below is in the corpus for that.
+
+
+def git_url(url: str) -> dict[str, str]:
+    return {"kind": "git_url", "url": url}
+
+
+def local_path(path: str) -> dict[str, str]:
+    return {"kind": "local_path", "path": path}
+
+
+def new_repository() -> dict[str, str]:
+    return {"kind": "new"}
+
+
+def canonical_payload(
+    project_id: str,
+    aliases: tuple[str, ...],
+    source: dict[str, str],
+    base_branch: str,
+) -> dict[str, object]:
+    """The semantics the digest covers, as ``cadenza.domain.digest`` computed it.
+
+    Provenance and file paths are deliberately absent: moving a catalog file, or
+    restating a field in a different layer, must not change what the digest says
+    about the project.
+
+    ``sorted(aliases)`` is load-bearing and is one of the two reasons the corpus
+    below carries alias-ordering cases: Python sorts strings by code point, and
+    JavaScript's default ``Array.prototype.sort`` sorts by UTF-16 code unit,
+    which disagree above U+FFFF.
+    """
+    return {
+        "project_id": project_id,
+        "aliases": sorted(aliases),
+        "source": source,
+        "base_branch": base_branch,
+    }
+
+
+def config_digest(payload: dict[str, object]) -> tuple[bytes, str]:
+    """Return the canonical bytes and the ``sha256:<hex>`` digest over them.
+
+    Every keyword below is part of the claim, not a default worth trusting to
+    stay put:
+
+    * ``sort_keys=True``   -- keys are emitted in code-point order, not
+      insertion order, so the payload's key order above is not load-bearing.
+    * ``separators``       -- no whitespace anywhere; a pretty-printed encoding
+      would hash differently.
+    * ``ensure_ascii=False`` -- non-ASCII goes out as itself in UTF-8, NOT as a
+      ``\\uXXXX`` escape. This is the single largest source of divergence
+      between a hand-written encoder and CPython's, and most of the corpus
+      exists to pin it.
+    * ``allow_nan=False``  -- there are no floats in the payload; this refuses
+      rather than emits the non-JSON ``NaN``/``Infinity`` tokens if one ever
+      arrives.
+    """
+    encoded = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    return encoded, f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+
+
+def corpus() -> list[tuple[str, dict[str, object]]]:
+    """The vector's inputs, in a fixed order: ``(id, payload)``.
 
     Two groups, and the split is deliberate.
 
@@ -70,71 +145,69 @@ def corpus() -> list[tuple[str, Project]]:
     reason.
 
     **Beyond what the validator admits.** Control characters in a path, and
-    aliases outside the identifier shape. ``parse_clone_source`` and
-    ``parse_identifier`` refuse both today, so nothing in this group can reach
-    ``config_digest`` through a file. They are here anyway, because
-    ``config_digest`` is a plain function over a ``Project`` and the validator is
+    aliases outside the identifier shape. The validators refuse both, so nothing
+    in this group can reach the digest through a file. They are here anyway,
+    because the digest is a plain function over a project and the validator is
     not part of it: a later belt that widens an input, or a caller that builds a
-    ``Project`` directly, meets the encoder without meeting the validator. And
+    project value directly, meets the encoder without meeting the validator. And
     the cost of finding an encoder divergence *then* is not one bad run -- it is
     that every digest already written is suspect.
     """
     return [
         # -- reachable through a catalog file --------------------------------
-        ("ascii-git-url", Project("web", ("site", "frontend"), GitUrlSource(url=WEB_URL), "main")),
-        ("no-aliases", Project("web", (), GitUrlSource(url=WEB_URL), "main")),
-        ("new-repository", Project("web", ("site",), NewRepositorySource(), "main")),
-        ("local-path", Project("web", (), LocalPathSource(path="/srv/web"), "main")),
+        ("ascii-git-url", canonical_payload("web", ("site", "frontend"), git_url(WEB_URL), "main")),
+        ("no-aliases", canonical_payload("web", (), git_url(WEB_URL), "main")),
+        ("new-repository", canonical_payload("web", ("site",), new_repository(), "main")),
+        ("local-path", canonical_payload("web", (), local_path("/srv/web"), "main")),
         (
             "non-ascii-path",
-            Project("web", (), LocalPathSource(path="/srv/\u65e5\u672c\u8a9e"), "main"),
+            canonical_payload("web", (), local_path("/srv/\u65e5\u672c\u8a9e"), "main"),
         ),
         (
             "astral-path",
-            Project("web", (), LocalPathSource(path="/srv/\U0001d54c\U0001f600"), "main"),
+            canonical_payload("web", (), local_path("/srv/\U0001d54c\U0001f600"), "main"),
         ),
         (
             "idn-host-url",
-            Project("web", (), GitUrlSource(url="https://\u4f8b.invalid/org/web.git"), "main"),
+            canonical_payload(
+                "web", (), git_url("https://\u4f8b.invalid/org/web.git"), "main"
+            ),
         ),
         (
             "non-ascii-base-branch",
-            Project("web", (), GitUrlSource(url=WEB_URL), "release/\u30ea\u30ea\u30fc\u30b9"),
+            canonical_payload(
+                "web", (), git_url(WEB_URL), "release/\u30ea\u30ea\u30fc\u30b9"
+            ),
         ),
         (
             "combining-marks-path",
             # NFC "e-acute" and NFD "e + combining acute" are different strings
             # and must stay different digests: the digest is over bytes, not
             # over a normalisation nobody applied.
-            Project("web", (), LocalPathSource(path="/srv/caf\u00e9"), "main"),
+            canonical_payload("web", (), local_path("/srv/caf\u00e9"), "main"),
         ),
         (
             "combining-marks-path-decomposed",
-            Project("web", (), LocalPathSource(path="/srv/cafe\u0301"), "main"),
+            canonical_payload("web", (), local_path("/srv/cafe\u0301"), "main"),
         ),
         # -- beyond what the validator admits --------------------------------
         (
             "escapes-in-path",
             # The whole of Python's ESCAPE_DCT plus a representative other C0
             # control, plus the two characters JSON always escapes.
-            Project(
-                "web",
-                (),
-                LocalPathSource(path='/srv/\b\t\n\f\r\x00\x1f"\\'),
-                "main",
-            ),
+            canonical_payload("web", (), local_path('/srv/\b\t\n\f\r\x00\x1f"\\'), "main"),
         ),
         (
             "del-and-c1-in-path",
             # U+007F is NOT escaped by either encoder, and U+0085 is a C1
             # control that neither treats specially. Both are places a
             # "hardened" encoder is tempted to differ from CPython.
-            Project("web", (), LocalPathSource(path="/srv/\x7f\x85"), "main"),
+            canonical_payload("web", (), local_path("/srv/\x7f\x85"), "main"),
         ),
         (
             "line-and-paragraph-separator-in-path",
             # U+2028/U+2029 are legal raw in JSON and are left raw by both.
-            Project("web", (), LocalPathSource(path="/srv/\u2028\u2029"), "main"),
+            canonical_payload("web", (), local_path("/srv/\u2028\u2029"), "main"),
         ),
         (
             "alias-sort-crosses-the-surrogate-boundary",
@@ -142,18 +215,15 @@ def corpus() -> list[tuple[str, Project]]:
             # U+FFFD < U+10000; by UTF-16 code unit the astral character begins
             # 0xD800, which sorts BELOW 0xFFFD. Python sorts by code point, and
             # JavaScript's default `Array.prototype.sort` does not.
-            Project(
-                "web",
-                ("\ufffd", "\U00010000", "a"),
-                GitUrlSource(url=WEB_URL),
-                "main",
+            canonical_payload(
+                "web", ("\ufffd", "\U00010000", "a"), git_url(WEB_URL), "main"
             ),
         ),
         (
             "alias-sort-is-not-length-first",
             # A prefix sorts before the longer string it prefixes, and neither
             # side may shortcut on length.
-            Project("web", ("ab", "a", "aa", "b"), GitUrlSource(url=WEB_URL), "main"),
+            canonical_payload("web", ("ab", "a", "aa", "b"), git_url(WEB_URL), "main"),
         ),
     ]
 
@@ -178,20 +248,14 @@ def main() -> int:
     arguments = parser.parse_args()
 
     cases = []
-    for case_id, project in corpus():
-        encoded = json.dumps(
-            canonical_payload(project),
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-            allow_nan=False,
-        ).encode("utf-8")
+    for case_id, payload in corpus():
+        encoded, digest = config_digest(payload)
         cases.append(
             {
                 "id": case_id,
                 "canonical_json": encoded.decode("utf-8"),
                 "canonical_bytes_hex": encoded.hex(),
-                "digest": config_digest(project),
+                "digest": digest,
             }
         )
 
