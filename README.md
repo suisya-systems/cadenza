@@ -182,22 +182,22 @@ path = "~/work/house-ledger"
 
 Resolving a name:
 
-```python
-from pathlib import Path
+```ts
+import { composeCatalog, resolveProject, TomlCatalogSource } from "@suisya-systems/cadenza";
 
-from cadenza.adapters.toml_catalog.loader import TomlCatalogSource
-from cadenza.application.compose import compose_catalog
-from cadenza.application.resolve import resolve_project
+const catalog = composeCatalog(new TomlCatalogSource("config").load());
+const resolved = resolveProject(catalog, "cdz");
 
-catalog = compose_catalog(TomlCatalogSource(Path("config")).load())
-resolved = resolve_project(catalog, "cdz")
-
-resolved.project_id  # 'cadenza'  - immutable identity, not the alias typed
-resolved.source.kind  # 'git_url'
-resolved.base_branch  # 'main'
-resolved.config_digest  # 'sha256:...' over the project's semantics
-resolved.provenance["base_branch"].layer  # 'tracked'
+resolved.projectId; // 'cadenza'  - immutable identity, not the alias typed
+resolved.source.kind; // 'git_url'
+resolved.baseBranch; // 'main'
+resolved.configDigest; // 'sha256:...' over the project's semantics
+resolved.provenance["base_branch"]?.layer; // 'tracked'
 ```
+
+Fields are camelCase, but **provenance keys are not**: they are the catalog's
+own field names, so the key is `base_branch` and not `baseBranch`. Provenance is
+indexed by what the operator wrote in the file, not by what the port calls it.
 
 A run persists `project_id` and `config_digest` next to `source` and
 `base_branch`. A digest that no longer matches is the signal that the catalog
@@ -209,8 +209,8 @@ exists, is readable, or is a symlink pointing somewhere else entirely is a
 run-side precondition, declared as the `LocalPathVerifier` port and mandatory
 before any clone.
 
-Every refusal is a typed exception under `cadenza.domain.errors`, carrying the
-file and the key at fault. An unknown key, a colliding name, an unsupported
+Every refusal is a typed error under `src/domain/errors.ts`, carrying the file
+and the key at fault. An unknown key, a colliding name, an unsupported
 `schema_version` or an unreachable `local_path` fails the whole load; a catalog
 that half-loads is worse than one that does not load.
 

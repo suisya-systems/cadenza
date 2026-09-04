@@ -91,8 +91,8 @@ machine, without the operator's disks:
 
 Filesystem-dependent checks — does it exist, is any component a symlink, is it
 readable — are **not** G1's. They are a run-side precondition, declared as the
-`LocalPathVerifier` port (`cadenza.ports`) and left unimplemented in this
-milestone. This is a real trust boundary and is stated as one: a lexically
+`LocalPathVerifier` port (`src/ports/path-verifier.ts`) and left unimplemented
+in this milestone. This is a real trust boundary and is stated as one: a lexically
 contained path can still be a symlink pointing anywhere, so the run-side
 verifier is mandatory before a clone, not optional hardening.
 
@@ -117,9 +117,11 @@ beginning with `.`.
 
 The validator's job is to move a git-level refusal earlier, so the property that
 matters is one-directional: it must refuse **everything git refuses**, and it is
-allowed to be stricter. `tests/test_refs.py` pins that direction against
+allowed to be stricter. `test/domain/refs.test.ts` pins that direction against
 `git check-ref-format` itself rather than against a second copy of the rules, so
-a rule this list forgets fails the build instead of surfacing at the clone.
+a rule this list forgets fails the build instead of surfacing at the clone. (It
+was `tests/test_refs.py` until D-0030; the port shells out to the same command,
+so the guarantee is unchanged.)
 Being stricter than git is a deliberate choice in exactly one place: a bare `@`
 is git's shorthand for HEAD in revision syntax, so a catalog and whatever
 resolves it would read it differently.
@@ -236,7 +238,7 @@ diffing two files by eye.
 
 ## 6. Resolution
 
-`resolve_project(catalog, name) -> ResolvedProject`
+`resolveProject(catalog, name) -> ResolvedProject`
 
 `name` is matched against the flat namespace of §5.4. Because that namespace is
 collision-free by construction, the lookup is total and unambiguous: exactly one
