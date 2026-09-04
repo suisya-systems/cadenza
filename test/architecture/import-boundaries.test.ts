@@ -468,7 +468,23 @@ const DECLARATION_EXTENSIONS = [".d.ts", ".d.mts", ".d.cts"];
  * anything else is unrecognised and must be accounted for -- and a `.py` file
  * reappearing anywhere under `src/`, `src/cadenza/` included, is a question a
  * reviewer answers rather than a silence.
+ *
+ * One exception survives it, and it is about generated files rather than about
+ * Python. `__pycache__` directories are not removed by `git pull`, because git
+ * does not delete ignored files: anyone who ran the old pytest suite still has
+ * `.pyc` files in `__pycache__` directories under `src/cadenza/` on disk after
+ * the deletion arrives. Without
+ * this skip the walk reports every one of them and `npm run verify` goes red on
+ * a tree that is entirely correct -- a false failure on the machines most likely
+ * to hit it, and one no clean CI run would ever reproduce.
+ *
+ * Skipping the DIRECTORY is what keeps this from being the old carve-out in
+ * disguise. Nothing is ignored by extension and nothing is ignored by location,
+ * so a `.py` or a `.pyc` sitting anywhere else under `src/` is still
+ * unrecognised. `__pycache__` holds only compiled output, every byte of it
+ * derived from a `.py` that this walk would itself report if it were there.
  */
+const GENERATED_BYTECODE_DIRECTORY = "__pycache__";
 
 /** Files under `src/` the walk did not recognise as modules. See `moduleFiles`. */
 const unrecognised: string[] = [];
@@ -485,7 +501,11 @@ function moduleFiles(directory: string = SRC_ROOT): string[] {
   for (const entry of readdirSync(join(ROOT, directory))) {
     const path = `${directory}/${entry}`;
     if (statSync(join(ROOT, path)).isDirectory()) {
-      found.push(...moduleFiles(path));
+      // Not descended into rather than filtered afterwards: the files inside are
+      // generated, and the directory is the whole of what is skipped.
+      if (entry !== GENERATED_BYTECODE_DIRECTORY) {
+        found.push(...moduleFiles(path));
+      }
     } else if (
       !DECLARATION_EXTENSIONS.some((extension) => entry.endsWith(extension)) &&
       MODULE_EXTENSIONS.some((extension) => entry.endsWith(extension))
