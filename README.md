@@ -244,7 +244,7 @@ a boundary review harder than it needs to be.
   D-0026 is the decision; this is why it is that one.
 - `docs/design/conductor.md` - the conductor proposal: how a one-line request
   becomes admitted continuo runs and comes back as gate and merge decisions.
-  Propose-only; its open decisions C-1..C-11 are the human gate's to take, and
+  Propose-only; its open decisions C-1..C-14 are the human gate's to take, and
   none is taken here.
 - `DECISIONS.md` - the append-only record of design decisions. Cadenza's own
   numbering space, starting at D-0001.

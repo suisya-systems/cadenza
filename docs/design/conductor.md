@@ -34,7 +34,9 @@ into a gate decision and a merge decision.
 It is the successor of claude-org-ja's secretary + dispatcher + `/org-conveyor` belt, re-expressed on
 continuo's verbs instead of on terminal panes. The decision that it lives in cadenza was taken with
 the human on 2026-09-04 and is recorded in cadenza#40; this document assumes it and does not re-argue
-it.
+it. It is, however, a settled design question living only in an issue, which AGENTS.md §3 says
+belongs in `DECISIONS.md` — ratifying it as an entry is decision **C-12**, and this document names it
+rather than writing it.
 
 **What the conductor is not, in this design.**
 
@@ -489,7 +491,7 @@ rather than stylistic:
   itself is a live layer (`:905` asserts it exists), so this is a ban on the interlock seam, not on
   adapters as such.
 
-The tier is real and useful, but it is **executor policy**. It belongs in the opaque policy bag of
+The tier is real and useful, but it is **executor policy**. It belongs in the `executorPolicy` bag of
 §7 — carried by the agent-type record, never read by `classify()`, outside the digest, and
 interpreted only by whatever renders a run for a given executor.
 
@@ -521,9 +523,9 @@ field costs.
 |---|---|---|
 | **what it may touch** | **Already G2's, and must not be duplicated.** The record names a *capability key set* in the D-0027 vocabulary that the conductor uses to **build** a `DelegationContract` | That question already has a single, total, three-valued answer: `classify(contract, action, context)`. A registry-side "may touch" list gives two answers under two digests — `config_digest` and `contract_digest` — with **no precedence rule anywhere**, and G2 deliberately refuses to invent one (`contract.ts:227-231`, "refusing beats inventing a precedence at classification time") |
 | **what it must report** | **Opaque executor policy.** Not read by cadenza | G2 is deny-by-default over *acts a run may perform*; there is no obligation direction and `Outcome` has exactly three members. A reporting obligation implies an observer, i.e. a port — and G2 pre-commits that "if G2 appears to need a port, that is a falsifier for D-0026 §2 and is **raised, not built**" (`g2-delegation-contract.md:62-67`) |
-| **how many review rounds** | **Opaque executor policy** | It is a *value beside a key*, which D-0027 §3 named in advance and refused as scoping; and budgets are on G2's explicit out-of-scope list (`g2-delegation-contract.md:44-46`). `classify()` takes `(contract, action, context)` with `context = { runId, configDigest }` and could not consume a round budget if it were there |
-| **when it halts** | **Opaque executor policy**, plus the conductor's own no-progress condition (§6.3) | Halting is enforcement, and G2 "does not stop anything" (`g2-delegation-contract.md:326-329`). A halt predicate over a running process needs a clock and an observer cadenza does not have |
-| **which model tier** | **Opaque executor policy** | §6.8 |
+| **how many review rounds** | **Loop policy: the conductor reads it. Not authority, and never read by `classify()`** | It is a *value beside a key*, which D-0027 §3 named in advance and refused as scoping; and budgets are on G2's explicit out-of-scope list (`g2-delegation-contract.md:44-46`). `classify()` takes `(contract, action, context)` with `context = { runId, configDigest }` and could not consume a round budget if it were there. But §4 gives *review* to the conductor, so the round budget has a real interpreter — it is simply not a cadenza-domain one |
+| **when it halts** | **Loop policy: the conductor reads it** — it parameterises the no-progress condition of §6.3 | Halting is enforcement, and G2 "does not stop anything" (`g2-delegation-contract.md:326-329`). A halt predicate over a running process needs a clock and an observer, so it cannot live in cadenza's pure layers — but the conductor has both, and §6.3 already assigns no-progress to it |
+| **which model tier** | **Opaque executor policy.** Carried, never interpreted by cadenza or by the conductor | §6.8 |
 
 **The record that survives**, then, is small:
 
@@ -533,13 +535,26 @@ AgentType
   granted              capability keys (D-0027 vocabulary) the conductor puts in the contract
   askable              capability keys the conductor puts in the contract's askable set
   vocabularyVersion    the vocabulary version the two sets are written against
-  policy               an opaque bag: rounds, halt conditions, reporting duties, model tier
+  loopPolicy           read by the conductor: review rounds, halt / no-progress thresholds
+  executorPolicy       an opaque bag nobody in cadenza interprets: model tier, reporting duties
+  agentTypeDigest      over all of the above, computed the way config_digest is
 ```
 
 `granted` and `askable` are **inputs to contract construction**, not a second answer beside a
-contract. `policy` is carried, never interpreted: nothing in `src/domain/` reads it, `classify()`
-never sees it, and it is excluded from every digest. That is what keeps the record
-provider-agnostic while letting a tier exist somewhere.
+contract. The two policy bags are split because they have different interpreters, and conflating
+them was this section's own first mistake: **`loopPolicy` is the conductor's** — §4 gives it review
+and §6.3 gives it no-progress, so a round budget and a halt threshold have a real reader — while
+**`executorPolicy` is carried and never interpreted**, which is what keeps a model tier expressible
+without naming an executor (§6.8). Neither bag is ever seen by `classify()`, and neither is
+authority: an action a `loopPolicy` permits is still `refused` if the contract refuses it.
+
+**The record is a frozen value with its own digest** (D-0015 for the freezing, and the
+`config_digest` / `contract_digest` technique for the digest — D-0011, D-0017 for its oracle), and a
+run persists `agent_type_digest` beside `project_id`, `config_digest` and `contract_digest`. Without
+that, the same `agentTypeId` under an unchanged `contract_digest` could denote different review
+rounds, halt thresholds or tier a month later, and "under what policy did it do that" would be
+unanswerable from the record — the same reconstructability argument D-0026 §1 makes for the grant.
+The digest is the agent type's own; it does **not** enter `config_digest`, for the reason in §7.2.
 
 ### 7.2 Where it lives, and the trap that decides it
 
@@ -552,7 +567,11 @@ the digest instead makes it a project semantic the digest does not cover, which 
 property the digest exists for.
 
 So the record is a **separate record keyed by agent type**, not a project field, and it is outside
-`config_digest`. Two further constraints follow from G1 as it stands:
+`config_digest`. The audit property is not lost by that: it is carried by the record's own
+`agent_type_digest` (§7.1), persisted per run alongside the other two, so what a run was configured
+with stays reconstructable without every project's digest moving when an agent type changes.
+
+Two further constraints follow from G1 as it stands:
 
 - **Every table is closed**: an unknown key anywhere is refused, naming the key and the file
   (G1 §5.6). A new record is a schema change with a `schema_version` and a migration story, not a key
@@ -766,6 +785,14 @@ Putting §§3-9 together, one conductor iteration for one request:
    workspace exist, and the endpoint destination dir must not exist (F-4). The next attempt is a
    **new** run needing a fresh (run id, topic branch, workspace, dropbox) tuple, and the allocator for
    that tuple does not exist (§6.7), so the conductor is one lap per request in lap 1.
+   **The gate opened in step 3 must still be terminated**, or it stays open forever while the request
+   it belongs to cannot be retried. Only three outcomes are a hand's to write —
+   `withdrawn`, `expired`, `unanswerable` (`gate/operator.ts:102-116`) — and only `withdrawn` may be
+   written from the `received` stage (`gates.ts:277-284`), which is where an un-presented gate sits.
+   This document therefore recommends `gate close --outcome withdrawn` on an aborted iteration, and
+   records the choice as decision **C-13** rather than taking it: `withdrawn` is not an approval
+   (`minimal-operating-loop.md:349-353`), which is exactly the property an abort wants, but the
+   question of who may write it is C-4's neighbour.
 6. **No-progress.** Key on the verify detail (§6.3). A repeated failure signature halts and reports.
 7. **Gate.** On the gate opened in step 3: `gate present` →
    `gate deliver` → `gate ack` → **a human answers** → `gate deliver` → `gate ack`. The gate closes
@@ -788,8 +815,8 @@ per AGENTS.md §6 an issue carrying open decisions is not started until they are
 | id | Decision | Recommendation | Reason |
 |---|---|---|---|
 | **C-1** | Does the agent-type record express "what a run may touch" anywhere other than G2? | **No.** The record carries capability key sets the conductor uses to *build* a `DelegationContract` | Two authority answers under two digests with no precedence rule, which G2 explicitly refuses to invent (§7.1) |
-| **C-2** | Where does the agent-type record live, and does it enter `config_digest`? | A **separate record keyed by agent type**, not a field on `Project`, and **outside** `config_digest` | Inside the digest it changes every project's `config_digest` and refuses every already-issued contract as `stale_subject`; outside it as a project field it defeats the audit property (§7.2) |
-| **C-3** | Do tiered models per stage belong to the conductor? | **No.** Tier is opaque executor policy, carried and never read by cadenza | G1 §1 and D-0027 forbid naming an executor in `domain`/`application`/`ports`, and the one adapter seam that would host the tier-to-model mapping, `src/adapters/interlock/`, is closed by D-0014 (§6.8) |
+| **C-2** | Where does the agent-type record live, and does it enter `config_digest`? | A **separate record keyed by agent type**, not a field on `Project`, **outside** `config_digest`, and carrying **its own `agent_type_digest`** that a run persists alongside `config_digest` and `contract_digest` | Inside the project digest it changes every project's `config_digest` and refuses every already-issued contract as `stale_subject`; outside it *with no digest of its own* the record's policy could change under an unchanged `agentTypeId` and "under what policy did it do that" would stop being answerable (§7.1, §7.2) |
+| **C-3** | Do tiered models per stage belong to the conductor? | **No.** Tier goes in `executorPolicy`: carried, and never read by cadenza *or* by the conductor — unlike `loopPolicy`, which the conductor does read (§7.1) | G1 §1 and D-0027 forbid naming an executor in `domain`/`application`/`ports`, and the one adapter seam that would host the tier-to-model mapping, `src/adapters/interlock/`, is closed by D-0014 (§6.8) |
 | **C-4** | May the conductor author a human's answer — a gate-answer body, or the widening that answers a `needs_approval`? | **No** — it may carry a human's answer verbatim, never compose one. `gate answer` should be invoked by the #22 surface, and a widening successor should be issued only on an answer that surface recorded, with that surface as issuer | Neither side records who answered: continuo derives the actor kind from the verb (§6.5), and `adopt()` does not refuse widening — G2 hands that to the control plane (§6.1) |
 | **C-5** | Does the conductor perform step 11 mechanically after approval? | **No** for lap 1: it holds no push credentials and stops at the closed gate | continuo executes no git or GitHub call, has no verb that moves `run.status` (F-7, "Workaround. None"), and defers the privileged publisher to lap 2 (§6.6) |
 | **C-6** | May the conductor compose `run admit --cli-arg` freely? | **No** — only from an allowlist the conductor owns, recorded in the design and spelled in the invocation adapter | `FENCE_OWNED_FLAGS` does not cover `--dangerously-skip-permissions`, `--allowedTools`, `--disallowedTools`, `--add-dir` (continuo#133), so a documented-verb path can make the human gate advisory (§2.3) |
@@ -798,6 +825,9 @@ per AGENTS.md §6 an issue carrying open decisions is not started until they are
 | **C-9** | If cadenza ever does take the npm dependency, are the three consequent entries acceptable? | Take them **explicitly, as three separate entries** (native transitive dependency vs D-0004's falsifier; D-0016's "one runtime dependency"; the `ALLOWED_EXTERNALS_BY_LAYER` widening), and note the macOS-first-exercise risk | Each is a named falsifier of an accepted entry, and D-0004 says so in its own words (§9.1) |
 | **C-10** | Which tree hosts the conductor and the record — TypeScript `src/` or Python `src/cadenza/`? | **TypeScript**, alongside G2 | G2 is TypeScript-only (cadenza#25), the boundary suite that would police the record runs over the TS graph, and C-8's boundary is an npm/CLI question either way |
 | **C-11** | Which recipient does the gate relay address? | Treat it as **continuo's** open decision; the conductor's read path is `gate show`, not the dropbox | continuo already calls it "a decision, not a detail"; `external-notify` writes `\uXXXX`-escaped `.effect.json` files a person cannot read (F-5, still reproducing), and the other handler delivers nothing by design (§3) |
+| **C-12** | Should the placement premise — "the conductor lives in cadenza", taken with the human on 2026-09-04 and recorded only in cadenza#40 — become a `D-` entry? | **Yes**, as its own entry, before any conductor code is written | AGENTS.md §3 requires a `DECISIONS.md` entry for any settled design question, and an architectural premise recorded only in an issue is the drift D-0001's oracle order exists to prevent. This document may not create it (propose-only), so it names it instead |
+| **C-13** | Who terminates the gate when an iteration aborts before an answer, and as what outcome? | **`gate close --outcome withdrawn`, written by the conductor** | It is the only outcome writable from the `received` stage (`gates.ts:277-284`, `gate/operator.ts:102-116`), and it is explicitly *not* an approval — so it cannot be confused with one. It is nonetheless a write on a gate, which is why it is asked here rather than assumed (§10 step 5) |
+| **C-14** | How does a cadenza run pin and record which continuo revision it drove? | **Record it per run** — the continuo revision the invocation adapter used, persisted beside the run's other identifying digests — and treat pinning the checkout as part of whatever C-8's interim is | C-8's CLI boundary answers "which continuo is this" worse than any of the three npm options, which is the property §9.1 used to reject option C; approving C-8 without this leaves the question hidden (§9.2) |
 
 Two things that are **not** cadenza decisions and are recorded here only so the design does not
 silently depend on them: continuo's S1 promotion (the "would you accept these settings?" question
