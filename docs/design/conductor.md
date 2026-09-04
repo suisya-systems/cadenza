@@ -39,12 +39,14 @@ into a gate decision and a merge decision.
 
 It is the successor of claude-org-ja's secretary + dispatcher + `/org-conveyor` belt, re-expressed on
 continuo's verbs instead of on terminal panes. The decision that it is built on cadenza was taken
-with the human on 2026-09-04 and is recorded in cadenza#40; this document assumes it and does not
-re-argue it. It is, however, a settled design question living only in an issue, which AGENTS.md §3
-says belongs in `DECISIONS.md` — ratifying it as an entry is decision **C-12**, and this document
-names it rather than writing it. What that decision settled is **whose semantics the conductor is
-built on**: cadenza's registry, contract and gates. It did not settle **which repository holds the
-code**, which continuo's own premise 2 recorded as a working assumption and which this document
+with the human on 2026-09-04, and this document assumes it and does not re-argue it. It lived only
+in cadenza#40 when this was written, which AGENTS.md §3 says is not where a settled design question
+belongs; ratifying it as an entry was decision **C-12**, and the gate has since taken it — the
+premise is **D-0030**, which is what a later reader should cite. What that decision settled is
+**whose semantics the conductor is built on**: cadenza's registry, contract, and reading of what a
+gate *outcome* means to a classification. **Not gate management** — D-0026 §2 leaves G3 unfixed, so
+the gate verbs and their storage are continuo's (D-0030). It did not settle **which repository holds
+the code**, which continuo's own premise 2 recorded as a working assumption and which this document
 raised as **C-17** (§9.3).
 
 **C-17 is now decided (D-0029).** The conductor lives in **rondo**, a third repository — the host
@@ -1155,9 +1157,9 @@ D-0059 defers), and continuo growing a run-close verb and a publisher. Both are 
   the role-as-authority shape D-0026 §1 rejected, and D-0026 would have to be superseded rather than
   extended.
 - **The whole document**, if the decision that the conductor is built on cadenza's semantics is
-  revisited (cadenza#40, taken with the human on 2026-09-04). C-17 was *not* that falsifier, and its
-  answer bears that out: D-0029 changed §9's shape, §2.3's module names and the ownership of §8's
-  sketch, and nothing else here. What the conductor *is* and does is the same document under either
+  revisited (taken with the human on 2026-09-04, cadenza#40, and ratified as **D-0030**, whose own
+  falsifiers are the entry's). C-17 was *not* that falsifier, and its answer bears that out: D-0029
+  changed §9's shape, §2.3's module names and the ownership of §8's sketch, and nothing else here. What the conductor *is* and does is the same document under either
   repository.
 - **D-0029's own falsifiers are the entry's**, not this document's — a host that cannot be written
   without reaching inside cadenza, cross-repository decisions arriving faster than the allowlist
