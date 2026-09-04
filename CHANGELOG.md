@@ -136,6 +136,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the other.
 - `README.md`'s G2 bullet now says what is implemented and what G2 deliberately
   does not do, rather than that G2 is designed and not implemented.
+- The six decisions `docs/design/conductor.md` section 11 assigns to cadenza's
+  gate, taken as the document recommends (cadenza#40, human gate 2026-09-05)
+  and recorded as two entries. D-0030 ratifies the 2026-09-04 premise that the
+  conductor is built on cadenza's semantics - the registry, the contract and
+  `classify()`, not gate management - which until now lived only in an issue
+  thread while section 12 named its reversal as the falsifier of the whole
+  document (C-12). D-0031 fixes the agent-type record in five parts, one entry
+  because they are five facets of one artefact: it carries capability key sets
+  that are inputs to contract construction and never a second authority beside
+  `classify()` (C-1); it is a separate record keyed by agent type, outside
+  `config_digest` - which it would otherwise move for every project, refusing
+  every issued contract as `stale_subject` - and carrying its own
+  `agent_type_digest` that a run persists (C-2); a model tier is
+  `executorPolicy`, carried and read only by the invocation adapter (C-3); it
+  lives in the TypeScript tree alongside G2 (C-10); and editing one mints a new
+  record, so a stored digest still addresses something, with the storage left
+  to whoever owns it (C-16). No code changes: both entries are design records,
+  and the belt that implements the record comes after them.
 
 ### Changed
 
@@ -146,11 +164,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entry here, so nothing gains "superseded by". Cadenza's own dependency graph
   is untouched by it: no allowlist widening, no native transitive dependency,
   and D-0004 and D-0016 both stay true. The decision that the conductor is
-  built on cadenza's semantics is unchanged and is still unratified (C-12).
+  built on cadenza's semantics is unchanged, and has since been ratified as
+  D-0030 (C-12).
   `docs/design/conductor.md` follows the decision: section 9 asks how the host
   consumes both libraries, section 9.3 and the C-17 row record the outcome, and
   the rows that turn on who consumes what - C-8, C-9 - change status without
-  being decided.
+  being decided. Section 11 now marks the six cadenza-gate rows DECIDED against
+  D-0030 and D-0031; the eight rondo rows - the seven that go with the
+  conductor, plus the demoted C-8 - and continuo's C-11 stay open.
 - `scripts/parity-check.mjs` runs its `unmapped` sweep after reading every
   ledger, so a ledger entry may claim a target test in another belt's file
   without the result depending on ledger order.

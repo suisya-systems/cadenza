@@ -60,6 +60,8 @@ so the two spaces can never be read as one. The same applies to
 | D-0027 | The capability vocabulary: a two-segment key matched by equality, a cumulative version pinned per contract, and seven keys to start | accepted |
 | D-0028 | What the classifier's totality ranges over: the action and the context, and malformed input is an answer rather than an exception | accepted |
 | D-0029 | The host application is a third repository, rondo, consuming cadenza and continuo as libraries | accepted |
+| D-0030 | The conductor is built on cadenza's semantics: the 2026-09-04 premise, ratified as an entry | accepted |
+| D-0031 | The agent-type record: inputs to a contract rather than a second authority, keyed separately with its own digest, in the TypeScript tree, and immutable | accepted |
 
 ---
 
@@ -1952,3 +1954,244 @@ the one the human raised.
 - README's name section points to rondo as the host, beside continuo.
 - No code changes. Nothing in `src/` is created, moved or deleted by this entry, and no other C-n
   decision from `conductor.md` §11 is taken here.
+
+---
+
+## D-0030 — the conductor is built on cadenza's semantics: the 2026-09-04 premise, ratified as an entry
+
+**Status:** accepted (2026-09-05, cadenza#40 C-12, taken at cadenza's human gate)
+
+**Context.** The premise that the conductor is built on cadenza's semantics was taken with the human
+on 2026-09-04 and recorded only in cadenza#40's issue thread. `docs/design/conductor.md` is written
+propose-only and may not create an entry for it, so §11 raises it as decision **C-12** and recommends
+taking it — "**Yes**, as its own entry, before any conductor code is written". AGENTS.md §3 requires
+a `DECISIONS.md` entry for any settled design question, D-0001 makes the design document the primary
+oracle, and an architectural premise that lives only in an issue comment is the drift that oracle
+order exists to prevent — issue #15 exists because one such note lived only in a PR body. This entry
+takes C-12.
+
+**Decision.**
+
+- **The conductor is built on cadenza's semantics.** The front agent that turns a one-line request
+  into continuo runs takes its meaning of *what a delegated run is and may do* from cadenza: the G1
+  project registry (`project_id`, the resolved project, `config_digest`), the G2 delegation contract
+  and `classify()` (D-0026, D-0027, D-0028), and cadenza's reading of what a gate outcome means to a
+  classification. That is what was taken on 2026-09-04, and this entry is where a later reader finds
+  it rather than reconstructing it from an issue thread.
+- **What it settles is whose semantics, not whose repository.** Where the conductor's code lives was
+  a separate question — C-17, taken as **D-0029**, which puts it in `rondo`. D-0029 says so in its
+  own words: what the 2026-09-04 decision settled is "*whose semantics* the conductor is built on …
+  not which repository holds the code". Neither entry answers the other's question, and this one is
+  unchanged by D-0029.
+- **Not gate management.** D-0026 §2 leaves gates (G3) deliberately unfixed and
+  `docs/design/g2-delegation-contract.md` §1 repeats it, so "cadenza's semantics" carries no gate
+  API. A gate *outcome* is an input to a classification; the gate verbs and their storage are
+  continuo's, and the conductor drives continuo's verbs for them.
+- **The premise binds the design, not an implementation.** No module, type or behaviour is created by
+  this entry, and nothing under `src/` changes.
+
+**Why ratify a premise that nobody disputes.** Because an undisputed premise is exactly the kind that
+stops being visible. It has already done work no issue comment can be held to: `conductor.md` §12
+names its reversal as the falsifier of the *whole* document, and D-0029 had to state which of the two
+questions the 2026-09-04 decision answered in order to take the other one. A premise carrying that
+much weight with no ID cannot be cited by ID (this file's own rule), cannot gain a supersession
+marker if it is ever revisited, and cannot be found by a reader who does not already know which issue
+to read.
+
+**What would falsify it.**
+
+- **A conductor that cannot be built on these semantics** — it needs an authority answer
+  `classify()`'s three-valued, total classification cannot give, or a subject identity G1's
+  `project_id`/`config_digest` pair cannot express, so the loop would have to reimplement or
+  contradict them. That would mean the premise was a convenience rather than a design.
+- **The semantics migrating.** If continuo (or rondo) grows its own delegation-authority model that a
+  conductor uses in preference to cadenza's, the premise is superseded by practice rather than by
+  argument, and this entry is the one that gains the marker.
+- **The 2026-09-04 decision being revisited at the gate**, which `conductor.md` §12 already names as
+  the falsifier of that document. It falsifies this entry first.
+
+**Consequences.**
+
+- `docs/design/conductor.md` §11's **C-12** row is marked DECIDED against this entry. Nothing else in
+  that document changes: C-12 was explicitly not the placement question, and the recommendation is
+  taken as written.
+- The premise is citable as `D-0030`. Later references written as "cadenza#40, taken with the human
+  on 2026-09-04" can be rewritten to the ID as the documents holding them are next touched; this
+  entry does not rewrite them.
+- No code changes.
+
+---
+
+## D-0031 — the agent-type record: inputs to a contract rather than a second authority, keyed separately with its own digest, in the TypeScript tree, and immutable
+
+**Status:** accepted (2026-09-05, cadenza#40 C-1/C-2/C-3/C-10/C-16, taken at cadenza's human gate)
+
+**Context.** `docs/design/conductor.md` §7 works out the provider-agnostic **agent type** cadenza#40
+proposes — "what it may touch, what it must report, how many review rounds, when it halts, which
+model tier" — and finds that the record as enumerated would ship two sources of truth over authority.
+§11 raises five decisions about it and recommends an answer for each; D-0029 leaves all five at
+cadenza's gate, because the record is registry semantics rather than application code. This entry
+takes them together, as one record: they are five facets of one artefact — what it carries, what
+digest covers it, which of its fields nothing here reads, which tree holds it, and what happens to it
+when it is edited — and each answer is a reason the others hold. The argument in full is
+`conductor.md` §§6.8, 7.1–7.3; where that document and this entry disagree, this entry is what was
+decided.
+
+**What this entry is not.** It is not an implementation. No module, type, schema or digest algorithm
+is written here, and no conductor code is admitted by it. The belt that builds the record comes after
+this entry, against it.
+
+**The record, as fixed by the five sections below.**
+
+```
+AgentType
+  agentTypeId          a stable identifier, cadenza's own
+  granted              capability keys (D-0027 vocabulary) the conductor puts in the contract
+  askable              capability keys the conductor puts in the contract's askable set
+  vocabularyVersion    the vocabulary version the two sets are written against
+  loopPolicy           read by the conductor: review rounds, halt / no-progress thresholds
+  executorPolicy       read only by the invocation adapter: executor role, model tier,
+                       reporting duties. Opaque to domain, application, ports and the loop
+  agentTypeDigest      over all of the above, computed the way config_digest is
+```
+
+### 1. The record expresses no authority of its own (C-1)
+
+**Decision.** The agent-type record does **not** express "what a run may touch" anywhere other than
+G2. It names a capability key set in the D-0027 vocabulary — `granted` and the disjoint `askable` —
+that the conductor uses to **build** a `DelegationContract`. Those sets are *inputs to contract
+construction*, consumed before the contract exists; they are never a second answer standing beside
+one. Neither policy bag is authority either: an action a `loopPolicy` permits is still `refused` if
+the contract refuses it.
+
+**Why.** "What may this run touch" already has a single, total, three-valued answer —
+`classify(contract, action, context)`. A registry-side "may touch" list gives two answers under two
+digests, `config_digest` and `contract_digest`, with no precedence rule anywhere, and G2 refuses to
+invent one at classification time (`contract.ts:227-231`; D-0026 §1). Two authorities with no
+precedence is not a stricter design than one, it is an unanswerable question at the moment authority
+is needed.
+
+**And the record is a rendering, in D-0026 §1's own sense** — the type expands to a grant *before*
+the contract exists, the contract stores the expansion, and the type name survives only as
+provenance. That is the only reason it survives D-0026 §1's rejection of roles as the authority
+model: a role name in a durable record means whatever the role table meant at the time.
+
+### 2. A separate record, outside `config_digest`, with its own `agent_type_digest` (C-2)
+
+**Decision.** The record is a **separate record keyed by agent type**, not a field on
+`Project` / `ResolvedProject`, and it is **outside `config_digest`**. It carries **its own
+`agent_type_digest`**, computed over its whole semantics the way `config_digest` is (G1 §4; D-0011
+and D-0017 for the technique and its oracle), and a run persists that digest alongside `project_id`,
+`config_digest` and `contract_digest`.
+
+**Why.** Both alternatives fail, in opposite directions, and the trap is measurable rather than
+stylistic:
+
+- **Inside `config_digest`**: the digest is computed over the resolved project's semantics
+  (`g1-project-registry.md:156-166`), so adding the record moves **every** project's `config_digest`.
+  Every already-issued contract pins the old one (`contract.ts:83`), so `classify()`'s first step
+  returns `refused` / `stale_subject` for all of them (`classification.ts:103-105`) — a
+  documentation-driven mass revocation, triggered by editing an agent type.
+- **Outside it with no digest of its own**: the record's policy could change under an unchanged
+  `agentTypeId`, and "under what policy did it do that" would stop being answerable from the record —
+  the reconstructability argument D-0026 §1 makes for the grant, one artefact along.
+
+The record's own digest keeps the audit property without coupling it to every project's.
+
+**Two constraints follow from G1 as it stands, and the belt that implements the record owes both.**
+Every table in G1 is closed — an unknown key anywhere is refused, naming the key and the file
+(G1 §5.6) — so the record is a schema change with a `schema_version` and a migration story, not a key
+added to `config/projects.toml`. And layer-local settings do not merge (G1 §3.3): a record that
+shapes a grant is an authorisation, so if an agent type can vary per operator its merge semantics
+must be stated as non-merging.
+
+### 3. The model tier is executor policy: carried, never read by cadenza or by the conductor (C-3)
+
+**Decision.** Tiered models per stage do **not** belong to the conductor. The tier goes in
+`executorPolicy` — carried by the record, interpreted in exactly one place, the continuo-invocation
+adapter, and read by nothing in `domain`, `application`, `ports` or the loop. This is what splits the
+two policy bags: **`loopPolicy` the conductor does read** (review rounds and the halt / no-progress
+thresholds of `conductor.md` §§4, 6.3 have a real interpreter in the loop), and **`executorPolicy` it
+does not**.
+
+**Why.** G1 §1 forbids naming Claude, GitHub, interlock or any other executor in `domain`,
+`application` or `ports` (`g1-project-registry.md:22-23`), and D-0027's consequences say the same for
+capability keys. A tier is only meaningful against one provider's model line, so spelled abstractly
+it is a provider fact carried under a neutral name — exactly what that one-word grep exists to make
+visible. And the one seam that would host the tier-to-model mapping is closed: `src/adapters/interlock/`
+must not exist in the TypeScript tree (`import-boundaries.test.ts:906`, D-0014, superseded on other
+grounds by D-0023 but not on this one), while `src/adapters` itself stays a live layer.
+
+**Stated rather than buried: the tier is carried for a capability that does not exist yet.** continuo
+names no model on the lap path; the only transport for a per-stage model is `--cli-arg --model`, and
+C-6's allowlist starts empty — so the adapter reads a tier it cannot spend. That is the honest state,
+not a working feature, and it is why the field is opaque rather than plumbed.
+
+### 4. The record lives in the TypeScript tree, alongside G2 (C-10)
+
+**Decision.** The agent-type record is hosted by cadenza's **TypeScript** `src/`, alongside G2 — not
+by the Python package `src/cadenza/`.
+
+**Why.** G2 is TypeScript-only (cadenza#25), and the record's `granted`/`askable` sets are written in
+the D-0027 vocabulary that only the TypeScript side has. The import-boundary suite that would police
+where the record may be read from parses the TypeScript module graph (D-0022, D-0024), so the tree
+that can enforce the layering is the tree that should hold it. Nothing about the choice depends on
+how the host consumes cadenza: that boundary is an npm-or-CLI question either way (C-8, now rondo's).
+
+**This is the record, not the conductor.** Where the conductor's own code lives is D-0029 — `rondo`.
+D-0029 states that the record stays cadenza's and that C-10 is unaffected by it; this section is the
+entry that takes C-10.
+
+### 5. Superseded records are retained by immutability: editing mints a new record (C-16)
+
+**Decision.** Agent-type records are **immutable**. Editing one **mints a new record** rather than
+mutating the existing one, so a run's stored `agent_type_digest` still addresses a record that
+exists. **Where superseded records are stored is the store owner's, not cadenza's** — catalog,
+content-addressed store or git history are all admissible, and this entry fixes the requirement, not
+the mechanism.
+
+**Why.** A digest is only the detection half. `agent_type_digest` proves that a record has or has not
+changed; it does not hand back the review limit, halt threshold or tier a past run actually ran
+under, so without a retention rule the digest addresses nothing and the audit property of §2 is
+nominal. Immutability is the move this repository already makes twice — D-0015 for value objects, and
+D-0026 §1 where "an approval is a superseding contract, not a widening of the running one". Leaving
+the storage open is not an omission: durability is what D-0026 §2 assigns to the control plane rather
+than to cadenza, and fixing it here would put a store inside a layer that has no I/O.
+
+**Deliberately not fixed.** The concrete schema, field encodings and the digest's canonical payload;
+where superseded records are stored (§5); whether an agent type may vary per operator, beyond §2's
+requirement that the answer be stated; the `loopPolicy` and `executorPolicy` field vocabularies
+beyond the members named above; and C-15 — which executor role roster the invocation adapter maps
+cadenza's role name onto, which is rondo's gate's under D-0029.
+
+**What would falsify it.**
+
+- **Against §1.** A conductor that cannot build a usable contract from `granted`/`askable` alone —
+  needing the record consulted again *at* classification time to get the right answer. That is the
+  role-as-authority shape D-0026 §1 rejected returning, and D-0026 would have to be superseded rather
+  than extended (`conductor.md` §7.3).
+- **Against §2.** Agent types turning out to vary per project in practice, so that "keyed by agent
+  type" forces a cross-product of near-duplicate records — that would mean the record belongs nearer
+  the project after all, and the mass-revocation cost would have to be paid deliberately or the
+  digest reshaped.
+- **Against §3.** A per-stage model tier becoming spendable — `--model` reaching an allowlist, or a
+  lap-path seam appearing in continuo — while `executorPolicy` still cannot express it, or a second
+  reader of `executorPolicy` appearing outside the invocation adapter. Either would mean the bag is
+  in the wrong place rather than merely unspent.
+- **Against §4.** The Python side acquiring a reader for the record before it is retired (#25), which
+  would make one tree host a record the other must parse.
+- **Against §5.** Minting-on-edit proving unworkable in practice — records edited in place because
+  the retention has no owner — which would mean the requirement needed its mechanism fixed here, not
+  deferred.
+
+**Consequences.**
+
+- `docs/design/conductor.md` §11's **C-1**, **C-2**, **C-3**, **C-10** and **C-16** rows are marked
+  DECIDED against this entry, each taking the document's recommendation as written. No row's text or
+  reason changes, and no other C-n row is touched: **C-11** is continuo's, and C-4, C-5, C-6, C-7,
+  C-8, C-13, C-14 and C-15 are rondo's under D-0029, with C-9 retired unreached.
+- **G2 is not reopened.** Nothing here changes `classify()`, the contract, or the D-0027 vocabulary;
+  the record consumes the vocabulary and produces contract inputs.
+- **The record is now admissible work.** A belt may implement it against this entry; a question this
+  entry names as not fixed is settled by the belt that needs it, as a new `D-` entry.
+- No code changes. Nothing in `src/` is created, moved or deleted by this entry.
