@@ -36,7 +36,10 @@ continuo's verbs instead of on terminal panes. The decision that it lives in cad
 the human on 2026-09-04 and is recorded in cadenza#40; this document assumes it and does not re-argue
 it. It is, however, a settled design question living only in an issue, which AGENTS.md §3 says
 belongs in `DECISIONS.md` — ratifying it as an entry is decision **C-12**, and this document names it
-rather than writing it.
+rather than writing it. What that decision settled is **whose semantics the conductor is built on**:
+cadenza's registry, contract and gates. It did not settle **which repository holds the code**, which
+continuo's own premise 2 records as an open working assumption and which this document raises as
+**C-17** (§9.3).
 
 **What the conductor is not, in this design.**
 
@@ -796,6 +799,75 @@ rather than a precondition.
 
 ---
 
+### 9.3 Where the conductor itself lives — open decision
+
+§9 asks how cadenza reaches continuo. A prior question is whether the conductor is a thing *in*
+cadenza at all. continuo's design already frames it, as the second of two operator premises supplied
+to that document: premise 1 is structural (the end state is a single web application, one host
+process owning the SQLite record of truth and speaking MCP over localhost to agent sessions);
+**premise 2 — "that application is hosted by cadenza, as an outermost adapter" — is recorded
+explicitly as a working assumption rather than a decision**, with a counter-proposal on the page and
+a revisit trigger: *the first line of application code*
+(`minimal-operating-loop.md:41-88`). The conductor is that first line. So the trigger has arrived,
+and this document raises the question rather than inheriting the assumption.
+
+| | Option |
+|---|---|
+| **A** | The conductor is an outermost adapter inside the cadenza repository, beside the existing catalog adapter |
+| **B** | The conductor is a third repository — the host application — consuming cadenza and continuo as libraries |
+
+**Three things argue for B, and the first is the one the human raised.**
+
+*The name argues against A.* cadenza's README says what the word means: "the moment the orchestra
+falls silent and a soloist plays on their own judgment — within an agreed frame, and ending with the
+trill that cues the ensemble back in", and — decisively — "**That is what this layer defines, not
+what it performs**". A conductor is precisely who is *not* playing during a cadenza. Housing the
+thing that runs the programme inside the layer that defines the soloist's frame inverts the metaphor
+the repository chose deliberately, and metaphors that invert stop guiding the boundary decisions they
+were adopted to guide.
+
+*The ownership table argues against A.* Of the four things #22's console renders, **three are
+continuo's** — the delegation record, run and belt state with `awaiting_user` events, the outbox —
+and one is cadenza's (gate semantics), with the operator conversation undecided. Under A the host
+lives in the repository that owns the minority of what it draws and reaches for the majority across a
+package boundary.
+
+*The layer discipline argues against A, measurably.* cadenza's import boundary is not a layer
+allowlist but a **per-binding external allowlist**, and `src/adapters` — "the one layer that is
+allowed I/O, and only this much of it" — currently admits exactly `readFileSync` and `statSync`. A
+host needs an HTTP server, continuo's exports, and a SQLite driver reached through them, each named
+binding by binding. That is a deliberate widening of the single check that keeps cadenza I/O-minimal,
+and it is not reversible by removing a directory later.
+
+**What argues for A**, and it is not nothing: it adds no repository, and continuo records that
+neither repository's `DECISIONS.md` can hold a decision binding both (`minimal-operating-loop.md`
+§8), so a shape that multiplies cross-repository decisions walks into a defect already named. A third
+repository needs a third ledger and a rule for what it may decide alone.
+
+**Recommendation: B**, with the packaging cost stated rather than buried. cadenza is `private: true`
+at `0.0.0` exactly as continuo is, so B does not inherit §9's publication problem — it **doubles**
+it: two packages must become consumable instead of one. That is the honest price, and it is a price
+in the same currency as continuo D-0045 rather than a new kind of problem.
+
+**How §9 generalises under B.** The consumption question stops being "how does cadenza take a
+dependency on continuo" and becomes "how does the host take a dependency on each of them", and that
+reframing dissolves most of §9.1 rather than moving it: cadenza never widens
+`ALLOWED_EXTERNALS_BY_LAYER`, never acquires `better-sqlite3` as a transitive native dependency, and
+D-0016's "`smol-toml` is the port's one runtime dependency" and D-0004's "cadenza has no native
+dependency today" both stay true — so C-9's three consequent entries never need taking. C-8's CLI
+process boundary also stops being the interesting answer: it exists to spare cadenza a dependency it
+cannot take today, and a host that is being written anyway can take continuo's published package
+directly (continuo D-0045) once the release path exists, keeping the typed surface §9.2 gives up.
+What B does *not* dissolve is C-14: whichever way, something must record which continuo revision a
+run drove.
+
+**What stays cadenza's under either answer.** The G1 registry, the G2 contract and `classify()`, and
+the agent-type record of §7 — which is registry semantics, not application code. C-10 (the record
+lives in the TypeScript tree alongside G2) is unaffected by C-17: under B the host *reads* cadenza's
+agent types, it does not own them.
+
+---
+
 ## 10. What the conductor's loop looks like, end to end
 
 Putting §§3-9 together, one conductor iteration for one request:
@@ -878,6 +950,7 @@ per AGENTS.md §6 an issue carrying open decisions is not started until they are
 | **C-14** | How does a cadenza run pin and record which continuo revision it drove? | **Record it per run** — the continuo revision the invocation adapter used, persisted beside the run's other identifying digests — and treat pinning the checkout as part of whatever C-8's interim is | C-8's CLI boundary answers "which continuo is this" worse than any of the three npm options, which is the property §9.1 used to reject option C; approving C-8 without this leaves the question hidden (§9.2) |
 | **C-15** | Where does the agent-type role name map onto the executor's role roster, and what refuses an unmapped name? | **In the continuo-invocation adapter, refusing before admission** — the agent type carries cadenza's own role name; the adapter maps it and refuses an unmapped one | `run admit --role` is required but unvalidated: a wrong role is accepted, persisted, and paid for only when `lap perform` renders the fence, after the branch and worktree exist (continuo#126). Refusing in the adapter is the only place that costs nothing, and it keeps the roster out of `domain` (§7.1) |
 | **C-16** | How are superseded agent-type records retained, so a run's `agent_type_digest` still addresses something? | **Immutably, by minting a new record on every edit**; where superseded records are stored is the store owner's, not cadenza's | A digest detects change but does not hand back the policy a past run used. Immutability is D-0015's and D-0026 §1's existing move; durability is what D-0026 §2 assigns to the control plane rather than to cadenza (§7.1) |
+| **C-17** | Where does the conductor itself live — **A** an outermost adapter in the cadenza repository, or **B** a third repository (the host application) consuming cadenza and continuo as libraries? | **B.** continuo's premise 2 named A a working assumption with a revisit trigger — "the first line of application code" — and the conductor is that line | The name says cadenza "defines, not performs", and a conductor is who is *not* playing during a cadenza; #22's ownership table puts three of the console's four sources in continuo; and A widens cadenza's per-binding external allowlist from `readFileSync`/`statSync` to an HTTP server, continuo's exports and a SQLite driver, irreversibly. Cost of B, stated: two packages must become consumable instead of one (§9.3) |
 
 Two things that are **not** cadenza decisions and are recorded here only so the design does not
 silently depend on them: continuo's S1 promotion (the "would you accept these settings?" question
@@ -900,5 +973,6 @@ D-0059 defers), and continuo growing a run-close verb and a publisher. Both are 
 - **§7**, if a later design lets `classify()` consult the agent type at classification time. That is
   the role-as-authority shape D-0026 §1 rejected, and D-0026 would have to be superseded rather than
   extended.
-- **The whole document**, if the decision that the conductor lives in cadenza is revisited
-  (cadenza#40, taken with the human on 2026-09-04).
+- **The whole document**, if the decision that the conductor is built on cadenza's semantics is
+  revisited (cadenza#40, taken with the human on 2026-09-04). C-17 is *not* that falsifier: which
+  repository holds the code changes §9's shape and §2.3's module names, and nothing else here.
