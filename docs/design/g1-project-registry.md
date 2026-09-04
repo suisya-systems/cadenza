@@ -3,7 +3,7 @@
 Status: accepted (bootstrap scope)
 Applies to: `src/domain/`, `src/application/`, `src/ports/`,
 `src/adapters/toml-catalog/` (the Python spellings `cadenza.domain` and friends
-until `DECISIONS.md` D-0030 retired that implementation)
+until `DECISIONS.md` D-0032 retired that implementation)
 
 This document is the contract for G1. The code implements what is written here;
 where the two disagree, this document is the defect report.
@@ -120,7 +120,7 @@ matters is one-directional: it must refuse **everything git refuses**, and it is
 allowed to be stricter. `test/domain/refs.test.ts` pins that direction against
 `git check-ref-format` itself rather than against a second copy of the rules, so
 a rule this list forgets fails the build instead of surfacing at the clone. (It
-was `tests/test_refs.py` until D-0030; the port shells out to the same command,
+was `tests/test_refs.py` until D-0032; the port shells out to the same command,
 so the guarantee is unchanged.)
 Being stricter than git is a deliberate choice in exactly one place: a bare `@`
 is git's shorthand for HEAD in revision syntax, so a catalog and whatever
@@ -252,7 +252,7 @@ refused silently — a catalog that half-loads is worse than one that does not
 load.
 
 The Python spelling of this section named `cadenza.domain.errors` and a bare
-`ValueError`; `DECISIONS.md` D-0030 retired that implementation, and only the
+`ValueError`; `DECISIONS.md` D-0032 retired that implementation, and only the
 spelling changed here. What is required is unchanged: typed, located, never
 silent.
 
@@ -276,7 +276,7 @@ No module is named `core` or `runtime` — those names belong to interlock's
 vocabulary and reusing them makes a boundary review harder than it needs to be.
 
 This section described `src/cadenza/` and a `tests/test_import_boundaries.py`
-until `DECISIONS.md` D-0030 retired the Python implementation. The **shape** is
+until `DECISIONS.md` D-0032 retired the Python implementation. The **shape** is
 what this section fixes and it is unchanged: the same four layers, the same
 inward-only direction, the same naming refusal, enforced by a scan in CI. The
 two `placeholder` adapter directories (`interlock/`, `claude_code/`) were empty
@@ -301,7 +301,7 @@ under `src/` imports `interlock` or `claude-org-runtime` — in any spelling, by
 any loader route.
 
 Under the Python implementation the seam was held open by an empty
-`cadenza/adapters/interlock/` package directory. D-0030 retired it, and nothing
+`cadenza/adapters/interlock/` package directory. D-0032 retired it, and nothing
 replaces the directory itself: what reserves the seam is this section plus
 `DECISIONS.md` D-0023, and what enforces the boundary is the scan, which never
 depended on the directory existing.
