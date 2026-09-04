@@ -125,20 +125,28 @@ property access that no finite list of roots can enumerate.
 `npm run inventory` separately checks the inventory as a whole against
 `parity/source-inventory.manifest.json`: stray files in either direction, lines that are not node ids
 of the file's own source, counts, the `all.txt` aggregate, duplicated ids across inventories, the
-reconciliation with the suite baseline, the `def test_` count re-derived from each source file, and
-that every inventory carries a status the manifest's own vocabulary defines.
+reconciliation with the suite baseline, and that every inventory carries a status the manifest's own
+vocabulary defines. It used to re-derive each entry's `def test_` count from its Python source file
+as well; `D-0032` deleted those files, so that check is retired and the recorded figure is now
+history, checked only for internal consistency.
 
 ### 3.3 Regenerating an inventory
 
-From the repository root:
+**This is no longer possible, and that is the end state rather than a gap.** `D-0032` deleted
+`tests/`, so the collection the inventory is a snapshot of cannot be re-run. The inventory is now a
+closed historical record of a suite that no longer exists.
+
+The procedure is kept here because it is what the committed files are evidence *of* — a reader who
+needs to know how a number was produced needs the command that produced it — and because it is the
+answer to "can we check this?", which is no. It was, from the repository root:
 
 ```bash
 PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python3 -m pytest --collect-only -q -p no:cacheprovider
 ```
 
-Split the output per source file, keeping **collection order**, and rebuild `all.txt` as the
-concatenation in the manifest's `files` order. The order is a claim this procedure makes and nothing
-offline can test it; re-running the collection is the only thing that does.
+The output was split per source file, keeping **collection order**, and `all.txt` rebuilt as the
+concatenation in the manifest's `files` order. The order was a claim this procedure made and nothing
+offline could test it; re-running the collection was the only thing that did, and now nothing does.
 
 ## 4. The differential oracle
 
@@ -175,15 +183,23 @@ let the comparison pass while comparing nothing.
 
 ### 4.2 Regenerating the vectors
 
+One of the two can be regenerated. `D-0032` split the faces apart on the question of *whose*
+implementation each one questions — see section 4.5 — and only the first still has a live
+counterparty:
+
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/oracle/dump_config_digest.py \
     parity/oracle/config-digest-vector.json
-PYTHONDONTWRITEBYTECODE=1 python3 scripts/oracle/dump_compose_digest.py \
-    parity/oracle/compose-digest-vector.json
 ```
 
-No second checkout and no installed package: the script puts `src/` on `sys.path` itself, so a stale
-install cannot shadow the implementation being questioned.
+No second checkout, no installed package and, since `D-0032`, no cadenza Python at all: the script
+imports the standard library and nothing else, and reproduces the committed vector byte for byte. It
+runs correctly copied into an empty directory, which is the property that let it outlive `src/cadenza/`.
+
+`parity/oracle/compose-digest-vector.json` is **frozen** and has no generator. Adding a case to it is
+not a normal edit — there is no CPython left to ask for the expected value, so a new row would only
+assert that the port agrees with itself. Pin new composition behaviour in
+`test/application/compose.test.ts` instead.
 
 ### 4.3 What the corpus is for
 
@@ -222,10 +238,20 @@ hashes. So the second face asks the same question one level up:
 > Given the same layer documents, the `config_digest` CPython's `resolve_project` produces and the
 > one the port's `resolveProject` produces are the same string.
 
-`scripts/oracle/dump_compose_digest.py` writes `parity/oracle/compose-digest-vector.json`;
+`scripts/oracle/dump_compose_digest.py` wrote `parity/oracle/compose-digest-vector.json`;
 `test/application/compose-oracle.test.ts` rebuilds the corpus independently in
 `test/oracle/compose-corpus.ts`, asserts the id lists match, and only then compares. It carries its
 own not-vacuous case, for the same reason the first face does.
+
+**Since `D-0032` this face is frozen, and the generator is deleted.** The two faces part company
+here, on a difference that was always true and only became load-bearing at the retirement: the first
+face questions **CPython's** encoder and collation, a third party that outlived the port and can
+still move under an interpreter upgrade, so it still regenerates on every CI run. This face
+questioned **cadenza's own** Python, which no longer exists and therefore can no longer move — so
+the vector can never go stale, and re-deriving it would have meant writing the same composition logic
+a second time by the same hand, an oracle that agrees with itself. All 13 cases are still compared
+against the frozen vector on every run, which catches every regression on the TypeScript side. What
+is no longer caught is a change on the Python side, which is not a gap: there is no Python side.
 
 **It earned its place the same way.** A `parseBaseBranch` that returns `value.normalize("NFC")` —
 which JavaScript makes look like tidying — leaves **all 103 ported tests green, the first face
@@ -283,9 +309,13 @@ nobody would be told.
 | `tests/test_toml_loader.py` | 14 | 13 | **ported** (14 mapped) |
 | **Total** | **330** | **127** | 330 ported, 0 inventoried |
 
-Every source file now carries a ledger. *Inventoried* remains a defined status in
-`parity/source-inventory.manifest.json` — collected as evidence, not a commitment to port — because
-a later source file added to the Python suite arrives in that state before a belt opens it.
+**This table is now final.** `D-0032` deleted every file in its first column, and the ledgers and
+inventories that account for them are kept as the closed record of what each case asserted. Nothing
+below is a plan any more; it is what happened.
+
+Every source file carries a ledger. *Inventoried* remains a defined status in
+`parity/source-inventory.manifest.json` — collected as evidence, not a commitment to port — though
+no file can enter that state again, since no source file can be added to a suite that is gone.
 
 The last file is the one that is `ported` without a single `ported` case in it.
 `tests/test_import_boundaries.py` asserts the dependency direction of design section 8 over a

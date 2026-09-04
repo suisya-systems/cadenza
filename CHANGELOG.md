@@ -155,8 +155,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to whoever owns it (C-16). No code changes: both entries are design records,
   and the belt that implements the record comes after them.
 
+### Removed
+
+- The Python G1 implementation (cadenza#25, D-0032): `src/cadenza/`, `tests/`,
+  `pyproject.toml`, `.github/workflows/test.yml`, and the ruff / mypy / pytest /
+  pip-audit wiring. TypeScript is now the whole of the implementation, and
+  `main`'s required checks are `ts-gate` and `dependency-review`. `shellcheck`
+  moved to `.github/workflows/hygiene.yml` and stays, as before, not required.
+- `scripts/oracle/dump_compose_digest.py`, with
+  `parity/oracle/compose-digest-vector.json` kept and frozen. The composition
+  oracle questioned cadenza's own Python, which no longer exists and so can no
+  longer move; `test/application/compose-oracle.test.ts` still compares all 13
+  cases against the frozen vector on every run. Regenerating it is no longer
+  possible, and adding a case to it is no longer meaningful.
+
 ### Changed
 
+- `scripts/oracle/dump_config_digest.py` no longer imports `cadenza.domain.*`;
+  it restates the payload shape and digest rule in stdlib Python and reproduces
+  the committed vector byte for byte, verified before the deletion landed and
+  from an empty directory with no repository around it. The `config_digest`
+  oracle therefore stays live through the retirement (D-0032), because what it
+  questions is CPython's JSON encoder and code-point collation - a third party
+  that outlived the port. This is the whole of the repository's remaining Python
+  footprint: one CI job, one stdlib-only script.
+- `parity/` is kept in full and is now a closed historical record: the ledgers
+  hold the only account of what the Python suite asserted, and the source
+  inventory can no longer be regenerated, since the collection it snapshots is
+  gone. The inventory check that re-derived `def test_` counts from the Python
+  sources is retired; the arithmetic that never needed them is kept.
+- `test/architecture/import-boundaries.test.ts` drops the `src/cadenza/`
+  carve-out and now applies one rule to the whole of `src/`, so a `.py` file
+  reappearing anywhere under it is reported rather than passed over by both
+  scans.
 - The host application is a third repository, `rondo`, consuming cadenza and
   continuo as libraries (D-0029, taking cadenza#40's C-17 at the human gate).
   This supersedes the working assumption that cadenza hosts the application -

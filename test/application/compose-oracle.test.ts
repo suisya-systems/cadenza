@@ -16,10 +16,27 @@
  * not surface as a red test. It surfaces as an audit reporting that a catalog
  * moved when it did not, on every run recorded before the port.
  *
- * Regenerate the vector with, from the repository root:
+ * **This vector is frozen, and cannot be regenerated (D-0032).** It was produced
+ * by `scripts/oracle/dump_compose_digest.py`, which drove cadenza's Python
+ * `compose_catalog` / `resolve_project`; the retirement of the Python G1 deleted
+ * both. That is deliberate rather than a loss taken for convenience: this face
+ * questioned cadenza's OWN Python, so with that implementation gone the vector
+ * can never go stale, and a self-contained generator would have been the same
+ * composition logic written a second time by the same hand -- an oracle that
+ * agrees with itself, which is exactly what the corpus split exists to prevent.
+ * The sibling face is the opposite case and stays live: `dump_config_digest.py`
+ * questions CPython's encoder, a third party that outlived `src/cadenza/`.
  *
- *     PYTHONDONTWRITEBYTECODE=1 python3 scripts/oracle/dump_compose_digest.py \
- *         parity/oracle/compose-digest-vector.json
+ * So what these 13 cases still catch is every regression on the TypeScript side
+ * -- the whole of what a reader of a green run should take from them. What they
+ * no longer catch is a change on the Python side, which is not a gap, because
+ * there is no Python side left to change.
+ *
+ * **Adding a case here is therefore not a normal edit.** There is no CPython to
+ * ask for the expected value, so a new row's `digest` would be whatever this
+ * port already computes, and the case would assert that the code agrees with
+ * itself. Pin new composition behaviour in `test/application/compose.test.ts`
+ * instead.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";

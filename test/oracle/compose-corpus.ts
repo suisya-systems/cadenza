@@ -1,10 +1,19 @@
 /**
  * The TypeScript half of the composition oracle's corpus.
  *
- * Stated **independently** of `scripts/oracle/dump_compose_digest.py`, which is
- * the point: the comparison in `test/application/compose-oracle.test.ts` reads
- * only the *outputs* from the committed vector, never the inputs. A corpus read
- * out of the vector would agree with itself no matter how wrong it was.
+ * Stated **independently** of `scripts/oracle/dump_compose_digest.py`, which
+ * was the point: the comparison in `test/application/compose-oracle.test.ts`
+ * reads only the *outputs* from the committed vector, never the inputs. A
+ * corpus read out of the vector would agree with itself no matter how wrong it
+ * was.
+ *
+ * That generator was deleted by D-0032 with the rest of the Python G1, and the
+ * independence it bought is now a property of the committed vector rather than
+ * of a script anyone can run: the vector holds what CPython said, this file
+ * holds what the inputs were, and the two were written apart. What that costs
+ * is stated in `test/application/compose-oracle.test.ts` -- read it there
+ * before adding a case here, because a case added to this file can no longer be
+ * answered by regenerating.
  *
  * Every non-ASCII character is written as an escape rather than as a literal, so
  * this file is pure ASCII. Two of these cases differ only by Unicode

@@ -62,6 +62,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0029 | The host application is a third repository, rondo, consuming cadenza and continuo as libraries | accepted |
 | D-0030 | The conductor is built on cadenza's semantics: the 2026-09-04 premise, ratified as an entry | accepted |
 | D-0031 | The agent-type record: inputs to a contract rather than a second authority, keyed separately with its own digest, in the TypeScript tree, and immutable | accepted |
+| D-0032 | The Python G1 is retired; one oracle face stays live on CPython and the other is frozen | accepted |
 
 ---
 
@@ -350,7 +351,13 @@ file's function count suggests, which is a cost paid in review time and is the p
 
 ## D-0011 — The differential oracle, and the one face this pilot implements
 
-**Status:** accepted
+**Status:** accepted; see D-0032 for what "the Python implementation" means after the retirement
+
+The face decided here survives D-0032 and still runs on every CI build, but its Python half no
+longer imports cadenza: `scripts/oracle/dump_config_digest.py` was rewritten to import only the
+standard library. The body below is left as written. Where it says the artefact "the Python
+implementation produces", read: what **CPython's** `json.dumps` and `hashlib` produce, which is what
+this face was always really questioning and is why it outlived `src/cadenza/`.
 
 **Decision.** Beside the ported tests, the port carries a **differential oracle**: for a fixed
 corpus, the artefact the Python implementation produces and the artefact the TypeScript
@@ -570,7 +577,13 @@ close the second disagreement above and would be worth the swap on its own.
 
 ## D-0017 — The oracle's second face: composition, over the persisted digest only
 
-**Status:** accepted
+**Status:** accepted; frozen by D-0032
+
+The face decided here still runs and still compares all 13 cases on every build. What D-0032 changed
+is that it can no longer be **regenerated**: `scripts/oracle/dump_compose_digest.py` is deleted and
+`parity/oracle/compose-digest-vector.json` is frozen, because this face questioned cadenza's own
+Python rather than a third party's, and that implementation no longer exists to be asked. The body
+below is left as written and describes the generator in the present tense.
 
 **Decision.** The differential oracle (D-0011) gains a **second face**: for a fixed corpus of layer
 documents, the `config_digest` that CPython's `resolve_project` produces and the one the port's
@@ -2195,3 +2208,119 @@ cadenza's role name onto, which is rondo's gate's under D-0029.
 - **The record is now admissible work.** A belt may implement it against this entry; a question this
   entry names as not fixed is settled by the belt that needs it, as a new `D-` entry.
 - No code changes. Nothing in `src/` is created, moved or deleted by this entry.
+## D-0032 — The Python G1 is retired; one oracle face stays live on CPython and the other is frozen
+
+**Status:** accepted
+
+**Decision.** `src/cadenza/` (the Python G1 implementation) and `tests/` (its pytest suite) are
+deleted, along with `pyproject.toml`, `.github/workflows/test.yml`, and the ruff / mypy / pytest /
+pip-audit wiring. `.github/branch-protection.json` requires `ts-gate` and `dependency-review` and no
+longer names the two `pytest (...)` contexts. TypeScript is the whole of the implementation.
+
+Two things are deliberately kept rather than deleted with their neighbours:
+
+- **`parity/`, untouched.** Every ledger, `target-only.json`, the source inventory and both oracle
+  vectors stay exactly as they are.
+- **`scripts/oracle/dump_config_digest.py`, rewritten to stand alone.** It imports the standard
+  library and nothing else, reproduces the committed vector byte for byte, and still runs in the
+  `oracle` CI job. Its sibling `scripts/oracle/dump_compose_digest.py` is deleted and its vector
+  frozen.
+
+The Python footprint of the repository is therefore one CI job running one stdlib-only script.
+
+**Why the two oracle faces are treated differently.** This is the substance of the entry, and the
+question it turns on is *whose implementation each face questions* — a difference that was always
+true and became load-bearing only at the retirement.
+
+- **The first face (D-0011) questions CPython.** `json.dumps` under `sort_keys=True` and
+  `ensure_ascii=False`, Python's code-point collation, and `hashlib.sha256` are the three things
+  `src/domain/canonical-json.ts` reimplemented by hand. All three belong to a third party, all three
+  outlive `src/cadenza/`, and all three can still move under an interpreter upgrade. Re-deriving
+  them every CI run still buys something, so the generator was made self-contained and the face
+  stays **live**.
+- **The second face (D-0017) questioned cadenza's own Python.** `compose_catalog` and
+  `resolve_project` were ours. With them deleted the vector can never go stale, because the thing it
+  was comparing against no longer exists to change. So the vector is **frozen**: kept, still
+  compared on every run by `test/application/compose-oracle.test.ts`, with no generator behind it.
+
+A self-contained generator was considered for the second face and rejected. It would have meant
+restating roughly 700 lines of composition, resolution and validation logic in stdlib Python — the
+same behaviour written a second time by the same hand, which is an oracle that agrees with itself.
+That is precisely the failure the corpora are split across two languages to prevent (D-0011), so
+reproducing it in the name of keeping the face "live" would have been a worse outcome than freezing
+it honestly. The first face escapes this objection because its self-contained form restates only the
+payload *shape*, while the part under test — the encoder — remains genuinely CPython's.
+
+**What replaces each guarantee the deleted cells provided.** Stated one by one, because "the
+TypeScript suite covers it" is the claim that needs checking rather than the answer.
+
+| Deleted | What provided it | What provides it now |
+|---|---|---|
+| `pytest` × 9 matrix cells | 330 collected cases over three OSes and three interpreters | 531 cases in `test/`, run **twice per cell at distinct seeds** over three OSes and two Node versions (`double-green`, D-0006) — a stronger ordering guarantee than the Python cells ever had |
+| `tests/test_import_boundaries.py` | no interlock import, inward-only dependencies, over the Python module graph | `test/architecture/import-boundaries.test.ts`, which additionally gains the `src/cadenza/` carve-out it used to leave to the Python scan, and is wider than its source in three recorded ways (`docs/porting.md` §7) |
+| `ruff check` / `ruff format --check` | lint and format of Python | `biome check` (`npm run lint`) over the TypeScript, already required via `ts-gate` |
+| `mypy --strict src` | static types on the Python | `tsc --noEmit` under the strictness of D-0005, already required via `ts-gate` |
+| `pip-audit` | known CVEs in Python dependencies | nothing, and nothing is needed: there is no Python dependency left to audit. The one surviving script imports only the standard library, and `dependency-review` (required) covers the npm and Actions surfaces |
+| `shellcheck` | tracked `*.sh` | the same job, moved to `.github/workflows/hygiene.yml` and, as before, deliberately **not** a required check |
+| `pyproject.toml` as version source | `src/cadenza/__about__.py` | `package.json`'s `version` field (`docs/repository-policy.md` §3) |
+| inventory check (7), `def test_` re-derived from source | the Python files | **nothing, and nothing can.** The figure is now a closed historical record; the arithmetic that never needed the file (ids ≥ functions) is kept. `scripts/source-inventory-check.mjs` says so at the check's old site |
+| regenerating an inventory | re-running pytest collection | **nothing, and nothing can.** `docs/porting.md` §3.3 keeps the procedure as the record of how the committed figures were produced, and says plainly that it can no longer be run |
+| the second oracle face's `--check` | `dump_compose_digest.py` | **nothing, and nothing is needed:** it detected "cadenza's Python moved", and cadenza's Python cannot move again |
+
+The last four rows are the honest ones and the reason this table exists. Three guarantees are gone
+with nothing behind them, and each is gone because the thing it protected against can no longer
+happen — not because something was overlooked.
+
+**Why one PR rather than two.** The ordering constraint that made a split necessary is discharged:
+`main`'s required checks no longer name the pytest contexts, so deleting the workflow does not strand
+a branch waiting on a check that never reports. With that gone, a single revertible commit is worth
+more than a staged one — a bisect that lands between two halves of a retirement finds a tree where
+the ledgers describe a suite that is half deleted.
+
+**What was verified, and when.** The self-contained generator was checked **before** the deletion
+landed, which is the only moment the check means anything: with `src/cadenza/` still present, the
+rewritten script reproduced all 15 cases of `config-digest-vector.json` identically, and the whole
+document apart from the `python_version` stamp. It was then run from a copy in an empty directory
+with no repository around it, and again after the deletion. `npm run verify` is green: 531 tests,
+lint, knip, typecheck, the parity ledger (531 target tests collected) and the source inventory (330
+node ids from 127 test functions across 8 files).
+
+**What would falsify it.**
+
+- **A CPython upgrade turning the first face red with no defect behind it** — for example a change
+  to `json.dumps`'s escaping that is a CPython bug rather than a divergence. That would mean the face
+  is pinning an implementation detail of a third party rather than a claim about cadenza, and the
+  right answer would be to freeze it as the second face is frozen rather than to chase it.
+- **A composition change that the frozen second face cannot see and no ported test catches.** The
+  freeze is defensible only while `test/application/compose.test.ts` and the 13 frozen cases between
+  them still cover what composition feeds the digest. A divergence found in production that both
+  missed would say the second face needed to stay live, and would make the 700-line reimplementation
+  the price that should have been paid.
+- **A need to run the Python G1 again** — a port defect severe enough that the original is wanted as
+  a reference. The git history holds it, so this is a cost rather than an impossibility, but if it
+  happens more than once the deletion was premature.
+
+**Consequences.**
+
+- `AGENTS.md` §1 and §2 are rewritten: there is one implementation, and the oracle order loses its
+  middle authority (the Python suite), leaving the design document to carry the weight alone. The
+  findings already recorded in ledger `reason` fields stand; none is re-opened.
+- `README.md`'s Status and Layout sections, `docs/repository-policy.md` §2/§3/§5, and
+  `docs/porting.md` §3.2/§3.3/§4.2/§4.5/§7 are updated to match. `docs/porting.md` §7's table is
+  final: every file in its first column is deleted.
+- **`docs/design/g1-project-registry.md` is updated in the same change**, and this is not
+  housekeeping. D-0001 makes that document the primary oracle and a disagreement with it a defect
+  **in the code**; its §7, §8 and §9 named `cadenza.domain.errors`, `src/cadenza/`'s layout, an empty
+  Python interlock package and `tests/test_import_boundaries.py`. Deleting those without touching the
+  contract would have left the only surviving implementation nonconforming by the repository's own
+  rule. Only the spellings change: the four layers, the inward-only direction, the refusal of the
+  names `core` and `runtime`, the typed-and-located error requirement, and the reserved interlock
+  seam are all exactly as they were. The two placeholder adapter directories have no counterpart,
+  because an empty tracked directory does not exist here; §9 and D-0023 hold the seam instead.
+- D-0011 and D-0017 gain forward pointers to this entry. Neither is superseded: both faces still
+  run, and what changed is what stands behind each one.
+- D-0014 deferred exactly this deletion, on the reasoning that removing the Python implementation in
+  the PR that introduced the TypeScript one would delete the oracle's Python half in the same diff
+  that first relied on it. That reasoning is discharged rather than overturned — the oracle's Python
+  half is still here, standing on the standard library.
+- Nothing in G2 is touched.

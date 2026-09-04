@@ -243,8 +243,9 @@ const CODE_EVALUATION_GLOBALS = ["eval", "Function"];
  * table achieves is narrower and worth stating exactly: every route that loads
  * a module *without looking like it* is refused, so an evasion has to be
  * written deliberately and in a shape a reviewer can see. Accidents are stopped
- * outright; determination is made loud. `tests/test_import_boundaries.py` makes
- * the same trade in a language that offered it fewer chances to be wrong.
+ * outright; determination is made loud. `tests/test_import_boundaries.py` made
+ * the same trade in a language that offered it fewer chances to be wrong, until
+ * D-0032 retired it and left this file covering the whole of `src/`.
  */
 /** The property that reaches the `Function` constructor from any value at all. */
 const CONSTRUCTOR_PROPERTY = "constructor";
@@ -452,51 +453,38 @@ const MODULE_EXTENSIONS = [".ts", ".mts", ".cts", ".tsx"];
  */
 const DECLARATION_EXTENSIONS = [".d.ts", ".d.mts", ".d.cts"];
 
-/**
- * The Python half, which lives under `src/` too and is not part of this graph.
+/*
+ * There was a carve-out here for `src/cadenza/`, the Python half that lived
+ * under `src/` alongside the port while D-0012's in-place rewrite ran. It
+ * ignored `.py` and `.pyc` under that one directory -- exactly the files
+ * `tests/test_import_boundaries.py` read -- and reported anything else there as
+ * unrecognised, so that no file under `src/` was passed over by both scans.
  *
- * The rewrite happens in place (D-0012): `src/cadenza/` and `src/` coexist
- * until a later PR retires the first (D-0014). So the TypeScript module graph
- * is `src/` MINUS the **Python files** under this directory -- not minus the
- * directory. Skipping the directory whole was a hole with nothing on either
- * side of it: `tsconfig.json` covers every TypeScript file under `src/`, so
- * `src/cadenza/domain/runtime.ts` would be type-checked and would import
- * whatever it liked, while `tests/test_import_boundaries.py` walks `*.py` and
- * would not see it either. It is the one place in the tree both scans agreed to
- * look away from. So the walk descends, ignores exactly the files the Python
- * scan does read, and reports everything else as unrecognised. The Python boundaries themselves
- * stay with the Python test, which enforces them over exactly that tree and
- * stays green in CI until the directory goes.
- */
-const PYTHON_PACKAGE = "src/cadenza";
-
-/**
- * The files under `PYTHON_PACKAGE` that the Python scan does read.
- *
- * `.py`, because `tests/test_import_boundaries.py` walks `rglob("*.py")` and
- * asserts these boundaries over exactly those files; and `.pyc`, the bytecode a
- * local pytest run leaves in `__pycache__`, which is compiled from a `.py` that
- * walk already read.
- *
- * That is the whole test, and it is deliberately narrower than "extensions
- * Python uses". A `.pyi` stub was ignored here at first and is not: the Python
- * walk does not match it either, so a stub importing interlock or `socket`
- * would have been read by neither scan -- the same hole this ignore list was
- * introduced to close, one extension smaller. `.pyo` went with it: Python 3
- * does not produce one, so ignoring it buys nothing and would swallow a file
- * nobody can account for. Both are unrecognised now, which is a question a
+ * D-0032 deleted the directory and that test, and the carve-out went with them
+ * rather than being left in place. Keeping it would have re-opened the hole it
+ * was written to close, pointed the other way: with no Python scan left, a `.py`
+ * under `src/cadenza/` would be ignored here and read by nothing at all. Now
+ * there is one rule for the whole of `src/` -- a TypeScript module is walked,
+ * anything else is unrecognised and must be accounted for -- and a `.py` file
+ * reappearing anywhere under `src/`, `src/cadenza/` included, is a question a
  * reviewer answers rather than a silence.
  *
- * These are ignored under `PYTHON_PACKAGE` and nowhere else. A `.py` file
- * anywhere else under `src/` is still unrecognised, because that is not where
- * the Python package lives.
+ * One exception survives it, and it is about generated files rather than about
+ * Python. `__pycache__` directories are not removed by `git pull`, because git
+ * does not delete ignored files: anyone who ran the old pytest suite still has
+ * `.pyc` files in `__pycache__` directories under `src/cadenza/` on disk after
+ * the deletion arrives. Without
+ * this skip the walk reports every one of them and `npm run verify` goes red on
+ * a tree that is entirely correct -- a false failure on the machines most likely
+ * to hit it, and one no clean CI run would ever reproduce.
+ *
+ * Skipping the DIRECTORY is what keeps this from being the old carve-out in
+ * disguise. Nothing is ignored by extension and nothing is ignored by location,
+ * so a `.py` or a `.pyc` sitting anywhere else under `src/` is still
+ * unrecognised. `__pycache__` holds only compiled output, every byte of it
+ * derived from a `.py` that this walk would itself report if it were there.
  */
-const PYTHON_EXTENSIONS = [".py", ".pyc"];
-
-/** Whether a repo-relative path sits inside the Python half of `src/`. */
-function underPythonPackage(path: string): boolean {
-  return path === PYTHON_PACKAGE || path.startsWith(`${PYTHON_PACKAGE}/`);
-}
+const GENERATED_BYTECODE_DIRECTORY = "__pycache__";
 
 /** Files under `src/` the walk did not recognise as modules. See `moduleFiles`. */
 const unrecognised: string[] = [];
@@ -513,14 +501,10 @@ function moduleFiles(directory: string = SRC_ROOT): string[] {
   for (const entry of readdirSync(join(ROOT, directory))) {
     const path = `${directory}/${entry}`;
     if (statSync(join(ROOT, path)).isDirectory()) {
-      found.push(...moduleFiles(path));
-    } else if (underPythonPackage(path)) {
-      // The Python half is not part of this graph, so its own files are passed
-      // over -- and only its own files. A TypeScript module placed here is
-      // reported rather than skipped: it is the one location `tsconfig.json`
-      // type-checks and the Python walk does not read.
-      if (!PYTHON_EXTENSIONS.some((extension) => entry.endsWith(extension))) {
-        unrecognised.push(path);
+      // Not descended into rather than filtered afterwards: the files inside are
+      // generated, and the directory is the whole of what is skipped.
+      if (entry !== GENERATED_BYTECODE_DIRECTORY) {
+        found.push(...moduleFiles(path));
       }
     } else if (
       !DECLARATION_EXTENSIONS.some((extension) => entry.endsWith(extension)) &&
