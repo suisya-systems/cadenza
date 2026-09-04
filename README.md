@@ -31,6 +31,10 @@ that underpins the piece throughout, realising behaviour from policy rows the
 way a continuo realises chords from figures. The pairing is recorded in
 suisya-systems/interlock#74.
 
+The host application that runs the piece is a third repository, `rondo` - it
+consumes cadenza and continuo as libraries and is where every delegated run
+returns for its gate (`DECISIONS.md` D-0029).
+
 ## Status
 
 Early. This repository currently contains:
@@ -244,8 +248,8 @@ a boundary review harder than it needs to be.
   D-0026 is the decision; this is why it is that one.
 - `docs/design/conductor.md` - the conductor proposal: how a one-line request
   becomes admitted continuo runs and comes back as gate and merge decisions.
-  Propose-only; its open decisions C-1..C-17 are the human gate's to take, and
-  none is taken here.
+  Propose-only; its decisions C-1..C-17 are the human gate's to take. C-17 has
+  been taken (D-0029: the host is `rondo`); the rest are still open.
 - `DECISIONS.md` - the append-only record of design decisions. Cadenza's own
   numbering space, starting at D-0001.
 - `docs/porting.md` - the TypeScript rewrite: the oracle order, the parity
