@@ -1860,7 +1860,11 @@ entry takes C-17 and names the repository.
 **Decision.**
 
 - **The host application lives in a third repository, `rondo`,** which consumes cadenza (the G1
-  registry, the G2 delegation contract, gate semantics) and continuo (the substrate) as libraries.
+  registry, the G2 delegation contract and `classify()`) and continuo (the substrate, including the
+  gate machinery) as libraries. **Not gate management:** D-0026 §2 leaves gates (G3) deliberately
+  unfixed and `docs/design/g2-delegation-contract.md` §1 repeats it, so cadenza offers no gate API to
+  consume. A gate *outcome* is an input to a classification, which is the whole of cadenza's present
+  relationship to gates; the verbs rondo drives are continuo's.
   #22's single host process is rondo's, and the conductor is written there. The word "conductor"
   survives only as the name of the loop component inside rondo, if at all: the repository and the
   host are rondo.
@@ -1893,8 +1897,10 @@ the one the human raised.
   to guide.
 - **The ownership split.** Of the four things #22's console renders, three are continuo's — the
   delegation record, run and belt state with `awaiting_user` events, the outbox — and one is
-  cadenza's (gate semantics). Inside cadenza the host would live in the repository owning the
-  minority of what it draws and reach for the majority across a package boundary.
+  cadenza's (gate *semantics*, in the sense of what a gate outcome means to a classification; the
+  gate verbs and their storage are continuo's, and G3 is unfixed here). Inside cadenza the host would
+  live in the repository owning the minority of what it draws and reach for the majority across a
+  package boundary.
 - **The layer discipline, measurably.** cadenza's import boundary is a per-binding external
   allowlist, not a layer allowlist, and `src/adapters` currently admits exactly `readFileSync` and
   `statSync`. A host needs an HTTP server, continuo's exports and a SQLite driver reached through

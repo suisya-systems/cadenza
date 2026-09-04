@@ -667,13 +667,27 @@ A cadenza-side substitution test should be the same kind of thing — parse-base
 non-vacuous by construction. Sketch:
 
 **Where the sketch lands under D-0029.** The technique is unchanged; the subject splits along the
-repository boundary the decision draws. Case 3 — the same agent type, project and grantee produce a
-byte-identical `contract_digest` whichever executor is behind them — is cadenza's, because the
-contract and the agent-type record are cadenza's (§7, C-10), and it is the case carrying the design's
-actual claim. Cases 1, 2 and 4 range over `CONDUCTOR_MODULES`, which are rondo's modules, so they are
-rondo's test to write over rondo's tree, with `REPLACEABLE` naming rondo's continuo-invocation
-adapter rather than a path under cadenza's `src/adapters/`. The sketch below is written in cadenza's
-paths as it was proposed; read the conductor half as rondo's.
+repository boundary the decision draws, and **case 3 splits too rather than staying whole on one
+side**.
+
+- **Cases 1, 2 and 4** range over `CONDUCTOR_MODULES`, which are rondo's modules. They are rondo's
+  test to write over rondo's tree, with `REPLACEABLE` naming rondo's continuo-invocation adapter
+  rather than a path under cadenza's `src/adapters/`.
+- **Case 3 as sketched cannot be cadenza's**, and the reason is the decision's own boundary: it
+  passes `executorA` and `executorB`, and cadenza knows of no executor. Written here those arguments
+  would either import something from rondo — the reverse dependency D-0029 exists to prevent — or be
+  inert, which makes the assertion vacuous in exactly the way D-0022's non-vacuity discipline
+  refuses.
+- **What is cadenza's is the half with no executor in it**: the same agent type, project and grantee
+  produce a byte-identical `contract_digest`, asserted as determinism over cadenza's own inputs. That
+  is a real property and it is the one cadenza can hold, using the technique `config_digest` and
+  `contract_digest` already use (D-0011, D-0017).
+- **The substitution claim itself is rondo's to prove**, by building a contract through each of two
+  executor adapters and asserting the digests are equal. It rests on cadenza's determinism case; it
+  is not a substitute for it.
+
+The sketch below is written in cadenza's paths as it was proposed; read the conductor half as
+rondo's, and read case 3's two executor arguments as rondo's wrapper around the determinism case.
 
 ```ts
 // test/architecture/executor-substitution.test.ts  (SKETCH -- not proposed for merge here)
@@ -720,7 +734,9 @@ not an absolute absence of the vocabulary from `src/`.
 
 Case 3 is the one that carries the design's actual claim: **the agent type and the contract are
 invariant under an executor swap, and the digest proves it byte for byte** — the same technique G1's
-`config_digest` and G2's `contract_digest` already use (D-0011, D-0017 for the oracle).
+`config_digest` and G2's `contract_digest` already use (D-0011, D-0017 for the oracle). Under D-0029
+it is written on both sides of the boundary, as above: cadenza asserts the digest is determined by
+its own inputs, rondo asserts it does not move when the executor behind them does.
 
 Two disciplines come with it, both already cadenza's:
 
@@ -1027,8 +1043,19 @@ per AGENTS.md §6 an issue carrying open decisions is not started until they are
 **C-17** — decided **B**, the repository is **rondo**, `DECISIONS.md` **D-0029** (2026-09-05). Its row
 below carries the outcome in place of the recommendation. Two rows change status as a consequence
 without being decided: **C-9**'s condition is left unreached, and **C-8** is demoted from central to
-an interim question that is rondo's rather than cadenza's (§9.2). The remaining fourteen are
-untouched and still the gate's.
+an interim question that is rondo's rather than cadenza's (§9.2).
+
+**The other fourteen rows are unchanged in substance and change hands in a way this document cannot
+settle.** Some are about things cadenza will hold — **C-1**, **C-2**, **C-10**, **C-12** and **C-16**
+are the agent-type record and the contract, which D-0029 leaves here — and some are about things that
+moved with the conductor: **C-6**'s `--cli-arg` allowlist and **C-15**'s role mapping locate logic in
+rondo's invocation adapter, **C-7**'s capacity ledger and identifier allocator would be rondo's,
+**C-13** and **C-4** are about who invokes a continuo verb, and **C-14** is about what a rondo run
+records. cadenza's gate cannot decide those *for* rondo, and rondo's own ledger and the rule for what
+it may decide alone do not exist yet — D-0029's second stated price. So the rows keep their
+recommendations and their reasons, and **who takes each of them is open until rondo's ledger says
+so**; naming an owner here would be exactly the cross-repository decision continuo records that
+neither ledger can hold (`minimal-operating-loop.md` §8).
 
 | id | Decision | Recommendation | Reason |
 |---|---|---|---|

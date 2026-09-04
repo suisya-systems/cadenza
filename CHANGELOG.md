@@ -139,6 +139,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The host application is a third repository, `rondo`, consuming cadenza and
+  continuo as libraries (D-0029, taking cadenza#40's C-17 at the human gate).
+  This supersedes the working assumption that cadenza hosts the application -
+  recorded in cadenza#22's comments and as continuo's premise 2, never as an
+  entry here, so nothing gains "superseded by". Cadenza's own dependency graph
+  is untouched by it: no allowlist widening, no native transitive dependency,
+  and D-0004 and D-0016 both stay true. The decision that the conductor is
+  built on cadenza's semantics is unchanged and is still unratified (C-12).
+  `docs/design/conductor.md` follows the decision: section 9 asks how the host
+  consumes both libraries, section 9.3 and the C-17 row record the outcome, and
+  the rows that turn on who consumes what - C-8, C-9 - change status without
+  being decided.
 - `scripts/parity-check.mjs` runs its `unmapped` sweep after reading every
   ledger, so a ledger entry may claim a target test in another belt's file
   without the result depending on ledger order.
