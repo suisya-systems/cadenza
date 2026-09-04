@@ -232,8 +232,10 @@ const CODE_EVALUATION_GLOBALS = ["eval", "Function"];
  * `Object.constructor("return import(...)")()` reaches the `Function`
  * constructor from any value at all, without ever naming it -- and so does
  * `const { constructor: F } = () => {}`, which writes the same property name in
- * a binding pattern instead of an expression (cadenza#19). Nothing under `src/`
- * reads `constructor` in any of the three spellings.
+ * a binding pattern instead of an expression (cadenza#19), and
+ * `({ constructor: F } = () => {})`, which writes it in an object literal that
+ * happens to stand where a pattern stands (cadenza#37). Nothing under `src/`
+ * reads `constructor` in any of the four spellings.
  *
  * **What this is not.** It is not a sandbox, and it cannot become one. A static
  * scan of JavaScript cannot prove that a module loads nothing, because the
@@ -1025,6 +1027,62 @@ function globalIoReachesIn(module: string, source: string): string[] {
 }
 
 /**
+ * Whether an object literal stands where a destructuring target stands, rather
+ * than being an object under construction.
+ *
+ * This is the whole difficulty of cadenza#37. A destructuring **assignment**
+ * writes its pattern as an `ObjectLiteralExpression` whose entries are
+ * `PropertyAssignment`s -- syntactically the same node a module builds an
+ * ordinary record with -- so `({ constructor: F } = () => {})` and
+ * `const x = { constructor: f }` differ in position and in nothing else. Only
+ * the first reads the property; the second names one it is defining. So the
+ * literal is not classified by its own shape but by what encloses it: the
+ * target half of an `=`, or a pattern nested inside one.
+ *
+ * Deliberately not every context in which a pattern can appear. `for ({ ... }
+ * of xs)` and a destructured catch parameter are further spellings of the same
+ * route, left where cadenza#19 left the rest of the list: the sweep's claim is
+ * scoped rather than enumerated, and closing the assignment form is what
+ * cadenza#37 asked for.
+ */
+function isDestructuringTarget(literal: ts.ObjectLiteralExpression): boolean {
+  let current: ts.Node = literal;
+  for (;;) {
+    const parent: ts.Node | undefined = current.parent;
+    if (parent === undefined) {
+      return false;
+    }
+    if (ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+      // The LEFT half only. `x = { constructor: f }` puts the identical literal
+      // on the right, where it is a value being built and not a read -- and
+      // reading it as a target is exactly the false positive this predicate
+      // exists to avoid. A default inside a pattern
+      // (`({ a: { constructor: F } = {} } = v)`) is also an `=` with the
+      // pattern on its left, and is a target for the same reason.
+      return parent.left === current;
+    }
+    // A nested pattern carries the question outward: the inner literal of
+    // `({ a: { constructor: F } } = v)` is a target exactly when the outer one
+    // is. The walk climbs one entry and one literal at a time, so an arbitrary
+    // depth of nesting is the same two steps repeated. An array pattern
+    // (`([{ constructor: F }] = v)`) and a rest element nest the same way.
+    if (
+      (ts.isPropertyAssignment(parent) && parent.initializer === current) ||
+      ts.isObjectLiteralExpression(parent) ||
+      ts.isArrayLiteralExpression(parent) ||
+      ts.isSpreadAssignment(parent) ||
+      ts.isSpreadElement(parent)
+    ) {
+      current = parent;
+      continue;
+    }
+    // Anything else -- an argument, an initializer, a return, a bare
+    // expression statement -- is an object being built.
+    return false;
+  }
+}
+
+/**
  * Every loader route `source` manufactures, as `module:line: spelling`.
  *
  * The imports half of the case below stays there: it reads the file from disk
@@ -1087,6 +1145,25 @@ function loaderRoutesIn(module: string, source: string): string[] {
             ? shorthand.text
             : null;
       if (key === CONSTRUCTOR_PROPERTY) {
+        report(node, `{ ${CONSTRUCTOR_PROPERTY} }`);
+      }
+    }
+    // `({ constructor: F } = () => {})` is the same property again, reached by
+    // the one spelling the branch above cannot see: in an ASSIGNMENT there is
+    // no binding pattern at all -- the entry is a `PropertyAssignment` inside
+    // an `ObjectLiteralExpression` -- so no `BindingElement` is ever visited,
+    // and `isShadowedOrDeclared` reads the key as somebody else's property
+    // name, which is what left it unreported (cadenza#37). The shorthand
+    // `({ constructor } = v)` reaches it the same way and is matched with it,
+    // as the shorthand of a binding pattern already is.
+    if (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) {
+      const parent = node.parent;
+      if (
+        propertyNameOf(node.name) === CONSTRUCTOR_PROPERTY &&
+        parent !== undefined &&
+        ts.isObjectLiteralExpression(parent) &&
+        isDestructuringTarget(parent)
+      ) {
         report(node, `{ ${CONSTRUCTOR_PROPERTY} }`);
       }
     }
@@ -1171,6 +1248,26 @@ test("a destructured constructor is a loader route", () => {
   // spelled `constructor` is ordinary code in both.
   expect(loaderRoutesIn(from, "const [constructor] = values;\n")).toEqual([]);
   expect(loaderRoutesIn(from, "const { value, ...constructor } = record;\n")).toEqual([]);
+  // An assignment writes the same route with no binding pattern in it at all:
+  // the entry is a `PropertyAssignment` in an object literal, so the branch
+  // above never sees it and nothing was reported (cadenza#37).
+  expect(
+    loaderRoutesIn(
+      from,
+      "let F;\n({ constructor: F } = () => {});\nF('return import(\"interlock\")')();\n",
+    ),
+  ).toEqual([`${from}:2: { ${CONSTRUCTOR_PROPERTY} }`]);
+  // Nested the same way, since a pattern may hold a pattern.
+  expect(loaderRoutesIn(from, "let F;\n({ a: { constructor: F } } = v);\n")).toEqual([
+    `${from}:2: { ${CONSTRUCTOR_PROPERTY} }`,
+  ]);
+  // And the two literals that are NOT targets, which is the false-positive
+  // surface the assignment branch opens: a declaration DEFINES the property it
+  // names, and a literal that is nobody's assignment target only builds an
+  // object. Both write the identical node the reported cases do, so position is
+  // the whole of the difference.
+  expect(loaderRoutesIn(from, "const x = { constructor: f };\n")).toEqual([]);
+  expect(loaderRoutesIn(from, "({ constructor: F });\n")).toEqual([]);
 });
 
 test("no module manufactures a loader or an unapproved dependency", () => {
