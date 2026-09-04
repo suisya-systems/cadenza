@@ -916,7 +916,8 @@ which is the part of C-8 that touches §2.3 and does not depend on who the calle
 
 ### 9.3 Where the conductor itself lives — decided: **B**, and the repository is **rondo** (D-0029)
 
-**This is the one row of §11 that is no longer open.** The human gate took it on 2026-09-05 and named
+**This row of §11 is no longer open** (nor, since D-0030 and D-0031, are the six at cadenza's gate).
+The human gate took it on 2026-09-05 and named
 the repository the same day; `DECISIONS.md` D-0029 is the record and is what a later reader should
 cite. The argument below is kept as written, because it is the reason the decision went the way it
 did and D-0029 cites it rather than restating it.
@@ -1065,24 +1066,34 @@ between is the conductor's.
 
 ---
 
-## 11. Open decisions — for cadenza's human gate, and (since D-0029) for rondo's
+## 11. The decision rows — cadenza's gate is closed; rondo's and continuo's stay open
 
-Propose-only. Each carries a recommendation and the reason. **None of these is taken here**, and
-per AGENTS.md §6 an issue carrying open decisions is not started until they are.
+Propose-only: this document takes none of these decisions, and per AGENTS.md §6 an issue carrying
+open decisions is not started until they are. Each row carries a recommendation and the reason, and
+the rows that have since been taken carry their outcome in place of the recommendation.
 
-**One row has since been taken at the gate, and the table records it rather than dropping it:**
-**C-17** — decided **B**, the repository is **rondo**, `DECISIONS.md` **D-0029** (2026-09-05). Its row
-below carries the outcome in place of the recommendation. Two rows change status as a consequence
-without being decided: **C-9**'s condition is left unreached, and **C-8** is demoted from central to
-an interim question that is rondo's rather than cadenza's (§9.2).
+**Seven rows have been taken at cadenza's human gate, and the table records the outcomes rather than
+dropping the rows:**
 
-**The other fourteen rows are unchanged in substance, and D-0029 splits them by subject. All
-fourteen are listed, because a row with no stated gate is a row nobody picks up.**
+- **C-17** — decided **B**, the repository is **rondo**, `DECISIONS.md` **D-0029** (2026-09-05).
+- **C-12** — decided **yes**, as recommended: the 2026-09-04 premise is ratified as **D-0030**
+  (2026-09-05).
+- **C-1**, **C-2**, **C-3**, **C-10**, **C-16** — decided as recommended, together as **D-0031**
+  (2026-09-05). One entry rather than five, because they are five facets of one record: what it
+  carries, what digest covers it, which field nothing here reads, which tree holds it, and what
+  happens to it when it is edited.
 
-- **Cadenza's gate, six rows** — the agent-type record and the contract, which D-0029 leaves here:
-  **C-1**, **C-2**, **C-3**, **C-10**, **C-12**, **C-16**. C-3 is on this side because its subject is
-  what the *record* carries (`executorPolicy`, carried and not read by cadenza), not what the
-  conductor does with it; the adapter that would eventually interpret it is rondo's, and that is C-15.
+Two rows change status as a consequence of D-0029 without being decided: **C-9**'s condition is left
+unreached, and **C-8** is demoted from central to an interim question that is rondo's rather than
+cadenza's (§9.2).
+
+**Cadenza's gate is clear; the eight rows still open are rondo's and continuo's. All seventeen are
+listed, because a row with no stated gate is a row nobody picks up.**
+
+- **Cadenza's gate, six rows — all decided** (D-0030, D-0031, above): **C-1**, **C-2**, **C-3**,
+  **C-10**, **C-12**, **C-16**. C-3 was on this side because its subject is what the *record* carries
+  (`executorPolicy`, carried and not read by cadenza), not what the conductor does with it; the
+  adapter that would eventually interpret it is rondo's, and that is C-15.
 - **Rondo's gate, seven rows** — they go with the conductor: **C-4**, **C-5**, **C-6**, **C-7**,
   **C-13**, **C-14**, **C-15**. C-5 is conductor behaviour (does it perform step 11 after approval),
   and C-4 and C-13 are about who may invoke a continuo verb on a human's behalf.
@@ -1100,22 +1111,22 @@ cross-repository decision continuo records that no single ledger can hold
 
 | id | Decision | Recommendation | Reason |
 |---|---|---|---|
-| **C-1** | Does the agent-type record express "what a run may touch" anywhere other than G2? | **No.** The record carries capability key sets the conductor uses to *build* a `DelegationContract` | Two authority answers under two digests with no precedence rule, which G2 explicitly refuses to invent (§7.1) |
-| **C-2** | Where does the agent-type record live, and does it enter `config_digest`? | A **separate record keyed by agent type**, not a field on `Project`, **outside** `config_digest`, and carrying **its own `agent_type_digest`** that a run persists alongside `config_digest` and `contract_digest` | Inside the project digest it changes every project's `config_digest` and refuses every already-issued contract as `stale_subject`; outside it *with no digest of its own* the record's policy could change under an unchanged `agentTypeId` and "under what policy did it do that" would stop being answerable (§7.1, §7.2) |
-| **C-3** | Do tiered models per stage belong to the conductor? | **No.** Tier goes in `executorPolicy`: carried, and never read by cadenza *or* by the conductor — unlike `loopPolicy`, which the conductor does read (§7.1) | G1 §1 and D-0027 forbid naming an executor in `domain`/`application`/`ports`, and the one adapter seam that would host the tier-to-model mapping, `src/adapters/interlock/`, is closed by D-0014 (§6.8) |
+| **C-1** | Does the agent-type record express "what a run may touch" anywhere other than G2? | **DECIDED: no** — the recommendation taken as written, human gate 2026-09-05, recorded as **D-0031 §1**. The record carries capability key sets the conductor uses to *build* a `DelegationContract` | Two authority answers under two digests with no precedence rule, which G2 explicitly refuses to invent (§7.1) |
+| **C-2** | Where does the agent-type record live, and does it enter `config_digest`? | **DECIDED as recommended** — human gate 2026-09-05, **D-0031 §2**. A **separate record keyed by agent type**, not a field on `Project`, **outside** `config_digest`, and carrying **its own `agent_type_digest`** that a run persists alongside `config_digest` and `contract_digest` | Inside the project digest it changes every project's `config_digest` and refuses every already-issued contract as `stale_subject`; outside it *with no digest of its own* the record's policy could change under an unchanged `agentTypeId` and "under what policy did it do that" would stop being answerable (§7.1, §7.2) |
+| **C-3** | Do tiered models per stage belong to the conductor? | **DECIDED: no** — human gate 2026-09-05, **D-0031 §3**. Tier goes in `executorPolicy`: carried, and never read by cadenza *or* by the conductor — unlike `loopPolicy`, which the conductor does read (§7.1) | G1 §1 and D-0027 forbid naming an executor in `domain`/`application`/`ports`, and the one adapter seam that would host the tier-to-model mapping, `src/adapters/interlock/`, is closed by D-0014 (§6.8) |
 | **C-4** | May the conductor author a human's answer — a gate-answer body, or the widening that answers a `needs_approval`? | **No** — it may carry a human's answer verbatim, never compose one. `gate answer` should be invoked by the #22 surface, and a widening successor should be issued only on an answer that surface recorded, with that surface as issuer | Neither side records who answered: continuo derives the actor kind from the verb (§6.5), and `adopt()` does not refuse widening — G2 hands that to the control plane (§6.1) |
 | **C-5** | Does the conductor perform step 11 mechanically after approval? | **No** for lap 1: it holds no push credentials and stops at the closed gate | continuo executes no git or GitHub call, has no verb that moves `run.status` (F-7, "Workaround. None"), and defers the privileged publisher to lap 2 (§6.6) |
 | **C-6** | May the conductor compose `run admit --cli-arg` freely? | **No — the allowlist starts empty.** The conductor admits with no `--cli-arg`; a first entry is its own decision at rondo's gate (D-0029); `--dangerously-skip-permissions`, `--allowedTools` / `--disallowedTools` and `--add-dir` are permanently refused (§2.3) | `FENCE_OWNED_FLAGS` does not cover `--dangerously-skip-permissions`, `--allowedTools`, `--disallowedTools`, `--add-dir` (continuo#133), so a documented-verb path can make the human gate advisory (§2.3) |
 | **C-7** | Address the concurrency residual first, or stay single-flight? | **Single-flight for lap 1**; parallel admission waits on continuo's post-lap entry or a **rondo-side** capacity ledger designed on its own evidence | `minimal-operating-loop.md:989-995` makes the residual unreachable at zero cost under one provider instance per run and bands it post-lap; and the verbs refuse on existence, so a retry needs an identifier allocator nothing provides (§6.7) |
 | **C-8** | How does **rondo** consume continuo? (was: how does cadenza) | **Across the CLI process boundary** while continuo is unpublished; the published package (continuo D-0045) is the destination for a typed surface. **Demoted by D-0029**: an interim-versus-wait choice, and rondo's gate's to take rather than cadenza's | It is the only option executable today: the package is unpublished (`E404`, `private: true`), a git dep has no `prepare` and collides with `--ignore-scripts`, and a workspace defeats D-0004's lockfile property (§9). Its original weight came from sparing *cadenza* a dependency its entries say it does not have, and D-0029 removes that reason (§9.2); its own cost — it answers "which continuo is this" worse still — survives as C-14 |
 | **C-9** | If **cadenza** ever does take the npm dependency, are the three consequent entries acceptable? | Unchanged, and **not reached**: D-0029 puts the dependency in rondo, so cadenza takes none and the three entries never need taking. Kept as a contingency; if the condition is ever met, take them **explicitly, as three separate entries** (native transitive dependency vs D-0004's falsifier; D-0016's "one runtime dependency"; the `ALLOWED_EXTERNALS_BY_LAYER` widening), and note the macOS-first-exercise risk | Each is a named falsifier of an accepted entry, and D-0004 says so in its own words (§9.1). D-0029 does not answer the row — it removes the antecedent, which is why the row is retired rather than decided |
-| **C-10** | Which tree hosts the **agent-type record** — cadenza's TypeScript `src/` or its Python `src/cadenza/`? (The conductor's own repository is C-17, not this row, and it is rondo — D-0029; this row is about the record, which stays cadenza's) | **TypeScript**, alongside G2 | G2 is TypeScript-only (cadenza#25), the boundary suite that would police the record runs over the TS graph, and C-8's boundary is an npm/CLI question either way |
+| **C-10** | Which tree hosts the **agent-type record** — cadenza's TypeScript `src/` or its Python `src/cadenza/`? (The conductor's own repository is C-17, not this row, and it is rondo — D-0029; this row is about the record, which stays cadenza's) | **DECIDED: TypeScript**, alongside G2 — human gate 2026-09-05, **D-0031 §4** | G2 is TypeScript-only (cadenza#25), the boundary suite that would police the record runs over the TS graph, and C-8's boundary is an npm/CLI question either way |
 | **C-11** | Which recipient does the gate relay address? | Treat it as **continuo's** open decision; the conductor's read path is `gate show`, not the dropbox | continuo already calls it "a decision, not a detail"; `external-notify` writes `\uXXXX`-escaped `.effect.json` files a person cannot read (F-5, still reproducing), and the other handler delivers nothing by design (§3) |
-| **C-12** | Should the premise "the conductor is built on cadenza's semantics" — taken with the human on 2026-09-04 and recorded only in cadenza#40 — become a `D-` entry? (Not the placement question: that was C-17, now D-0029, which leaves this one untouched) | **Yes**, as its own entry, before any conductor code is written | AGENTS.md §3 requires a `DECISIONS.md` entry for any settled design question, and an architectural premise recorded only in an issue is the drift D-0001's oracle order exists to prevent. This document may not create it (propose-only), so it names it instead |
+| **C-12** | Should the premise "the conductor is built on cadenza's semantics" — taken with the human on 2026-09-04 and recorded only in cadenza#40 — become a `D-` entry? (Not the placement question: that was C-17, now D-0029, which leaves this one untouched) | **DECIDED: yes** — taken as recommended at the human gate on 2026-09-05 and written as its own entry, **D-0030**, before any conductor code | AGENTS.md §3 requires a `DECISIONS.md` entry for any settled design question, and an architectural premise recorded only in an issue is the drift D-0001's oracle order exists to prevent. This document may not create it (propose-only), so it names it instead |
 | **C-13** | Who terminates the gate when an iteration aborts before an answer, and as what outcome? | **`gate close --outcome withdrawn`, invoked by the #22 surface — not by the conductor**; the conductor asks for the close and reports why | `withdrawn` is the only outcome writable from the `received` stage (`gates.ts:277-284`, `gate/operator.ts:102-116`) and is explicitly not an approval. But `closeOpenGate` hard-codes `actorKind: "human"` (`gate/operator.ts:991`), so a conductor-issued close records an agent action as a person's — C-4's problem exactly, one verb along (§10 step 5) |
 | **C-14** | How does a **rondo** run pin and record which continuo revision it drove? (was "a cadenza run", when the host was assumed to be cadenza) | **Record it per run** — the continuo revision the invocation adapter used, persisted beside the run's other identifying digests — and treat pinning the checkout as part of whatever C-8's interim is | C-8's CLI boundary answers "which continuo is this" worse than any of the three npm options, which is the property §9.1 used to reject option C; approving C-8 without this leaves the question hidden (§9.2) |
 | **C-15** | Where does the agent-type role name map onto the executor's role roster, and what refuses an unmapped name? | **In the continuo-invocation adapter, refusing before admission** — the agent type carries cadenza's own role name; the adapter maps it and refuses an unmapped one | `run admit --role` is required but unvalidated: a wrong role is accepted, persisted, and paid for only when `lap perform` renders the fence, after the branch and worktree exist (continuo#126). Refusing in the adapter is the only place that costs nothing, and it keeps the roster out of `domain` (§7.1) |
-| **C-16** | How are superseded agent-type records retained, so a run's `agent_type_digest` still addresses something? | **Immutably, by minting a new record on every edit**; where superseded records are stored is the store owner's, not cadenza's | A digest detects change but does not hand back the policy a past run used. Immutability is D-0015's and D-0026 §1's existing move; durability is what D-0026 §2 assigns to the control plane rather than to cadenza (§7.1) |
+| **C-16** | How are superseded agent-type records retained, so a run's `agent_type_digest` still addresses something? | **DECIDED as recommended** — human gate 2026-09-05, **D-0031 §5**: **immutably, by minting a new record on every edit**; where superseded records are stored is the store owner's, not cadenza's | A digest detects change but does not hand back the policy a past run used. Immutability is D-0015's and D-0026 §1's existing move; durability is what D-0026 §2 assigns to the control plane rather than to cadenza (§7.1) |
 | **C-17** | Where does the conductor itself live — **A** an outermost adapter in the cadenza repository, or **B** a third repository (the host application) consuming cadenza and continuo as libraries? | **DECIDED: B, and the repository is `rondo`** — human gate, 2026-09-05, recorded as **D-0029**. continuo's premise 2 named A a working assumption with a revisit trigger — "the first line of application code" — and the conductor is that line | The name says cadenza "defines, not performs", and a conductor is who is *not* playing during a cadenza; #22's ownership table puts three of the console's four sources in continuo; and A widens cadenza's per-binding external allowlist from `readFileSync`/`statSync` to an HTTP server, continuo's exports and a SQLite driver, irreversibly. Costs of B, stated: two packages must become consumable instead of one, and a third repository needs a third ledger (§9.3, D-0029) |
 
 Two things that are **not** cadenza decisions and are recorded here only so the design does not
