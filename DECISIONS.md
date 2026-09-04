@@ -59,6 +59,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0026 | What the delegation contract must express: an enumerated grant, a seam that is a document rather than an API, and a total three-valued bound on unattended action | accepted |
 | D-0027 | The capability vocabulary: a two-segment key matched by equality, a cumulative version pinned per contract, and seven keys to start | accepted |
 | D-0028 | What the classifier's totality ranges over: the action and the context, and malformed input is an answer rather than an exception | accepted |
+| D-0029 | The host application is a third repository, rondo, consuming cadenza and continuo as libraries | accepted |
 
 ---
 
@@ -1839,3 +1840,105 @@ honest: cadenza will not answer for a contract it did not issue.
   is written to fail if the corpus stops reaching every outcome and every reason -- a sweep that
   degenerated into one refusal repeated would satisfy the letter of the claim and test nothing.
 - No behaviour of the contract or the vocabulary changes, and nothing here reopens D-0026 or D-0027.
+
+---
+
+## D-0029 — the host application is a third repository, rondo, consuming cadenza and continuo as libraries
+
+**Status:** accepted (2026-09-05, cadenza#40 C-17, taken at cadenza's human gate)
+
+**Context.** continuo's `docs/design/minimal-operating-loop.md` supplies two operator premises.
+Premise 1 is structural: the end state is a single web application, one host process owning the
+SQLite record of truth and speaking MCP over localhost to agent sessions. Premise 2 — "that
+application is hosted by cadenza, as an outermost adapter" — records *itself* as a working
+assumption rather than a decision, with a counter-proposal on the page and a revisit trigger written
+beside it: **the first line of application code**. cadenza#22's comments of 2026-08-29 carry the same
+assumption. The conductor is that first line, so `docs/design/conductor.md` §9.3 raises the question
+as decision **C-17** instead of inheriting the assumption, and recommends the third repository. This
+entry takes C-17 and names the repository.
+
+**Decision.**
+
+- **The host application lives in a third repository, `rondo`,** which consumes cadenza (the G1
+  registry, the G2 delegation contract, gate semantics) and continuo (the substrate) as libraries.
+  #22's single host process is rondo's, and the conductor is written there. The word "conductor"
+  survives only as the name of the loop component inside rondo, if at all: the repository and the
+  host are rondo.
+- **The name is chosen on the same rule as the other two.** A rondo is the piece that keeps coming
+  home — a refrain set between episodes that are free to wander, and the refrain is where the piece
+  is decided. Each delegated run is an episode that leaves it and is cued back to it; every return is
+  a gate. continuo underpins the piece, cadenza defines the soloist's frame, rondo is where the piece
+  always returns.
+- **This supersedes the working assumption that cadenza hosts the application** (cadenza#22,
+  2026-08-29; continuo's premise 2). The assumption never became a `D-` entry in this space — it
+  lived in issue comments and on continuo's page — so no entry here gains `superseded by`. What is
+  superseded is a premise, and this entry is where a later reader finds that out.
+- **The 2026-09-04 decision is unchanged and is not reopened.** What that decision settled is *whose
+  semantics* the conductor is built on — cadenza's registry, contract and gates — not which
+  repository holds the code (`docs/design/conductor.md` §1). Ratifying it as its own entry remains
+  **C-12**, which this entry does not take.
+- **What stays cadenza's under this decision.** The G1 registry, the G2 contract and `classify()`,
+  and the agent-type record of `conductor.md` §7, which is registry semantics rather than application
+  code. rondo *reads* cadenza's agent types; it does not own them, and **C-10** — the record lives in
+  the TypeScript tree alongside G2 — is unaffected.
+
+**Why the third repository, and not an adapter inside cadenza.** Three grounds, the first of which is
+the one the human raised.
+
+- **The name.** README says what the word means, and says it decisively: a cadenza is the soloist's
+  moment "within an agreed frame … **That is what this layer defines, not what it performs**". A
+  conductor is precisely who is *not* playing during a cadenza. Housing the thing that runs the
+  programme inside the layer that defines the soloist's frame inverts the metaphor this repository
+  chose deliberately, and a metaphor that inverts stops guiding the boundary decisions it was adopted
+  to guide.
+- **The ownership split.** Of the four things #22's console renders, three are continuo's — the
+  delegation record, run and belt state with `awaiting_user` events, the outbox — and one is
+  cadenza's (gate semantics). Inside cadenza the host would live in the repository owning the
+  minority of what it draws and reach for the majority across a package boundary.
+- **The layer discipline, measurably.** cadenza's import boundary is a per-binding external
+  allowlist, not a layer allowlist, and `src/adapters` currently admits exactly `readFileSync` and
+  `statSync`. A host needs an HTTP server, continuo's exports and a SQLite driver reached through
+  them, each named binding by binding in `ALLOWED_EXTERNALS_BY_LAYER` (D-0022). That is a deliberate
+  widening of the single check that keeps cadenza I/O-minimal, and deleting a directory later does
+  not undo it.
+
+**The price, stated rather than buried.** Two, both real.
+
+- **Two packages must become consumable instead of one.** cadenza is `private: true` at `0.0.0`
+  exactly as continuo is, so this decision does not inherit the publication problem of
+  `conductor.md` §9 — it doubles it. It is a price in the same currency as continuo D-0045 rather
+  than a new kind of problem.
+- **A third repository needs a third ledger and a rule for what it may decide alone.** continuo
+  records that neither repository's `DECISIONS.md` can hold a decision binding both
+  (`minimal-operating-loop.md` §8), and a third repository multiplies that defect rather than
+  curing it. Nothing here fixes it; rondo's own ledger and its rule are rondo's to establish.
+
+**What would falsify it.**
+
+- **A host that cannot be written without reaching inside cadenza** — rondo needing a value or a type
+  cadenza's published surface does not expose, so that the split forces cadenza to export internals
+  it would not otherwise expose, or forces rondo to reimplement them. That would mean the boundary is
+  in the wrong place and the adapter-inside-cadenza shape was the honest one.
+- **Cross-repository decisions arriving often enough to cost more than the widening.** Decisions that
+  genuinely bind two of the three repositories, with no repository able to hold them, at a rate that
+  exceeds what the `ALLOWED_EXTERNALS_BY_LAYER` widening would have cost. The defect is named above;
+  it is a falsifier only if it is paid at that rate.
+- **The packaging price never being paid.** If neither cadenza nor continuo becomes consumable, rondo
+  cannot be written at all, and the honest answer becomes the adapter with the widening taken
+  deliberately and recorded as its own entry.
+
+**Consequences.**
+
+- `docs/design/conductor.md` is updated to this decision: §9 becomes how the *host* consumes both
+  libraries, §9.3 and the §11 row for C-17 record it as decided, §2.3's module names are rondo's,
+  **C-9**'s three derived entries fall away (cadenza never widens the allowlist, never acquires
+  `better-sqlite3` transitively, and D-0004's "no native dependency today" and D-0016's "one runtime
+  dependency" both stay true), and **C-8** stops being central — it exists to spare cadenza a
+  dependency it cannot take, and rondo can take continuo's published package once the release path
+  exists. **C-14** is untouched: something must still record which continuo revision a run drove.
+- **continuo's premise 2 is continuo's to revise.** Its revisit trigger has fired, but cadenza's
+  numbering space is its own and nothing written here supersedes a continuo entry or edits a continuo
+  document.
+- README's name section points to rondo as the host, beside continuo.
+- No code changes. Nothing in `src/` is created, moved or deleted by this entry, and no other C-n
+  decision from `conductor.md` §11 is taken here.
