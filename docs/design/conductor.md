@@ -505,7 +505,8 @@ rather than stylistic:
   adapters as such.
 
 The tier is real and useful, but it is **executor policy**. It belongs in the `executorPolicy` bag of
-§7 — carried by the agent-type record, never read by `classify()`, outside the digest, and
+§7 — carried by the agent-type record, never read by `classify()`, outside `config_digest` (though
+inside the record's own `agent_type_digest`, §7.1), and
 interpreted only by whatever renders a run for a given executor.
 
 continuo has no model concept on the *lap path*: `StartRequest` is
@@ -519,6 +520,14 @@ named provider-side seam for a *provider-wide* pinned model
 `test/gate_item11/registry.ts:59`). Neither is per-stage: a per-stage model selection has no seam and
 would still travel as a `--cli-arg` (`--model` is absent from the provider's owned-flag list,
 `claude_cli_provider.ts:242-253`), through the same unguarded door §2.3 flags.
+
+**So a per-stage tier is carried but not honoured in lap 1, and the document says so rather than
+leaving the contradiction for an implementer to find.** The only transport is `--cli-arg --model`,
+and C-6's allowlist is empty; the adapter therefore reads a tier it cannot spend. Two seams could
+change that later — `ClaudeCliSessionProviderOptions.baseCliArgs` (provider-wide, not per stage) and
+`ai_invocation`'s `(provider, model, run_id)` row (recorded, not selected) — and neither is wired to
+a lap today. Until one is, `executorPolicy.modelTier` is a field the record carries forward for a
+capability that does not exist yet, which is the honest state and not a working feature.
 
 ---
 
@@ -915,7 +924,12 @@ Putting §§3-9 together, one conductor iteration for one request:
    C-7's allocator exists — they are specified here so the design does not have to be reopened then,
    not because they fire today.
 7. **Gate.** On the gate opened in step 3: `gate present` →
-   `gate deliver` → `gate ack` → **a human answers** → `gate deliver` → `gate ack`. The gate closes
+   `gate deliver` → `gate ack` → **a human answers** → `gate deliver` → `gate ack`. **The yes/no is
+   not automatic**: `lap perform`'s `--gate-option` is repeated and left unset when never given
+   (`lap/cli.ts:287-289`), so a lap admitted without it presents a question carrying no options at
+   all. The conductor must pass the options it wants answerable, and the #22 surface must constrain
+   the answer to them — otherwise "two contact points, one of them a yes/no" is a description of a
+   free-text box. The gate closes
    as `answered_and_forwarded` only via the forward relay's ack; the conductor cannot write that
    outcome directly (`gate close` admits only `withdrawn`, `expired`, `unanswerable`).
 8. **Stop.** Report to the human: the gate outcome, the verify verdict, and the fact that the run row
@@ -943,7 +957,7 @@ per AGENTS.md §6 an issue carrying open decisions is not started until they are
 | **C-7** | Address the concurrency residual first, or stay single-flight? | **Single-flight for lap 1**; parallel admission waits on continuo's post-lap entry or a cadenza-side capacity ledger designed on its own evidence | `minimal-operating-loop.md:989-995` makes the residual unreachable at zero cost under one provider instance per run and bands it post-lap; and the verbs refuse on existence, so a retry needs an identifier allocator nothing provides (§6.7) |
 | **C-8** | How does cadenza consume continuo? | **Across the CLI process boundary for lap 1**; the published package (continuo D-0045) is the destination for a typed surface | It is the only option executable today: the package is unpublished (`E404`, `private: true`), a git dep has no `prepare` and collides with `--ignore-scripts`, and a workspace defeats D-0004's lockfile property (§9); its own cost is that it answers "which continuo is this" worse still, and that pinning question stays open (§9.2) |
 | **C-9** | If cadenza ever does take the npm dependency, are the three consequent entries acceptable? | Take them **explicitly, as three separate entries** (native transitive dependency vs D-0004's falsifier; D-0016's "one runtime dependency"; the `ALLOWED_EXTERNALS_BY_LAYER` widening), and note the macOS-first-exercise risk | Each is a named falsifier of an accepted entry, and D-0004 says so in its own words (§9.1) |
-| **C-10** | Which tree hosts the conductor and the record — TypeScript `src/` or Python `src/cadenza/`? | **TypeScript**, alongside G2 | G2 is TypeScript-only (cadenza#25), the boundary suite that would police the record runs over the TS graph, and C-8's boundary is an npm/CLI question either way |
+| **C-10** | Which tree hosts the **agent-type record** — cadenza's TypeScript `src/` or its Python `src/cadenza/`? (The conductor's own repository is C-17, not this row) | **TypeScript**, alongside G2 | G2 is TypeScript-only (cadenza#25), the boundary suite that would police the record runs over the TS graph, and C-8's boundary is an npm/CLI question either way |
 | **C-11** | Which recipient does the gate relay address? | Treat it as **continuo's** open decision; the conductor's read path is `gate show`, not the dropbox | continuo already calls it "a decision, not a detail"; `external-notify` writes `\uXXXX`-escaped `.effect.json` files a person cannot read (F-5, still reproducing), and the other handler delivers nothing by design (§3) |
 | **C-12** | Should the placement premise — "the conductor lives in cadenza", taken with the human on 2026-09-04 and recorded only in cadenza#40 — become a `D-` entry? | **Yes**, as its own entry, before any conductor code is written | AGENTS.md §3 requires a `DECISIONS.md` entry for any settled design question, and an architectural premise recorded only in an issue is the drift D-0001's oracle order exists to prevent. This document may not create it (propose-only), so it names it instead |
 | **C-13** | Who terminates the gate when an iteration aborts before an answer, and as what outcome? | **`gate close --outcome withdrawn`, invoked by the #22 surface — not by the conductor**; the conductor asks for the close and reports why | `withdrawn` is the only outcome writable from the `received` stage (`gates.ts:277-284`, `gate/operator.ts:102-116`) and is explicitly not an approval. But `closeOpenGate` hard-codes `actorKind: "human"` (`gate/operator.ts:991`), so a conductor-issued close records an agent action as a person's — C-4's problem exactly, one verb along (§10 step 5) |
