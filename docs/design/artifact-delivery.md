@@ -116,12 +116,14 @@ not comparable until they are separated. rondo measured all three.
 | **I2 — build output** | that the bytes built here are the bytes used | nothing npm provides; only a digest recorded by whoever built |
 | **I3 — installed artifact** | that the package npm installed is the package that was checked | a lockfile `integrity` hash npm **enforces** |
 
-The distinctions that matter, each measured in `rondo D-0001`:
+The distinctions that matter. The first three are `rondo D-0001`'s measurements; the fourth is §5.6's,
+made for this document because the first three do not cover it and assuming they did produced a wrong
+answer in an earlier draft.
 
 - **A git dependency records an I3 hash and does not enforce it.** npm prints
   `npm warn skipping integrity check for git dependency` on every install. The hash is byte-stable
   across independent installs of the same sha, and it is decoration.
-- **A `file:` dependency has no I1, no I2 and no I3.** The lockfile records
+- **A `file:` dependency *pointing at a directory* has no I1, no I2 and no I3.** The lockfile records
   `"resolved": "../../../../home/.../continuo", "link": true` — a machine path, no registry URL, no
   integrity, no sha. rondo's summary: *which revision this was built against is recorded nowhere in
   the repository.* It also fails in the wrong direction: with the target renamed away,
@@ -129,12 +131,19 @@ The distinctions that matter, each measured in `rondo D-0001`:
   failure to the first import.
 - **A remote tarball URL — codeload, a Release asset, or a registry — gets a real, enforced I3 hash.**
   rondo calls it "strictly better than every other option here" on reproducibility.
+- **A `file:` dependency *pointing at a local `.tgz`* is not the directory case, and gets a real,
+  enforced I3 hash.** Measured in §5.6: the lockfile records
+  `"resolved": "file:cadenza.tgz"` — a path **relative to the consumer's root**, not a machine
+  path — beside a `sha512-...` `integrity` value, and `npm ci` refuses a tarball whose bytes do not
+  match it with `npm error code EINTEGRITY`. The two `file:` forms differ on every layer that
+  matters, and collapsing them is the mistake this bullet exists to prevent.
 
 So: a commit sha (I1), a recorded-but-unenforced git SRI (a broken I3), and an enforced tarball SRI
 (a real I3) are three different things. A route that has I1 and no I3 tells you what source was used
 and cannot tell you the artifact was not swapped afterwards. A route that has I3 and no I1 tells you
 the bytes are the reviewed bytes and cannot tell you which commit produced them. **A route needs both,
-and only a route that records the sha *and* installs a digest-checked tarball has both.**
+and only a route that records the sha *and* installs a digest-checked tarball has both.** The local
+tarball of route (e-pack) is such a route; a `file:` link to a built checkout is not.
 
 ---
 
@@ -314,43 +323,71 @@ build/hosting", not a settled precedent to copy.
 
 So the bridge has to name a contract. There are two candidates, and this document recommends the first.
 
-**(e-pack) — the recommended form. Build, pack, install the tarball.**
+**(e-pack) — the recommended form. Build, pack, install the tarball.** It has **two phases**, and
+merging them is a defect rather than a simplification: `npm install <tarball>` *writes* the consumer's
+lockfile, and `npm ci` *enforces* it. A bridge documented as one phase would either be an
+`npm install` in CI — which rewrites the dependency entry it was supposed to be checked against — or
+an `npm ci` on a machine with no lockfile entry to check.
+
+*Phase 1 — bootstrap, run once by a person, and its output is committed.*
 
 ```
-git clone https://github.com/suisya-systems/cadenza.git <checkout>
-git -C <checkout> checkout <sha>
-git -C <checkout> rev-parse HEAD              # must equal the recorded <sha>   [I1]
-npm --prefix <checkout> ci --ignore-scripts
-npm --prefix <checkout> run build
-npm pack <checkout> --pack-destination <dir>  # -> suisya-systems-cadenza-0.0.0.tgz
-sha256sum <dir>/suisya-systems-cadenza-0.0.0.tgz                                 [I2]
-npm install --ignore-scripts <dir>/suisya-systems-cadenza-0.0.0.tgz              [I3, local]
+git clone https://github.com/suisya-systems/cadenza.git vendor/cadenza-src
+git -C vendor/cadenza-src checkout <sha>
+git -C vendor/cadenza-src rev-parse HEAD                       # must equal <sha>        [I1]
+npm --prefix vendor/cadenza-src ci --ignore-scripts
+npm --prefix vendor/cadenza-src run build
+npm pack vendor/cadenza-src --pack-destination vendor          # -> vendor/suisya-systems-cadenza-0.0.0.tgz
+sha256sum vendor/suisya-systems-cadenza-0.0.0.tgz > vendor/cadenza.tgz.sha256           [I2, recorded]
+npm install --ignore-scripts vendor/suisya-systems-cadenza-0.0.0.tgz                    [I3, written]
 ```
 
-- **D1, D2:** yes, and by the same mechanism as every other tarball route — `npm pack` honours `files`,
-  so `dist/`, `src/` and both map families arrive together. rondo ran exactly these steps and got
-  `118 files` and `import ok: 70 exports`.
+Committed afterwards: `<sha>` (in the consumer's own decision record or a pinning file),
+`vendor/cadenza.tgz.sha256`, and the `package.json` / `package-lock.json` the install wrote. **The
+`.tgz` itself is not committed** — it is 118 files of build output, and phase 2 rebuilds it.
+
+*Phase 2 — every CI run and every fresh clone. No `npm install`, and nothing is rewritten.*
+
+```
+git clone ... vendor/cadenza-src && git -C vendor/cadenza-src checkout <sha>
+git -C vendor/cadenza-src rev-parse HEAD                       # must equal <sha>        [I1 checked]
+npm --prefix vendor/cadenza-src ci --ignore-scripts
+npm --prefix vendor/cadenza-src run build
+npm pack vendor/cadenza-src --pack-destination vendor          # same path as phase 1
+sha256sum -c vendor/cadenza.tgz.sha256                         # fails loudly on drift   [I2 checked]
+npm ci --ignore-scripts                                        # enforces the lockfile   [I3 checked]
+```
+
+The `sha256sum -c` is not decoration beside the lockfile: it fails with a *diagnosis* ("the tarball
+you built is not the tarball this repository was pinned to"), whereas the `npm ci` that would fail a
+moment later reports `EINTEGRITY` against a hash nobody can read. Both are wanted, in that order.
+
+- **D1, D2:** yes, by the same mechanism as every other tarball route — `npm pack` honours `files`, so
+  `dist/`, `src/` and both map families arrive together. rondo ran the equivalent steps and got
+  `118 files` and `import ok: 70 exports`; §5.6 reproduces it.
 - **D3:** yes. The tarball installs under the package name, and the `exports` map, `types` and the
   declarations resolve as they do from a registry. This is what (e-pack) buys over a bare checkout.
-- **D4:** partial, and it must be stated as partial. I1 is real (a verified sha). I3 is *local*: the
-  lockfile records a `file:` path to a tarball, so npm enforces nothing about where that tarball came
-  from — the enforceable record is the **recorded sha256** of §I2, which the consumer commits and
-  checks before installing. That is a real check performed by the consumer, and it is not the
-  lockfile-enforced hash routes (c) and (d2) give.
-- **One measurement this document does not have, and will not assert:** whether `npm pack` over the
-  same sha is **byte-reproducible on a second machine**. If it is, the recorded digest becomes a
-  cross-machine check; if it is not, it is a local record only, and the cross-machine check reduces to
-  I1. The bridge is specified so that it is correct either way — the digest is recorded and verified
-  *by the machine that built it, against its own later installs* — and §11 row D6 flags the
-  measurement as owed.
+- **D4:** yes, and **stronger than an earlier draft of this document claimed**. I1 is a verified sha.
+  I2 is a committed digest, checked before install. I3 is a **real, npm-enforced** lockfile integrity
+  hash — §5.6 measured `npm ci` rejecting a swapped tarball with `EINTEGRITY`. The `resolved` value is
+  a path relative to the consumer's root, so unlike a directory link it is not machine-specific. What
+  it still lacks against (c) and (d2) is that npm cannot tell the consumer *where the bytes came from*:
+  the chain from `<sha>` to the tarball is the documented procedure and the committed digest, not
+  something npm verifies.
+
+**Because I3 is enforced, byte-reproducibility of `npm pack` is load-bearing rather than a curiosity.**
+If phase 2's pack differed from phase 1's, every CI run would fail. §5.6 measures it and finds it
+holds; §5.6 also states exactly how far that measurement reaches.
 
 **(e-link) — the documented fallback. `file:` to the built checkout, with `--install-links`.**
 rondo measured `--install-links` failing on continuo, but the failure was `files: ["dist"]` with no
 `dist/` on disk: `--install-links` packs the target, and the target was unbuilt. **Against a checkout
 that has already been built, that failure does not apply** — the pack contains `dist/` and `src/`, and
-D1/D2/D3 hold. What does not change is §3: a `file:` dependency records a path, no integrity, no
-revision, and it fails green when the target moves. It is the fallback for a developer's local loop,
-where a path is the point; it is not what a consumer's CI should install from.
+D1/D2/D3 hold. What does not change is §3's *directory* case, which this is: a `file:` dependency on a
+directory records a machine path, no integrity and no revision, and it fails green when the target
+moves. That is the whole difference from (e-pack), which points `file:` at a `.tgz` and gets an
+enforced hash and a relative path for it. (e-link) is the fallback for a developer's local loop, where
+a path is the point; it is not what a consumer's CI should install from.
 
 **(e-codeload) — rejected variant, named because it will be proposed.** Installing
 `https://github.com/suisya-systems/cadenza/archive/<sha>.tar.gz` gets an enforced I3 on the *source*
@@ -362,10 +399,61 @@ internal build in its own repository. (e-pack) has the same ownership cost and d
 put a build product somewhere `npm ci` deletes.
 
 **Cost to cadenza for route (e): documentation.** No `package.json` change, no CI change, no tracked
-build output, no lifecycle script, no release. The seven commands above, written down in cadenza's
-README or a `docs/` page so that "the supported bridge" is a specification cadenza owns rather than
-folklore the consumer reconstructs. That is the entire price, and it is why it is the recommended
-bridge.
+build output, no lifecycle script, no release. The two phases above, written down in cadenza's README
+or a `docs/` page so that "the supported bridge" is a specification cadenza owns rather than folklore
+the consumer reconstructs. That is the entire price, and it is why it is the recommended bridge.
+
+### 5.6 What was measured for this document, and how far it reaches
+
+Run on 2026-09-05 in this worktree at cadenza `62cd11f` (tree identical to `4b53eca` for everything
+that packs), **npm 10.9.2, Node v22.17.0, Linux** — the same npm rondo measured on. Two questions,
+because §5.5's contract fails without both.
+
+**Q1 — is `npm pack` byte-reproducible?** Three packs, and a full `npm run build` (which cleans
+`dist/` first, so every emitted file has a new mtime) between the second and the third:
+
+```
+7010decf...a4fa  a.tgz   # pack of the built tree
+7010decf...a4fa  b.tgz   # immediate second pack
+7010decf...a4fa  c.tgz   # pack after `npm run build` re-emitted every file
+```
+
+Identical. npm normalises entry mtimes when it packs, which is the usual source of tar variance, and
+removing it is what makes phase 2 of §5.5 possible at all. **How far this reaches:** one machine, one
+npm, one Node, one platform. It shows that *time* and *rebuilding* do not perturb the tarball; it does
+not show that a Windows runner or a different npm produces the same bytes. `package-lock.json` pins
+`typescript@7.0.2` exactly, so the emitted JavaScript is the same input on every machine — which makes
+cross-machine reproducibility likely and not measured. §11 row D6 owns the residue.
+
+**Q2 — does npm enforce a local tarball's integrity?** A consumer package installed `a.tgz`:
+
+```
+"resolved": "file:cadenza.tgz",
+"integrity": "sha512-ZbEn1qa3hfsJ8MbORdQFOxAm6RvstE89y6Mg8NCd4mepKz8972eFXeiNxHINkpIAtzMKuB3s/kM+cq8EistuRA=="
+```
+```
+node -e 'import("@suisya-systems/cadenza")'   ->  import ok: 70 exports
+```
+
+A different but valid tarball (`a.tgz` unpacked, one byte appended to `README.md`, repacked) was then
+put at that exact path and `npm ci --ignore-scripts` re-run **with a cold cache**:
+
+```
+npm warn tarball tarball data for @suisya-systems/cadenza@file:.../cadenza.tgz (sha512-ZbEn1q...) seems to be corrupted.
+npm error code EINTEGRITY
+npm error sha512-ZbEn1q... integrity checksum failed when using sha512: wanted sha512-ZbEn1q... but got sha512-n/w69E... (127157 bytes)
+```
+
+**So the integrity is real and enforced**, which is the opposite of the directory-link case and the
+opposite of what an earlier draft of this document asserted by analogy with it.
+
+**One wrinkle, recorded because it will confuse somebody.** The same swap with a *warm* npm cache
+exited 0, and the installed `README.md` was the **original** content, not the tampered file. That is
+integrity working rather than failing — npm resolved the recorded hash to bytes it already held and
+declined to use the file on disk — but it means a tampered or drifted tarball produces `EINTEGRITY` on
+a cold cache (a CI runner) and a silent, correct install on a warm one (a developer's laptop). It is
+another reason §5.5 keeps the explicit `sha256sum -c`: that check is cache-independent and reports the
+drift in the one place npm will not.
 
 ---
 
@@ -378,8 +466,8 @@ bridge.
 | (c) npm publication | yes | yes | yes | **enforced I3 + real version** | cadenza release CI | registry name, version, publisher, provenance, release job | **preferred permanent shape — untaken decision** (§9) |
 | (d1) Actions artifact | n/a | n/a | no | none | — | — | **rejected** — not a dependency channel |
 | (d2) Release asset | yes | yes | yes | **enforced I3** | cadenza release CI | tag + changelog + release process + `contents: write` job | viable; a release decision, at the same gate as (c) |
-| (e-pack) consumer builds and packs | yes | yes | yes | verified sha + recorded digest | consumer, explicit step | **documentation only** | **recommended temporary bridge** |
-| (e-link) `file:` + `--install-links` | yes | yes | yes | **none** | consumer, explicit step | documentation only | fallback for local development only |
+| (e-pack) consumer builds and packs | yes | yes | yes | verified sha + committed digest + **enforced I3** (§5.6) | consumer, explicit step | **documentation only** | **recommended temporary bridge** |
+| (e-link) `file:` + `--install-links` to a *directory* | yes | yes | yes | **none** — a machine path, no integrity, no revision | consumer, explicit step | documentation only | fallback for local development only |
 | (e-codeload) source tarball + build in place | no | no | no | enforced I3 on source | consumer, inside `node_modules` | none | rejected — build erased by `npm ci` |
 
 **The recommendation is two-part, and the parts are not alternatives.**
@@ -390,7 +478,9 @@ cadenza has not taken, no release, no tracked artifact, no lifecycle script; it 
 documentation; and it is **removable without residue** the day a stronger route exists — a consumer
 deletes a build step and changes a specifier. Its weakness is exactly the one rondo names and accepts
 for continuo: the consumer owns the build of a dependency it does not own. That is a real cost, and it
-is the cost of a bridge rather than a destination.
+is the cost of a bridge rather than a destination. What it is **not** weak on is integrity: §5.6
+measured `npm ci` enforcing the local tarball's hash, so the bridge's gap against (c) is provenance —
+npm cannot say where the bytes came from — rather than tamper-detection.
 
 **Permanent shape: (c).** Registry publication is the only route where a consumer's `npm ci` is the
 whole of the story: no build step, no clone, an enforced integrity hash in the lockfile, a version
@@ -447,7 +537,10 @@ For the record, so that taking the bridge is not read as a commitment either way
   dependency remains rondo's decision, to be re-argued on its merits.
 - **Whether the bridge should live in cadenza's README or a `docs/` page**, and whether cadenza ships a
   script that runs it. §11 row D5.
-- **Byte-reproducibility of `npm pack`** across machines (§5.5, §11 row D6).
+- **Byte-reproducibility of `npm pack` across machines and platforms.** Measured stable across time
+  and across a clean rebuild on one Linux machine (§5.6); unmeasured on Windows or a different npm.
+  It is load-bearing rather than cosmetic, because the enforced lockfile hash turns a differing pack
+  into a red CI run (§11 row D6).
 - **Windows behaviour of a route (b) drift gate**, which is only owed if the gate overturns the
   recommendation.
 
@@ -478,9 +571,13 @@ is the honest question of who builds it."
 **Decision.** Four parts.
 
 - **The supported bridge is: the consumer clones cadenza at a pinned commit sha, verifies the sha,
-  installs cadenza's lockfile with `--ignore-scripts`, runs `npm run build`, runs `npm pack`, records
-  the tarball's sha256, and installs *that tarball* with `--ignore-scripts`.** Not a `file:` link to the
-  checkout, and not a build inside `node_modules`. The bridge is documented in this repository, because
+  installs cadenza's lockfile with `--ignore-scripts`, runs `npm run build`, runs `npm pack`, commits
+  the tarball's sha256, and installs *that tarball* with `--ignore-scripts`.** Not a `file:` link to
+  the checkout, and not a build inside `node_modules`. **It has two phases, and they are not
+  interchangeable**: a one-time bootstrap that runs `npm install <tarball>` and commits the lockfile it
+  writes, and a recurring phase — every CI run, every fresh clone — that rebuilds the tarball at the
+  same path, verifies it with `sha256sum -c`, and then runs `npm ci --ignore-scripts`, which enforces
+  the committed lockfile rather than rewriting it. The bridge is documented in this repository, because
   a delivery route the consumer reconstructs is not a route cadenza can be held to.
 - **No lifecycle script is added.** `prepare` is refused, and the reason D-0033 gave for refusing it is
   **corrected rather than repeated**: rondo measured npm 10.9.2 running a git dependency's `prepare`
@@ -501,13 +598,25 @@ is the honest question of who builds it."
   is a release decision of the same kind; it is not the cheap half of publication. Both are for the
   human gate, and this entry deliberately leaves both untaken.
 
-**Integrity, stated in three layers rather than as "pinned".** Source acquisition is a verified commit
-sha. Build output is covered by a sha256 the consumer records. The installed artifact is a local
-tarball, so npm enforces nothing about its origin — a git dependency's recorded SRI is *not enforced*
-(`npm warn skipping integrity check for git dependency`) and a `file:` link records a path with no
-integrity and no revision at all. Only a registry or remote-tarball route gives a lockfile-enforced
-hash. The bridge is honest about being weaker there, and the `version` field cannot help: every build
-of every revision is `0.0.0`, so identity is the sha and the digest or it is nothing.
+**Integrity, stated in three layers rather than as "pinned".** Source acquisition is a verified
+commit sha. Build output is covered by a sha256 the consumer commits and checks. The installed
+artifact is covered by a **real, npm-enforced** lockfile hash: a local `.tgz` is not the directory-link
+case, and `npm ci` rejects a tarball whose bytes do not match with `EINTEGRITY` (measured, npm 10.9.2).
+That is materially stronger than a git dependency, whose recorded SRI is *not* enforced
+(`npm warn skipping integrity check for git dependency`), and than a `file:` link to a directory, which
+records a machine path with no integrity and no revision at all. What the bridge still lacks against a
+registry or a Release asset is **provenance** — npm can say the bytes are the pinned bytes and cannot
+say where they came from; the chain from the sha to the tarball is the documented procedure, not
+something npm verifies. The `version` field cannot help either way: every build of every revision is
+`0.0.0`, so identity is the sha and the digest or it is nothing.
+
+**One consequence, stated because it is a running cost rather than a one-off.** Because the lockfile
+hash is enforced, `npm pack` must be byte-stable or the consumer's CI goes red. It was measured stable
+across repeated packs and across a full clean rebuild on one Linux machine with npm 10.9.2 (npm
+normalises entry mtimes when packing), and it was **not** measured across machines or on Windows.
+`package-lock.json` pins `typescript@7.0.2` exactly, which is what makes cross-machine stability
+plausible. If it turns out not to hold, the bridge is not lost — the consumer commits the `.tgz`
+instead of rebuilding it — but that is a different trade and would be recorded.
 
 **What the consumer receives.** The packed tarball, so the whole of D-0033's type contract:
 `dist/**/*.js`, `.d.ts`, `.d.ts.map`, `.js.map`, and `src/` — which is packed deliberately because both
@@ -522,9 +631,10 @@ bridge's, and it is the argument for publication rather than an argument against
 cannot reach a working cadenza without lifecycle scripts: the clone or build fails on their platform;
 `npm pack` produces a tarball that does not install; the bare specifier
 `import ... from "@suisya-systems/cadenza"` does not resolve, or `tsc --noEmit` under `module: NodeNext`
-cannot find the declarations; or the recorded sha256 cannot be checked against what is installed. Any
-of those means the bridge is a story rather than a route, and the answer is a real route — which is
-publication.
+cannot find the declarations; or the committed sha256 cannot be checked against what was rebuilt; or
+`npm ci` fails `EINTEGRITY` on a tarball rebuilt from the pinned sha, which would mean `npm pack` is
+not byte-stable on that platform and the recurring phase does not work there. Any of those means the
+bridge is a story rather than a route, and the answer is a real route — which is publication.
 
 **What later publication changes.** It supersedes this entry wholesale. The clone, the build, the pack
 and the recorded digest all disappear and the consumer takes an ordinary pinned dependency with an
@@ -550,11 +660,11 @@ Each row is a question this document had to answer and that the gate can overtur
 
 | # | Open decision | Recommendation | Reason |
 |---|---|---|---|
-| D1 | Which route is the **temporary bridge**? | **(e-pack)**: pinned clone → verify sha → `npm ci --ignore-scripts` → `npm run build` → `npm pack` → record sha256 → install that tarball with `--ignore-scripts` | It is the only route delivering build output, the full type contract, resolution by package name and a checkable identity while changing nothing about what cadenza is. Cost is one page of documentation, and it is removable without residue when publication lands |
+| D1 | Which route is the **temporary bridge**? | **(e-pack)**, in two phases: bootstrap once (clone at sha → verify sha → `npm ci --ignore-scripts` → `npm run build` → `npm pack` → commit sha256 → `npm install` that tarball), then every CI run rebuilds it at the same path, checks `sha256sum -c`, and runs `npm ci --ignore-scripts` against the committed lockfile | It is the only route delivering build output, the full type contract, resolution by package name and a checkable identity while changing nothing about what cadenza is. Cost is one page of documentation, and it is removable without residue when publication lands |
 | D2 | Is a `prepare` script added? | **No** | It *works* — rondo measured npm 10.9.2 running it under `--ignore-scripts`, falsifying D-0033's stated reason — and that is why it is refused: it executes cadenza's build inside a consumer whose policy forbids dependency code at install (D-0004). continuo refused the same line for the same reason (`continuo D-0045`) |
 | D3 | Is `dist/` committed? | **No** | It would repair the existing git specifier, and it is the one route whose cost survives publication. It also needs a new drift gate — `check:package` cannot serve, because `build` cleans `dist/` first and would mask stale committed output — plus a `.gitattributes` that does not exist yet and an emitted diff in every review |
 | D4 | Is publication (c) or a Release asset (d2) taken now? | **Neither.** (c) is named the permanent shape; both are left for a separate gate | `docs/repository-policy.md` §3 leaves registry name, release process and publisher open; D-0033 calls a registry name a one-way door and stays `private: true`. (d2) is not the cheap half of (c): it needs a version, a tag, a changelog entry and a `contents: write` release job, and it buys a channel (c) would then replace. Overturnable in one direction only — a gate that wants a release should take (c) |
 | D5 | Where does the bridge specification live? | **A `docs/` page in cadenza**, referenced from `README.md`; no script shipped | A route the consumer reconstructs is folklore. A shipped script would be cadenza taking responsibility for running commands in the consumer's CI, which is the ownership the bridge deliberately leaves on the consumer's side |
-| D6 | Is the recorded sha256 a cross-machine check or a local one? | **Treat it as local** until `npm pack` byte-reproducibility across machines is measured | Unmeasured here and not asserted. The bridge is specified so it is correct either way; if pack turns out reproducible, the digest strengthens from a local record to a cross-machine check at no cost |
+| D6 | `npm pack` byte-stability is load-bearing — is the evidence enough? | **Adopt the bridge on it, and treat Windows as owed.** Measured stable across repeated packs and across a full clean rebuild on one Linux machine, npm 10.9.2 (§5.6); npm normalises entry mtimes, and `typescript@7.0.2` is lockfile-pinned | It stopped being a curiosity once the lockfile hash turned out to be enforced: an unstable pack means `EINTEGRITY` on every CI run, not merely a weaker record. The residue is a cross-machine and Windows measurement, which the first consumer performs by existing. Fallback if it fails: commit the `.tgz` rather than rebuild it |
 | D7 | Does any route trim `src/` from the artifact to reduce its size? | **No, in every route** | Both `.js.map` and `.d.ts.map` name `../src/*.ts` relatively with no inlined source (D-0033). Removing `src/` is a decision to drop or redesign the maps, and needs its own entry |
 | D8 | If a release route is ever taken, what does the release job do? | **Build once, pack once, check *that* file with publint/attw, smoke-install it with `--ignore-scripts` on Ubuntu **and** Windows, record its sha256, upload those exact bytes** | Today's `package` job builds and lets both tools pack independently, retains no named `.tgz`, and runs on Ubuntu only. That is fine for checking packaging and wrong for shipping: without the chain, the checked bytes and the shipped bytes are two different packs of a directory rebuilt in between (`continuo D-0045` reaches the same rule from its side) |
