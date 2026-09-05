@@ -26,8 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   declared name under `src/ports/**` is split into words and refused on a
   whole-token match against sixteen transport words, which catches the
   hand-written `interface GateAnswerRequest { sessionToken: string }` that
-  imports nothing and so is invisible to the import allowlists. Eight planted
-  violations, one per declaration form, show it is not vacuous.
+  imports nothing and so is invisible to the import allowlists. Where an acronym
+  ends is a guess, so every run of adjacent fragments counts as a word too -
+  without that, `OAuth` cuts to `o` + `auth` and never matches the list. Ten
+  planted violations show it is not vacuous.
 - The agent-type record (D-0031, with its value schema fixed by D-0034): a frozen,
   digested value carrying two D-0027 capability key sets, a `loopPolicy` the
   conductor reads, an `executorPolicy` cadenza carries and never interprets, and

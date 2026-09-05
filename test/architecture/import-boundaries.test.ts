@@ -1310,25 +1310,45 @@ const TRANSPORT_WORDS: readonly string[] = [
 
 const TRANSPORT_WORD_SET = new Set(TRANSPORT_WORDS);
 
+/** Where a delimited part is cut into fragments: camel, Pascal, and digit runs. */
+const WORD_BOUNDARY =
+  /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|(?<=[A-Za-z])(?=[0-9])|(?<=[0-9])(?=[A-Za-z])/u;
+
 /**
- * A declared name, split into the words a reader reads in it.
+ * A declared name, read as the words it could be made of.
  *
- * On camelCase and PascalCase boundaries, on every non-alphanumeric character
- * (which covers `_` and `-`), and on digit runs, then lowercased. `PascalCase`
- * needs two boundaries rather than one: `HttpClient` breaks between a lower and
- * an upper, and `HTTPClient` breaks between the last upper of a run and the
- * upper that starts the next word.
+ * The name is first cut on every non-alphanumeric character (which covers `_`
+ * and `-`), then each part is cut on camelCase and PascalCase boundaries and on
+ * digit runs. `PascalCase` needs two boundaries rather than one: `HttpClient`
+ * breaks between a lower and an upper, and `HTTPClient` breaks between the last
+ * upper of a run and the upper that starts the next word.
+ *
+ * **And then every run of adjacent fragments is offered as a word too**, which
+ * is not a substring sweep and is the fix for a hole the first version had.
+ * Where an acronym ends is a *guess*: the same rule that reads `HTTPClient` as
+ * `http` + `client` reads `OAuth` as `o` + `auth`, and `URLs` as `ur` + `ls`, so
+ * `oauth` and `url` -- both on the list -- could never be produced from the
+ * spellings every specification and library actually uses. Joining adjacent
+ * fragments closes that without weakening the whole-token rule: the candidates
+ * are still words the name is built from, in order, and `SecurityPolicy` still
+ * yields only `security`, `policy` and `securitypolicy`, none of which is
+ * listed. What it does not do is join across a `_`, a `-` or a digit run --
+ * those are boundaries the writer put there rather than boundaries this rule
+ * guessed at.
  */
 function wordsIn(name: string): string[] {
-  return name
-    .split(/[^A-Za-z0-9]+/u)
-    .flatMap((part) =>
-      part.split(
-        /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|(?<=[A-Za-z])(?=[0-9])|(?<=[0-9])(?=[A-Za-z])/u,
-      ),
-    )
-    .filter((word) => word !== "")
-    .map((word) => word.toLowerCase());
+  const candidates = new Set<string>();
+  for (const part of name.split(/[^A-Za-z0-9]+/u)) {
+    const fragments = part.split(WORD_BOUNDARY).filter((fragment) => fragment !== "");
+    for (let start = 0; start < fragments.length; start += 1) {
+      let joined = "";
+      for (let end = start; end < fragments.length; end += 1) {
+        joined += fragments[end];
+        candidates.add(joined.toLowerCase());
+      }
+    }
+  }
+  return [...candidates];
 }
 
 /**
@@ -1466,7 +1486,15 @@ test("the transport sweep catches a planted violation in every declaration form"
     ["export type Reach = { readonly url: string };\n", "url"],
     ["export enum Scheme {\n  Https = 1,\n}\n", "Https"],
     ['export { fetchIt as bearerToken } from "./client.js";\n', "bearerToken"],
+    // The other half of a specifier: here the transport word is the SOURCE name
+    // (`propertyName`) and the name bound in this module is innocent, so only
+    // the `propertyName` branch of the collector can see it.
+    ['import { sessionToken as recorded } from "../domain/x.js";\n', "sessionToken"],
     ['const held = { ["oauthState"]: 1 };\n', "oauthState"],
+    // PascalCase around a one-letter acronym: the boundary rule reads `OAuth` as
+    // `o` + `auth`, so this is caught by the joined-fragment candidate and by
+    // nothing else.
+    ["export class OAuthClient {}\n", "OAuthClient"],
   ];
   for (const [source, name] of planted) {
     const offenders = transportNamesIn(from, source);
@@ -1517,6 +1545,21 @@ test("the transport sweep matches whole words and reads declarations, not text",
   expect(
     transportNamesIn(from, "export interface Held {\n  readonly headers: string;\n}\n"),
   ).toEqual([`${from}:2: headers (header)`]);
+  // Where an acronym ends is a guess, so the spellings a specification actually
+  // uses are covered by the joined-fragment candidate rather than left to the
+  // boundary rule: `OAuth` cuts to `o` + `auth` and `URLs` to `ur` + `ls`.
+  expect(transportNamesIn(from, "export class OAuthClient {}\n")).toEqual([
+    `${from}:1: OAuthClient (oauth)`,
+  ]);
+  expect(
+    transportNamesIn(from, "export interface Held {\n  readonly redirectURLs: string;\n}\n"),
+  ).toEqual([`${from}:2: redirectURLs (url)`]);
+  // And joining stops at a boundary the writer wrote: `url` is not assembled
+  // out of two parts a `_` separates, and an innocent compound stays innocent.
+  expect(transportNamesIn(from, "export const ur_ls = 1;\n")).toEqual([]);
+  expect(
+    transportNamesIn(from, "export interface SecurityPolicy {\n  readonly urLimit: number;\n}\n"),
+  ).toEqual([]);
 });
 
 // --- the anchors ------------------------------------------------------------

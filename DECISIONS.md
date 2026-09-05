@@ -2996,16 +2996,31 @@ reading; it did not.
   check. A name that genuinely *uses* a listed word is refused whatever it means by it —
   `CancellationToken` is refused for `token` — because the rule is over the vocabulary a port names,
   and the sixteen words are a policy this entry starts rather than closes.
-- **The plural is matched too**, which is the one departure from §8's literal sixteen: `headers`,
-  `cookies` and `tokens` are the names somebody would actually write, and a list of singulars matched
-  as whole tokens would pass all three. A word matches if it is in the list, or if it ends in `s` and
-  its stem is. No innocent English word collides with a listed word plus `s`.
+- **The plural is matched too**, which is the first of two departures from §8's literal reading:
+  `headers`, `cookies` and `tokens` are the names somebody would actually write, and a list of
+  singulars matched as whole tokens would pass all three. A word matches if it is in the list, or if
+  it ends in `s` and its stem is. No innocent English word collides with a listed word plus `s`.
+- **Every run of adjacent fragments is offered as a word**, which is the second departure and the
+  correction to a hole the first implementation of this rule had. Where an acronym ends is a *guess*:
+  the same boundary rule that reads `HTTPClient` as `http` + `client` reads `OAuth` as `o` + `auth`
+  and `URLs` as `ur` + `ls`, so `oauth` and `url` -- both on the list -- could never be produced from
+  the spellings every specification and library actually writes, and `export class OAuthClient {}`
+  in a port passed the check in silence. Joining adjacent fragments closes that and is **not** a
+  substring sweep: the candidates are still words the name is built from, in order, so
+  `SecurityPolicy` still yields only `security`, `policy` and `securitypolicy` and is still accepted.
+  Joining stops at a `_`, a `-` or a digit run, because those are boundaries the writer put there
+  rather than boundaries the rule guessed at.
 
 **Non-vacuity, as AGENTS.md requires of a PR that adds a check.** The defect the rule guards against
-is a *missed declaration form*, so one planted violation is not enough: eight are asserted, one per
-form — an interface member, a class, a `const`, a function parameter, a type alias member, an enum
-member, a re-export's local name, and a computed property whose key is a literal — and each turns the
-sweep red on its own. The complementary case asserts what it must **not** refuse: `SecurityPolicy`,
+is a *missed declaration form*, so one planted violation is not enough: **ten** are asserted and each
+turns the sweep red on its own. Eight are one per declaration form — an interface member, a class, a
+`const`, a function parameter, a type alias member, an enum member, a re-export's **exported** name,
+and a computed property whose key is a literal. The ninth is the other half of a specifier, an
+alias's **source** name (`import { sessionToken as recorded }`), which is the only planted case the
+collector's `propertyName` branch can see: without it that branch was asserted by nothing and could
+have been deleted with the suite still green, which is exactly the vacuity this rule is written
+against. The tenth is not a form but the splitter — `export class OAuthClient {}` — and it is there
+because that is how the hole above was found. The complementary case asserts what it must **not** refuse: `SecurityPolicy`,
 a doc comment saying *"no browser, cookie or session reaches this layer"*, and a URL in a string
 literal. On the tree itself, planting `sessionToken` in `src/ports/human-decision.ts` turns exactly
 `no port names a transport[src/ports/human-decision.ts]` red, and reverting restores green.
