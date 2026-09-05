@@ -63,12 +63,14 @@ describe("the five fields", () => {
     });
   });
 
-  test("a null predecessor is what opens a lineage, and is not an omission", () => {
+  test("a null predecessor is what opens a lineage, and an omission is not", () => {
     expect(recordOf({ predecessor: null }).predecessor).toBeNull();
-    // A field left off entirely reads as the same decision rather than as a
-    // malformed one: the successor opens a lineage. `approved` has no such
-    // reading, and its case is below.
-    expect(humanDecisionRecord(rawRecord({ predecessor: undefined })).predecessor).toBeNull();
+    // Only an explicit null opens one. A record that omits the field is
+    // malformed, and with a run that holds nothing the two would otherwise be
+    // indistinguishable -- an omission would read as a human's decision to open
+    // a lineage. All five fields are required (row `S-2`), and the contract's
+    // optional `supersedes` is the one that may default, not this.
+    refusal(InvalidDigestError, () => humanDecisionRecord(rawRecord({ predecessor: undefined })));
   });
 
   test("the record is a frozen copy, so the caller's object cannot change it later", () => {

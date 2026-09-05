@@ -2916,6 +2916,9 @@ rondo, where D-0009 part 2 is prose.
   `src/ports/human-decision.ts` names `HumanDecisionRecord` — `decisionId`, `recordedBy`, `outcome`
   (`approved`/`refused`), `predecessor` (a `contract_digest` or `null`) and `approved` (a
   `contract_digest`) — with `humanDecisionRecord()` as the one way to obtain a validated, frozen one.
+  **All five are required**, and `null` is the only value of `predecessor` that opens a lineage: a
+  record that omits the field is refused, because against a run that holds nothing an omission would
+  otherwise read as a human's decision to open one.
   The two digests take `DIGEST_PATTERN`; `decisionId` and `recordedBy` take **`requireIdentity`,
   reused rather than restated**, which is why that function stops being private to
   `src/domain/contract.ts`; `outcome` is checked against the closed union. It stays **off the

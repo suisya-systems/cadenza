@@ -69,7 +69,12 @@ export interface HumanDecisionRecord {
   /** The surface's identity, and the successor's `issuer`. */
   readonly recordedBy: string;
   readonly outcome: DecisionOutcome;
-  /** The `contract_digest` replaced, or `null` when the decision opens a lineage. */
+  /**
+   * The `contract_digest` replaced, or `null` when the decision opens a lineage.
+   *
+   * Required, and `null` is the only value that opens one: a record that omits
+   * the field is refused rather than read as an opening.
+   */
   readonly predecessor: string | null;
   /** The `contract_digest` of the successor approved. */
   readonly approved: string;
@@ -105,10 +110,14 @@ export function humanDecisionRecord(input: HumanDecisionRecord): HumanDecisionRe
   const decisionId = requireIdentity(input.decisionId, "decision_id");
   const recordedBy = requireIdentity(input.recordedBy, "recorded_by");
   const outcome = requireOutcome(input.outcome);
+  // Only an **explicit** `null` opens a lineage. A record that omits the field
+  // is malformed rather than lineage-opening, and the difference is not
+  // cosmetic: with `current === null` an omission would otherwise read as a
+  // human's decision to open one. `DelegationContractInput.supersedes` is
+  // optional and defaults, which is why that one may; this field is required by
+  // the five-field schema `S-2` fixes, so it does not.
   const predecessor =
-    input.predecessor === null || input.predecessor === undefined
-      ? null
-      : requireDigest(input.predecessor, "predecessor");
+    input.predecessor === null ? null : requireDigest(input.predecessor, "predecessor");
   const approved = requireDigest(input.approved, "approved");
 
   return Object.freeze({ decisionId, recordedBy, outcome, predecessor, approved });
