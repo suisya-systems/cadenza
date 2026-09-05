@@ -120,7 +120,25 @@ $ npm run verify
 ```
 
 `verify` is lint, unused-export analysis, type-check, the test suite, the parity
-ledger and the source inventory, in that order.
+ledger, the source inventory and the package check, in that order.
+
+## Using cadenza as a library
+
+The package has one public entry point, `src/index.ts`, reached through the
+package name and no deep path (`DECISIONS.md` D-0033). It exports what D-0029
+names: the G1 project registry, the G2 delegation contract, and `classify()`.
+There is no gate API - a gate *outcome* is an input to a classification, and
+the gate verbs belong to continuo.
+
+```console
+$ npm run build          # clean, then tsc -p tsconfig.build.json -> dist/
+$ npm run check:package  # the same build, then publint and attw on the tarball
+```
+
+`dist/` is gitignored and absent from a fresh checkout, so a consumer builds it
+or takes a packed tarball. **Nothing is published**: the package is
+`private: true` at `0.0.0`, and the first publish is still an untaken decision
+(`docs/repository-policy.md` section 3).
 
 One CI job runs Python, and it is not a build step: the differential oracle at
 `scripts/oracle/dump_config_digest.py` re-derives what CPython's JSON encoder

@@ -1,0 +1,26 @@
+{
+  // Distribution build (DECISIONS.md D-0033). `tsconfig.json` stays the
+  // type-check configuration and keeps `noEmit`: it covers `test/`, `scripts/`
+  // and `vitest.config.ts` as well as `src/`, none of which is shipped, and a
+  // single configuration cannot both check those and emit only the library.
+  //
+  // Everything that makes the check strict is inherited rather than restated,
+  // so the emitted files are compiled under exactly the settings D-0003 and
+  // D-0005 fix. Only the emit is configured here.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+
+    // A consumer of a published package reads `.d.ts`, not `.ts`; without
+    // `declaration` the `types` entry in `package.json` would point at nothing
+    // and `attw` would say so. The two map files are what make a stack trace or
+    // a "go to definition" in rondo land on cadenza's source rather than on
+    // generated output.
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  },
+  "include": ["src"]
+}

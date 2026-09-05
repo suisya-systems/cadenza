@@ -806,8 +806,8 @@ rondo consume both, so this must be said separately rather than by generalisatio
 | | continuo | cadenza |
 |---|---|---|
 | published? | no — `E404`, `private: true` at `0.0.0` | no — `private: true` at `0.0.0` |
-| entry point | `main: ./dist/index.js`, and `src/index.ts` re-exports the lap surface | **none**: `package.json` declares no `main`, no `exports`, no `types` and no `files` (read 2026-09-05) |
-| build | a seven-command `build` producing `dist/`, gitignored and absent from a fresh checkout | **none**: `typecheck` is `tsc --noEmit`, and D-0008 records "no build output yet" as a decision, not an oversight |
+| entry point | `main: ./dist/index.js`, and `src/index.ts` re-exports the lap surface | `main`, `types` and an `exports` map naming `.` and `./package.json`, over the `src/index.ts` barrel, with a `files` allowlist (D-0033; **none** of it existed when this table was first read on 2026-09-05) |
+| build | a seven-command `build` producing `dist/`, gitignored and absent from a fresh checkout | `npm run build` (clean, then `tsc -p tsconfig.build.json`) producing `dist/`, gitignored and absent from a fresh checkout, with `publint` and `attw` over the packed tarball in the merge gate (D-0033; D-0008's "no build output yet" was still current when this row was first read) |
 | `prepare` | none, which is what breaks option B | none, and adding one collides with D-0004 exactly as it does for continuo (D-0009) |
 
 So option A needs a publication step in each repository; option B is broken in both for the same
@@ -817,6 +817,14 @@ cadenza owes before rondo can import it is therefore a decision D-0008 deliberat
 it emits build output and declares an entry point.** That is not taken here and is not C-8: it is
 cadenza's own, and it is the concrete shape of D-0029's "two packages must become consumable instead
 of one".
+
+**Taken, on 2026-09-05, as D-0033.** cadenza now has the entry point, the build and the `files`
+allowlist, and its packed tarball is checked by `publint` and `attw` in the merge gate. Two things in
+this section are unchanged by that: **nothing is published** — cadenza is still `private: true` at
+`0.0.0`, so option A still needs a publication step in each repository — and option B is still broken
+for the `prepare`/`--ignore-scripts` reason, which no amount of build output cures. What has changed
+is only the last clause of the sentence above it: a git dependency on cadenza would now install a
+package whose entry point exists but whose `dist/` was never built.
 
 | Option | Status today |
 |---|---|

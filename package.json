@@ -17,22 +17,43 @@
   "engines": {
     "node": ">=22.14.0 <23 || >=24.0.0 <25"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "clean": "node scripts/clean.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "knip": "knip",
+    "publint": "publint --strict",
+    "attw": "attw --pack .",
+    "check:package": "npm run build && npm run publint && npm run attw",
     "parity": "node scripts/parity-check.mjs",
     "inventory": "node scripts/source-inventory-check.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run lint && npm run knip && npm run typecheck && npm run test && npm run parity && npm run inventory"
+    "verify": "npm run lint && npm run knip && npm run typecheck && npm run test && npm run parity && npm run inventory && npm run check:package"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
     "@biomejs/biome": "2.5.10",
     "@types/node": "26.3.0",
     "knip": "6.32.2",
+    "publint": "0.3.24",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
   },

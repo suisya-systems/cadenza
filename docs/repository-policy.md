@@ -61,8 +61,14 @@ they derive from it.
 
 It was `src/cadenza/__about__.py` until `DECISIONS.md` D-0032 deleted the Python
 package along with `pyproject.toml`, which is what read it. The field currently
-reads `0.0.0` and the package is `private: true`: nothing has been released, and
-what a published cadenza would look like is still deferred by D-0008.
+reads `0.0.0` and the package is `private: true`: nothing has been released.
+
+What a published cadenza would look like is no longer open. D-0033 gives the
+package its library surface -- one entry point (`src/index.ts`), an `exports`
+map, an emitted `dist/` from `tsconfig.build.json`, and a `files` allowlist --
+and CI checks the packed tarball with `publint` and `attw` on every pull
+request. What is still deferred is the act of publishing: a registry name, a
+release process, and who may run it.
 
 ## 4. Releases
 
