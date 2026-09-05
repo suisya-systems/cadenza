@@ -189,8 +189,20 @@ nothing here: D-0001 records that rondo imports no cadenza code at all ... Both 
 part 2 into the library; either half alone leaves it here"* (rondo D-0009, its own "what would falsify it" section). The
 second half fired the next day: **rondo D-0018** (2026-09-06) makes cadenza a consumed library
 through the delivery bridge (rondo D-0018; facade granted the package at
-`test/architecture/import-boundaries.test.ts:218-230`). The remaining half is cadenza's, and this
-document is where it is proposed.
+`test/architecture/import-boundaries.test.ts:218-230`).
+
+**The remaining half is cadenza's, and what 4.3 proposes is deliberately *not* it.** rondo's
+falsifier asks for an **issuer-authority** check, and authority is what cadenza cannot supply: it
+mints no identity and holds no provenance, so anything it checks is a caller-supplied string against
+another caller-supplied string. A conductor that composes a self-consistent record passes all four
+checks in 4.3 with no surface having recorded anything. So this document does **not** claim to fire
+rondo D-0009's falsifier, and a gate should not read `S-1` as firing it: what 4.3 offers is a value
+check over four classes of silent error, and the falsifier stays unfired until something can tell a
+claimed answerer from a proven one. The third option — a store that mints decision records the
+conductor cannot forge — is named in `S-1` and is not reachable in-process: rondo's loop and its
+surface share an address space, and its only enforcement is a layer table, which is the same grade
+of guarantee again. A real one arrives with continuo recording an authenticated answerer, which is
+rondo D-0009's *other* falsifier and nobody's to take here.
 
 **And there is a boundary collision waiting behind it.** D-0009 part 2 makes *the operating surface*
 the issuer, but rondo's layer table refuses `src/access -> src/cadenza` on purpose: *"an access
@@ -461,9 +473,16 @@ by name and each followed by another): a list of "interfaces, type aliases and f
 over the declared identifier of **every** declaration the parser reports — interface, type alias,
 enum, class, function, `const`/`let`/`var`, and every member and parameter of each, plus the local
 and exported names of a re-export — and it fails closed on a form nobody has thought of, exactly as
-the externals allowlist does. Fail if any of those names, lowercased, contains one of a fixed word
-list: `http`, `https`, `url`, `uri`, `header`, `cookie`, `session`, `browser`, `socket`, `oidc`,
-`oauth`, `jwt`, `bearer`, `token`, `csrf`, `websocket`.
+the externals allowlist does.
+
+**Match tokens, never substrings.** Each collected name is split into words first — on camelCase and
+PascalCase boundaries, on `_` and `-`, and on digit runs — lowercased, and compared **whole** against
+a fixed list: `http`, `https`, `url`, `uri`, `header`, `cookie`, `session`, `browser`, `socket`,
+`oidc`, `oauth`, `jwt`, `bearer`, `token`, `csrf`, `websocket`. A substring sweep is not a smaller
+version of this rule, it is a broken one: `SecurityPolicy` contains `uri` and `CancellationToken`
+contains `token`, so a port would be refused for a word it does not use. A check that a reader
+learns to route around by renaming an innocent type is worse than no check, because it teaches the
+tree that this case fires for the wrong reason.
 
 **And the case must be shown not to be vacuous**, which AGENTS.md requires of any PR that adds a
 check: *"plant the failure the check exists to catch, show it goes red, revert"*
@@ -525,7 +544,7 @@ recommend into existence: they are about verbs cadenza has no say in.
 
 | id | Decision | Gate | Recommendation | Reason |
 |---|---|---|---|---|
-| **S-1** | Does cadenza expose anything at all for the operating surface — a port and an application function (4.3), or nothing, leaving D-0009 part 2 to hold by rondo's omission? | cadenza | **Yes, the minimum in 4.3**: one port and one application function, scoped to the widening successor and to nothing else | Half of rondo D-0009's own falsifier fired at rondo D-0018 (rondo D-0009's falsifiers; rondo D-0018), so the remaining half is cadenza's; and rondo cannot satisfy D-0009 part 2 by calling cadenza from the surface, because its layer table refuses `src/access -> src/cadenza` (`rondo test/.../import-boundaries.test.ts:143-148`) |
+| **S-1** | Does cadenza expose anything for the operating surface — (a) nothing, leaving D-0009 part 2 to hold by rondo's omission; (b) the port and application function of 4.3; or (c) provenance the conductor cannot forge? | cadenza | **(b), and with its price stated rather than buried.** (c) is not reachable: rondo's loop and its surface share an address space, so "unforgeable" would mean a layer table again. **Taking (b) ends the omission** — rondo gains a widening path where it has none — and replaces an absolute property with four value checks. That is the trade the gate is being asked to make, and it is a close one | rondo consumes cadenza as of rondo D-0018, so the library is now a place a check could live; but cadenza mints no identity, so no check it holds can be the *authority* check rondo D-0009's falsifier asks for (§4.2). (b) is recommended because the first widening will otherwise be written under deadline in rondo, where D-0009 part 2 is prose — not because it makes the rule structural. Note also that rondo cannot satisfy D-0009 part 2 by calling cadenza from the surface: its layer table refuses `src/access -> src/cadenza` (`rondo test/.../import-boundaries.test.ts:143-148`), which is why the decision travels as data |
 | **S-2** | What does the human-decision value carry, and under which validators? | cadenza | **Five fields**: `decisionId`, `recordedBy`, `outcome` (`approved`/`refused`), `predecessor` and `approved`, the last two being `contract_digest`s. **Three validators, not one** — `DIGEST_PATTERN` for the two digests, `requireIdentity` **reused, not restated**, for the two strings (it applies six checks including the lone-surrogate one a copy would drop), a closed union for `outcome`. Reuse means making it non-private, which is the part the gate decides | `approved` is what stops a decision about a two-key widening from authorising a ten-key one; `outcome` is what stops a denial being spent as an approval. The validator split is not a nicety: `parseIdentifier` refuses every digest it is given, for the colon and for the length (`src/domain/identifiers.ts:19`), so one rule for all five fields cannot work |
 | **S-3** | Where do the four decision checks live — a new `application/` function, or inside `adopt()`? | cadenza | **A new application function**, leaving `adopt()` byte-identical | `adopt` is also the initial-adoption path and is on the exported surface (`src/domain/supersession.ts:62-71`, `src/index.ts:149-154`); a check added there changes every existing caller. The alternative is listed because rondo D-0009's falsifier names `adopt()` literally, and a gate may prefer the literal reading |
 | **S-4** | Is the first cut chat-primary (A, as #22 settled) or the decision list (B's centre column)? | rondo | **Keep B as the endpoint and build the gate panes first**: list, detail, `answer`, `close --outcome withdrawn` | B's rows ship today as `continuo.gate.list/1` (`continuo src/gate/cli.ts:355-366`); A's conversation has no store in any repository, and D-0009 puts this surface on the critical path of every gate. #22's reason for A-then-B ("both read the same data model") is unaffected — only which half has one has changed |
@@ -535,7 +554,7 @@ recommend into existence: they are about verbs cadenza has no say in.
 | **S-8** | Where does the operator conversation live? | rondo | **rondo's store**, and **not** the slot that holds a gate answer | #22 recorded it as undecided and its cross-link says #40 answered it; #40's document does not (none of `conductor.md`'s seventeen rows is the conversation). `gate_transition.body` is the verbatim human answer, and prose in that slot records as approval (`continuo docs/production-schema.md:1378-1383`) |
 | **S-9** | Once a console exists, who acks the `presented` relay, and does the dropbox stay a second presentation channel? | continuo | **Not cadenza's to recommend.** Stated because the surface cannot answer a gate without it: `answerGate` admits only stage `presented`, that stage is reached only on the relay's ack, and `gate present` / `deliver` / `ack` carry no `--json` | `continuo src/gate/operator.ts:99,645`, `src/gate/cli.ts:800-836`; D-0076 assigns the dropbox to the operator, and a console makes that channel a duplicate of itself. Acking a relay nobody delivered records a delivery that did not happen |
 | **S-10** | How does the console read run and belt state, `awaiting_user` and the outbox? | continuo | **A read verb**, not a second reader of continuo's database | `run` has exactly `admit` and `close` (`continuo src/control_plane/run_cli.ts:469,517`), and rondo D-0015 rule 1 keeps continuo behind a CLI process boundary. The pane with no read path is exactly where somebody opens the SQLite file instead |
-| **S-11** | Is the "no port names a transport" case added, and with which word list? | cadenza | **Add it** in the shape §8 describes — **every** declared identifier under `src/ports/**`, not an enumerated set of declaration forms, structural rather than a text sweep, with one planted violation per form to show it is not vacuous (`AGENTS.md:133-138`). The sixteen-word starting list is the part to argue about | The import allowlists already refuse `node:http`; what they cannot see is a hand-written `interface GateAnswerRequest { sessionToken: string }`, which is precisely the leak #22's testable form 1 names. A form-by-form list would pass `export class HttpClient {}` and `export const sessionToken = ""`, which is the same losing game the externals allowlist already played once (`test/.../import-boundaries.test.ts:156-164`) |
+| **S-11** | Is the "no port names a transport" case added, and with which word list? | cadenza | **Add it** in the shape §8 describes — **every** declared identifier under `src/ports/**`, not an enumerated set of declaration forms, structural rather than a text sweep, **matched as whole tokens** after splitting each name into words, with one planted violation per form to show it is not vacuous (`AGENTS.md:133-138`). The sixteen-word starting list is the part to argue about | The import allowlists already refuse `node:http`; what they cannot see is a hand-written `interface GateAnswerRequest { sessionToken: string }`, which is precisely the leak #22's testable form 1 names. Token matching is not a refinement but a correctness condition: a substring sweep refuses `SecurityPolicy` for `uri`. A form-by-form list would pass `export class HttpClient {}` and `export const sessionToken = ""`, which is the same losing game the externals allowlist already played once (`test/.../import-boundaries.test.ts:156-164`) |
 
 Two things that are **not** decisions here and are recorded so the design does not silently depend on
 them: continuo growing an authenticated answerer (which would supersede rondo D-0009 and shrink `S-1`
