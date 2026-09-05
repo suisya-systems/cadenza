@@ -64,6 +64,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0031 | The agent-type record: inputs to a contract rather than a second authority, keyed separately with its own digest, in the TypeScript tree, and immutable | accepted |
 | D-0032 | The Python G1 is retired; one oracle face stays live on CPython and the other is frozen | accepted |
 | D-0033 | cadenza is consumable as a library: one entry point, an emitted `dist/`, and the packed tarball as what CI checks | accepted |
+| D-0035 | The artifact-delivery bridge: a consumer builds cadenza from a pinned checkout and installs what it packed; publication remains the destination and remains untaken | accepted |
 
 ---
 
@@ -2465,3 +2466,139 @@ output are in the pull request.
   nothing about the emit gives a module a new edge.
 - **Nothing is published.** The package stays `private: true` at `0.0.0`, and the first publish
   remains an untaken decision.
+
+---
+
+## D-0035 — The artifact-delivery bridge: a consumer builds cadenza from a pinned checkout and installs what it packed; publication remains the destination and remains untaken
+
+**Status:** accepted (2026-09-05, taken at cadenza's human gate)
+
+**Context.** D-0033 made cadenza packable and said in its own words that it publishes nothing. It did
+not make cadenza deliverable, and `rondo D-0016` measured the difference on 2026-09-05 at cadenza
+`4b53eca`: a pinned git dependency installs `LICENSE package.json README.md src`, no `dist/`, and dies
+on import; the deep-path escape hatch is closed by the `exports` map
+(`ERR_PACKAGE_PATH_NOT_EXPORTED`). `npm pack` from a built tree is consumable — 118 files, `import ok:
+70 exports` — which proves the packaging and not the delivery. rondo states the residue: "What remains
+is the honest question of who builds it." `docs/design/artifact-delivery.md` argued the routes and
+drafted this entry; the gate took all nine rows of its decision table as recommended, and the table
+below records that outcome row by row.
+
+**Decision.** Four parts.
+
+- **The supported bridge is: the consumer clones cadenza at a pinned commit sha, verifies the sha,
+  installs cadenza's lockfile with `--ignore-scripts`, runs `npm run build`, runs `npm pack`, commits
+  the tarball's sha256, and installs *that tarball* with `--ignore-scripts`.** Not a `file:` link to
+  the checkout, and not a build inside `node_modules`. **It has two phases, and they are not
+  interchangeable**: a one-time bootstrap that runs `npm install <tarball>` and commits the lockfile it
+  writes, and a recurring phase — every CI run, every fresh clone — that is a portable digest check
+  (a committed Node helper, because `sha256sum` is not on macOS or Windows) followed by
+  `npm ci --ignore-scripts`, which enforces the committed lockfile rather than rewriting it. **The
+  recurring phase rebuilds nothing: the consumer commits the `.tgz`.** A variant that re-clones,
+  rebuilds and re-packs on every run is documented for a consumer who refuses a vendored binary, and it
+  requires `npm pack` to be byte-identical on that consumer's platform, which is measured on one
+  platform only. The bridge is documented in this repository, because a delivery route the consumer
+  reconstructs is not a route cadenza can be held to: it is
+  [`docs/artifact-delivery-bridge.md`](docs/artifact-delivery-bridge.md), a consumer-facing page
+  linked from `README.md`, and cadenza ships no script that runs it.
+- **No lifecycle script is added.** `prepare` is refused, and the reason D-0033 gave for refusing it is
+  **corrected rather than repeated**: rondo measured npm 10.9.2 running a git dependency's `prepare`
+  *despite* `--ignore-scripts`, so the claim that it "would be skipped exactly where it is needed" is
+  falsified. The refusal stands on the stronger ground — a `prepare` runs cadenza's build inside a
+  consumer whose install policy forbids dependency code at install time, and D-0004 is a standing rule
+  about what a dependency may do to its consumer. `docs/design/conductor.md` §9.1 carries the same
+  falsified claim and is corrected with this entry. **D-0033's own text is left exactly as it was**:
+  this entry is the correction, and the record stays append-only.
+- **`dist/` is not committed.** It would work, and it is the only route that repairs the *existing*
+  git-dependency specifier, but it requires a new drift gate — `check:package` cannot be it, because
+  `build` cleans `dist/` before the checks run and would overwrite stale committed output while
+  reporting green — plus a `.gitattributes` this repository does not have, plus an emitted diff in
+  every review. All of that survives publication, having become pure cost.
+- **npm publication is the intended permanent shape and is NOT decided here.** It needs a registry name
+  (a one-way door, per D-0033), a version off `0.0.0` and therefore a first release under
+  `docs/repository-policy.md` §4, `private: true` removed, a publisher and a provenance decision, and a
+  release job running an exact-byte chain. A GitHub Release asset reaches the same technical shape and
+  is a release decision of the same kind; it is not the cheap half of publication. Both are for the
+  human gate, and this entry deliberately leaves both untaken.
+
+**Integrity, stated in three layers rather than as "pinned".** Source acquisition is a verified
+commit sha. Build output is covered by a sha256 the consumer commits and checks. The installed
+artifact is covered by a **real, npm-enforced** lockfile hash: a local `.tgz` is not the directory-link
+case, and `npm ci` rejects a tarball whose bytes do not match with `EINTEGRITY` (measured, npm 10.9.2).
+That is materially stronger than a git dependency, whose recorded SRI is *not* enforced
+(`npm warn skipping integrity check for git dependency`), and than a `file:` link to a directory, which
+records a machine path with no integrity and no revision at all. What the bridge still lacks against a
+registry or a Release asset is **provenance** — npm can say the bytes are the pinned bytes and cannot
+say where they came from; the chain from the sha to the tarball is the documented procedure, not
+something npm verifies. The `version` field cannot help either way: every build of every revision is
+`0.0.0`, so identity is the sha and the digest or it is nothing.
+
+**Why the `.tgz` is committed rather than rebuilt, stated because it is the least obvious part.**
+Because the lockfile hash is enforced, any recurring phase that re-packs must produce byte-identical
+bytes or the consumer's CI goes red on a correct tree. Packing was measured stable across repeated
+packs and across a full clean rebuild on one Linux machine with npm 10.9.2 — npm normalises entry
+mtimes when packing — and was **not** measured across platforms, where two things in cadenza were
+unpinned and could differ: `tsconfig.build.json` set no `newLine`, and no `.gitattributes` held the
+packed `src/` to LF in a Windows checkout. Committing the tarball removes the question rather than
+betting on it, at the price of a ~128 KB unreviewable blob in the consumer's history that is
+regenerable from `<sha>` at any time. **Both of those two are pinned by this entry** (row D9 below, which covers every packed path rather
+than only the sources),
+which makes the rebuilding variant sound everywhere rather than on one platform — but it is not a
+precondition of the bridge, and the recommended recurring form does not depend on it.
+
+**What the consumer receives.** The packed tarball, so the whole of D-0033's type contract:
+`dist/**/*.js`, `.d.ts`, `.d.ts.map`, `.js.map`, and `src/` — which is packed deliberately because both
+map families name `../src/*.ts` relatively with no inlined source. Trimming `src/` is not a delivery
+optimisation available to any route; it is a decision to drop or redesign the maps, with its own entry.
+
+**Who owns a failure.** The consumer, at an explicit step they wrote, never during `npm install`. If
+cadenza's build acquires a step, the consumer's step breaks visibly the same day. That cost is the
+bridge's, and it is the argument for publication rather than an argument against the bridge.
+
+**The nine rows, as taken.** `docs/design/artifact-delivery.md` §11 put nine questions to the gate,
+each overturnable on its own. All nine were taken as recommended.
+
+| # | Question | Taken |
+|---|---|---|
+| D1 | Which route is the temporary bridge? | **(e-pack), in two phases.** Bootstrap once — clone at the sha, verify it, `npm ci --ignore-scripts`, `npm run build`, `npm pack`, commit the sha256, `npm install` that tarball — then the recurring **form 2a**: a portable digest check plus `npm ci --ignore-scripts` |
+| D2 | Is a `prepare` script added? | **No.** It works under `--ignore-scripts` (measured), and that is why it is refused: it would run cadenza's build inside a consumer whose policy forbids exactly that (D-0004) |
+| D3 | Is `dist/` committed? | **No.** It needs a drift gate `check:package` cannot serve, plus an emitted diff in every review, and every part of that cost survives publication |
+| D4 | Is publication (c) or a Release asset (d2) taken now? | **Neither.** (c) is named the permanent shape and left for a separate gate; a gate that wants a release should take (c) rather than (d2) |
+| D5 | Where does the bridge specification live? | **A `docs/` page in this repository**, `docs/artifact-delivery-bridge.md`, linked from `README.md`. **No script is shipped** — running commands in the consumer's CI is the ownership the bridge leaves on the consumer's side |
+| D6 | Does the recurring phase rebuild the tarball, or is the `.tgz` committed? | **Committed (form 2a).** The rebuilding form 2b stays documented, with its platform caveat attached, for a consumer who refuses a vendored binary |
+| D7 | Does any route trim `src/` from the artifact? | **No, in every route.** Both map families name `../src/*.ts` relatively with no inlined source; removing `src/` is a decision about the maps and needs its own entry |
+| D8 | If a release route is ever taken, what does the release job do? | **Build once, pack once, check *that* file with publint and attw, smoke-install it with `--ignore-scripts` on Ubuntu and Windows, record its sha256, upload those exact bytes.** Recorded now, owed only when a release route is taken |
+| D9 | Does cadenza harden its own output so a rebuilt pack is platform-independent? | **Yes, and taken with this entry.** `newLine: "lf"` in `tsconfig.build.json`, and a `.gitattributes` holding to LF everything `files` packs — `src/**`, `dist/**`, `README.md`, `LICENSE` and `package.json` — since a rebuilt pack has to reproduce all of it, not only the sources. It is not a precondition of the bridge — form 2a does not need it — and it is what makes form 2b sound off one platform |
+
+**What would falsify it.** A clean Ubuntu **or Windows** consumer that follows the documented steps and
+cannot reach a working cadenza without lifecycle scripts: the clone or build fails on their platform;
+`npm pack` produces a tarball that does not install; the bare specifier
+`import ... from "@suisya-systems/cadenza"` does not resolve, or `tsc --noEmit` under `module: NodeNext`
+cannot find the declarations; or the committed sha256 cannot be checked against what was rebuilt; or
+`npm ci` fails `EINTEGRITY` against the committed tarball. An `EINTEGRITY` from the *rebuilding*
+variant is not a falsifier of this entry — it is the platform hazard the entry avoids by committing the
+tarball, and it falsifies only that variant. Any of the others means the bridge is a story rather than
+a route, and the answer is a real route — which is publication.
+
+**What later publication changes.** It supersedes this entry wholesale. The clone, the build, the pack
+and the recorded digest all disappear and the consumer takes an ordinary pinned dependency with an
+enforced integrity hash. This entry is written to be deleted, and dating it is part of the decision:
+it is true of a cadenza that has not published, and of nothing else.
+
+**Consequences.**
+
+- No change to `package.json`, CI, `.gitignore`, or any lifecycle script. The bridge itself is
+  documentation: `docs/artifact-delivery-bridge.md`, linked from `README.md`.
+- Row D9 is the only code change: `newLine: "lf"` in `tsconfig.build.json` and a new `.gitattributes`
+  holding every packed path to LF — `src/**`, `dist/**`, `README.md`, `LICENSE`, `package.json`. Measured on Linux with npm 10.9.2 and Node v22.17.0, the
+  emitted `dist/` and a fresh `npm pack` are byte-identical before and after the change
+  (`7010decfef4175b7ff491a46e9dc99eec7613123349b87f75129a3818301a4fa` both times), which is what a
+  no-op on the platform that already emitted LF looks like. The change is for the platform this
+  worktree cannot measure.
+- `docs/design/conductor.md` §9.1's `prepare`/`--ignore-scripts` claim is corrected where it appears;
+  D-0033's text is not edited, and gains the correction by reference from this entry.
+- `docs/design/artifact-delivery.md` is marked taken: its §10 draft becomes a pointer here rather than
+  a second copy of the entry, and its §11 rows record their outcomes.
+- `rondo D-0016`'s delivery objection is answerable; its *surface* objection (no exported agent-type
+  record) is not touched by this entry, and whether rondo consumes cadenza remains rondo's decision.
+- Nothing is published. The package stays `private: true` at `0.0.0`, and the first publish remains an
+  untaken decision — now with its price written down.

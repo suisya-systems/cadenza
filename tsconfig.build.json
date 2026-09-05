@@ -24,7 +24,17 @@
     // combination that is worse than emitting neither.
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+
+    // TypeScript's line-ending default is a property of the compiler and the
+    // host platform rather than of this configuration, so without this the
+    // bytes emitted into `dist/` are not the same on a Windows runner as on a
+    // Linux one. That matters because the artifact-delivery bridge's rebuilding
+    // variant enforces a lockfile integrity hash over `npm pack` output: an
+    // emit that differs by line ending is `EINTEGRITY` on a correct tree. Pinned
+    // here, with `.gitattributes` holding the packed `src/` to LF for the same
+    // reason (D-0035, row D9).
+    "newLine": "lf"
   },
   "include": ["src"]
 }

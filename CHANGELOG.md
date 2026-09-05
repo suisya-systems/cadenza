@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Artifact-delivery bridge (D-0035): `docs/artifact-delivery-bridge.md` is the
+  supported way to depend on cadenza until it publishes - clone at a pinned
+  commit sha, build, `npm pack`, commit the tarball and its sha256, and install
+  that tarball with `--ignore-scripts`, with a portable Node digest check
+  (`sha256sum` is on neither macOS nor Windows) and `npm ci` enforcing the
+  committed lockfile on every run. The rebuilding variant is documented with its
+  platform caveat. No lifecycle script is added, no `dist/` is committed, and
+  nothing is published: the package stays `private: true` at `0.0.0`.
+- `.gitattributes` holding every packed path to LF - `src/**`, `dist/**`,
+  `README.md`, `LICENSE`, `package.json` - and `newLine: "lf"` in
+  `tsconfig.build.json` (D-0035, row D9), so a rebuilt `npm pack` does not
+  differ by line ending on a Windows checkout. Measured no-op on Linux: the
+  emitted `dist/` and a fresh pack are byte-identical before and after.
 - Library surface (cadenza#50, D-0033): the package declares `main`, `types`, an
   `exports` map over the single entry point `src/index.ts`, and a `files`
   allowlist; `npm run build` emits `dist/` with declarations and source maps from
@@ -178,6 +191,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `docs/design/conductor.md` section 9.1's `prepare`/`--ignore-scripts`
+  rationale is corrected where it appears (D-0035): npm 10.9.2 runs a git
+  dependency's `prepare` *despite* `--ignore-scripts`, so option B is declined
+  because a `prepare` would run cadenza's build inside a consumer whose install
+  policy forbids exactly that (D-0004) - not because the install would come out
+  empty. `docs/design/artifact-delivery.md` is marked taken, with its draft
+  entry replaced by a pointer to D-0035 and its decision table recording each
+  row's outcome.
 - `scripts/oracle/dump_config_digest.py` no longer imports `cadenza.domain.*`;
   it restates the payload shape and digest rule in stdlib Python and reproduces
   the committed vector byte for byte, verified before the deletion landed and
