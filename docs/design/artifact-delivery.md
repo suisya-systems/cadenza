@@ -95,10 +95,16 @@ up with all four of these. They are separable, and the routes differ on which th
   `node_modules/@suisya-systems/cadenza`. A route that leaves the consumer running a file out of a
   checkout by path has not delivered a *library*; it has delivered a directory. This is where the
   continuo precedent stops applying — see §5.5.
-- **D4 — Identity is recorded and checkable.** The consumer's repository can answer "which cadenza is
-  this?" after the fact, from committed files. Note that **the `version` field cannot answer it**:
-  every build of every revision is `0.0.0`, so a consumer's lockfile saying `0.0.0` distinguishes
-  nothing. Whatever records identity has to be a sha or a digest, recorded on purpose.
+- **D4 — Identity is recorded *and* the artifact is checkable against it.** Two halves, and a route
+  can hold one without the other, so they are scored separately below rather than summed into a verdict:
+  - **D4a — identity is recorded.** The consumer's repository can answer "which cadenza is this?" from
+    committed files. A pinned commit sha satisfies this, wherever it is written down. **The `version`
+    field never does**: every build of every revision is `0.0.0`, so a lockfile saying `0.0.0`
+    distinguishes nothing.
+  - **D4b — the installed artifact is checkable against that identity.** Something fails when the bytes
+    on disk are not the bytes the record names. This is §3's I3, and it is what a recorded-but-unenforced
+    hash does not give. A route with D4a and not D4b tells you which revision was *intended* and cannot
+    tell you the artifact was not swapped after the fact.
 
 D1 and D2 are the same thing for every route that ships a packed tarball, and different things for
 every route that does not.
@@ -193,8 +199,9 @@ which of D1–D4 it delivers, its I1/I2/I3 story, and what cadenza has to change
 **Who owns a build failure:** the consumer, at install time, with cadenza's toolchain in cadenza's
 `devDependencies` — which npm does install for a git dependency, so this genuinely works.
 
-**Delivers:** D1, D2, D3. **Not D4**: the git SRI is recorded and unenforced (§3), so identity rests on
-the sha in the specifier alone.
+**Delivers:** D1, D2, D3, **D4a and not D4b**: the sha in the specifier records which revision was
+asked for, and the git SRI npm writes beside it is not enforced (§3), so nothing checks that the tree
+npm actually fetched and built is that revision's.
 
 **Cost to cadenza:** one line.
 
@@ -220,8 +227,8 @@ moves *earliest*, and it is the only route that makes the **existing** specifier
 dependency and a codeload tarball both start delivering D1/D2/D3 the day `dist/` is tracked, with no
 change on the consumer's side and no lifecycle script anywhere.
 
-**Delivers:** D1, D2, D3. **D4 only as well as a git dependency does**, i.e. the sha in the specifier
-plus an unenforced SRI.
+**Delivers:** D1, D2, D3, and **D4a without D4b** — exactly as well as a git dependency does, and for
+the same reason: the sha is recorded and the SRI beside it is not enforced.
 
 **Cost to cadenza — and this is the part that is not one line:**
 
@@ -262,8 +269,9 @@ route (b)'s cost stays and its benefit goes. A bridge should be removable.
 **Where the build runs:** in cadenza's release CI, once, under §4's chain.
 **Who owns a build failure:** cadenza, before anything is published; a consumer never builds.
 
-**Delivers:** D1, D2, D3 and **the strongest D4 in the document** — an enforced I3 in the consumer's
-lockfile, plus a real version number that finally makes the `version` field mean something.
+**Delivers:** D1, D2, D3, and **the strongest D4 in the document** — D4a as a real version number that
+finally makes the `version` field mean something, and D4b as an enforced integrity hash in the
+consumer's lockfile, over bytes whose origin the registry also attests.
 
 **This is the right permanent shape**, and section 6 argues it. It is also **not takeable here**, and
 this document does not propose taking it. What it needs is not engineering:
@@ -346,7 +354,28 @@ Committed afterwards: `<sha>` (in the consumer's own decision record or a pinnin
 `vendor/cadenza.tgz.sha256`, and the `package.json` / `package-lock.json` the install wrote. **The
 `.tgz` itself is not committed** — it is 118 files of build output, and phase 2 rebuilds it.
 
-*Phase 2 — every CI run and every fresh clone. No `npm install`, and nothing is rewritten.*
+*Phase 2 — every CI run and every fresh clone. No `npm install`, and nothing is rewritten.* There are
+two forms, and **the first is recommended**.
+
+**2a (recommended) — commit the `.tgz`; phase 2 rebuilds nothing.**
+
+```
+sha256sum -c vendor/cadenza.tgz.sha256    # cheap, and fails with a diagnosis    [I2 checked]
+npm ci --ignore-scripts                   # enforces the committed lockfile      [I3 checked]
+```
+
+The consumer commits `vendor/suisya-systems-cadenza-0.0.0.tgz` (118 files, ~128 KB) alongside the
+digest and the sha. Phase 2 is then a plain `npm ci` on every platform, with no clone, no cadenza
+toolchain, no build, and — decisively — **no dependence on `npm pack` being byte-reproducible
+anywhere**, because nothing is packed twice. The build happens once, on one machine, by one person,
+per cadenza bump.
+
+Its cost is a vendored binary in the consumer's history: a blob no reviewer can read, which a reader
+must take on the digest and the sha rather than on inspection. That is a real cost and it is the
+smaller one — the artifact is regenerable from `<sha>` by phase 1 at any time, and §5.6's whole
+platform question disappears with it.
+
+**2b (alternative) — rebuild in CI, for a consumer who refuses a vendored binary.**
 
 ```
 git clone ... vendor/cadenza-src && git -C vendor/cadenza-src checkout <sha>
@@ -358,22 +387,29 @@ sha256sum -c vendor/cadenza.tgz.sha256                         # fails loudly on
 npm ci --ignore-scripts                                        # enforces the lockfile   [I3 checked]
 ```
 
-The `sha256sum -c` is not decoration beside the lockfile: it fails with a *diagnosis* ("the tarball
-you built is not the tarball this repository was pinned to"), whereas the `npm ci` that would fail a
-moment later reports `EINTEGRITY` against a hash nobody can read. Both are wanted, in that order.
+**2b requires `npm pack` to be byte-identical to phase 1's**, because the lockfile hash is enforced —
+and §5.6 shows that is measured on one platform and **has two named reasons to be false across
+platforms**: cadenza sets no `newLine` in `tsconfig.build.json`, and has no `.gitattributes` to hold
+`src/` to LF in a checkout. A consumer whose bootstrap and CI platforms differ should use 2a, or wait
+for the cadenza-side hardening §11 row D9 proposes.
+
+In both forms the `sha256sum -c` is not decoration beside the lockfile: it fails with a *diagnosis*
+("the tarball is not the one this repository was pinned to"), whereas the `npm ci` that would fail a
+moment later reports `EINTEGRITY` against a hash nobody can read. It is also cache-independent, which
+§5.6 shows matters. Both are wanted, in that order.
 
 - **D1, D2:** yes, by the same mechanism as every other tarball route — `npm pack` honours `files`, so
   `dist/`, `src/` and both map families arrive together. rondo ran the equivalent steps and got
   `118 files` and `import ok: 70 exports`; §5.6 reproduces it.
 - **D3:** yes. The tarball installs under the package name, and the `exports` map, `types` and the
   declarations resolve as they do from a registry. This is what (e-pack) buys over a bare checkout.
-- **D4:** yes, and **stronger than an earlier draft of this document claimed**. I1 is a verified sha.
-  I2 is a committed digest, checked before install. I3 is a **real, npm-enforced** lockfile integrity
-  hash — §5.6 measured `npm ci` rejecting a swapped tarball with `EINTEGRITY`. The `resolved` value is
-  a path relative to the consumer's root, so unlike a directory link it is not machine-specific. What
-  it still lacks against (c) and (d2) is that npm cannot tell the consumer *where the bytes came from*:
-  the chain from `<sha>` to the tarball is the documented procedure and the committed digest, not
-  something npm verifies.
+- **D4a and D4b, and D4b is stronger than an earlier draft of this document claimed.** D4a is the
+  committed sha beside the committed digest. D4b is a **real, npm-enforced** lockfile integrity hash —
+  §5.6 measured `npm ci` rejecting a swapped tarball with `EINTEGRITY` — plus the `sha256sum -c`, which
+  is cache-independent where npm is not. The `resolved` value is a path relative to the consumer's
+  root, so unlike a directory link it is not machine-specific. What it still lacks against (c) and (d2)
+  is **provenance**: npm can say these are the pinned bytes and cannot say where they came from. The
+  chain from `<sha>` to the tarball is the documented procedure and the person who ran it.
 
 **Because I3 is enforced, byte-reproducibility of `npm pack` is load-bearing rather than a curiosity.**
 If phase 2's pack differed from phase 1's, every CI run would fail. §5.6 measures it and finds it
@@ -419,11 +455,23 @@ because §5.5's contract fails without both.
 ```
 
 Identical. npm normalises entry mtimes when it packs, which is the usual source of tar variance, and
-removing it is what makes phase 2 of §5.5 possible at all. **How far this reaches:** one machine, one
-npm, one Node, one platform. It shows that *time* and *rebuilding* do not perturb the tarball; it does
-not show that a Windows runner or a different npm produces the same bytes. `package-lock.json` pins
-`typescript@7.0.2` exactly, so the emitted JavaScript is the same input on every machine — which makes
-cross-machine reproducibility likely and not measured. §11 row D6 owns the residue.
+removing it is what makes form 2b of §5.5 possible at all. **How far this reaches, and why the limit
+is not a formality:** one machine, one npm, one Node, one platform. It shows that *time* and
+*rebuilding* do not perturb the tarball. It does **not** show that a Windows runner produces the same
+bytes, and there are two named reasons to expect it may not:
+
+- **`tsconfig.build.json` sets no `newLine`.** TypeScript's line-ending default is a property of the
+  compiler and the platform rather than of this configuration, so emitted `dist/` files are not pinned
+  to LF by anything in this repository. (Not measured here: cadenza is on TypeScript 7.0.2, whose
+  compiler is native, and this worktree has no Windows runner. The point is that nothing in the tree
+  *fixes* it, not that it is known to differ.)
+- **There is no `.gitattributes`.** `files` packs `src/`, whose bytes come from the consumer's
+  checkout, so a Windows clone under a `core.autocrlf` that rewrites line endings packs different
+  `.ts` files than a Linux one — with no compiler involved at all.
+
+`package-lock.json` pins `typescript@7.0.2` exactly, so the *compiler* is the same input everywhere;
+the newline and the checkout are not. This is why §5.5 recommends form **2a**, which packs once and
+therefore cannot be affected by any of it, and why §11 rows D6 and D9 own what is left.
 
 **Q2 — does npm enforce a local tarball's integrity?** A consumer package installed `a.tgz`:
 
@@ -459,16 +507,16 @@ drift in the one place npm will not.
 
 ## 6. The comparison, and the recommendation
 
-| Route | D1 build | D2 types+maps+`src` | D3 by package name | D4 identity | Where the build runs | Cost to cadenza | Verdict |
-|---|---|---|---|---|---|---|---|
-| (a) `prepare` | yes | yes | yes | sha only (SRI unenforced) | consumer, **during install** | one line | **rejected** — runs dependency code under `--ignore-scripts` (§1.1) |
-| (b) committed `dist/` | yes | yes | yes | sha only (SRI unenforced) | cadenza, every commit | new drift gate + `.gitattributes` + review tax, permanently | **not recommended** — permanent cost for a temporary problem |
-| (c) npm publication | yes | yes | yes | **enforced I3 + real version** | cadenza release CI | registry name, version, publisher, provenance, release job | **preferred permanent shape — untaken decision** (§9) |
-| (d1) Actions artifact | n/a | n/a | no | none | — | — | **rejected** — not a dependency channel |
-| (d2) Release asset | yes | yes | yes | **enforced I3** | cadenza release CI | tag + changelog + release process + `contents: write` job | viable; a release decision, at the same gate as (c) |
-| (e-pack) consumer builds and packs | yes | yes | yes | verified sha + committed digest + **enforced I3** (§5.6) | consumer, explicit step | **documentation only** | **recommended temporary bridge** |
-| (e-link) `file:` + `--install-links` to a *directory* | yes | yes | yes | **none** — a machine path, no integrity, no revision | consumer, explicit step | documentation only | fallback for local development only |
-| (e-codeload) source tarball + build in place | no | no | no | enforced I3 on source | consumer, inside `node_modules` | none | rejected — build erased by `npm ci` |
+| Route | D1 build | D2 types+maps+`src` | D3 by package name | D4a identity recorded | D4b artifact checkable | Where the build runs | Cost to cadenza | Verdict |
+|---|---|---|---|---|---|---|---|---|
+| (a) `prepare` | yes | yes | yes | sha in the specifier | **no** — git SRI unenforced | consumer, **during install** | one line | **rejected** — runs dependency code under `--ignore-scripts` (§1.1) |
+| (b) committed `dist/` | yes | yes | yes | sha in the specifier | **no** — git SRI unenforced | cadenza, every commit | new drift gate + `.gitattributes` + review tax, permanently | **not recommended** — permanent cost for a temporary problem |
+| (c) npm publication | yes | yes | yes | **a real version number** | **yes** — enforced, plus registry provenance | cadenza release CI | registry name, version, publisher, provenance, release job | **preferred permanent shape — untaken decision** (§9) |
+| (d1) Actions artifact | n/a | n/a | no | no | no | — | — | **rejected** — not a dependency channel |
+| (d2) Release asset | yes | yes | yes | tag + version | **yes** — enforced | cadenza release CI | tag + changelog + release process + `contents: write` job | viable; a release decision, at the same gate as (c) |
+| (e-pack) consumer builds and packs | yes | yes | yes | committed sha + digest | **yes** — enforced (§5.6), no provenance | consumer, once per bump (2a) | **documentation only** | **recommended temporary bridge** |
+| (e-link) `file:` + `--install-links` to a *directory* | yes | yes | yes | **no** — a machine path, no revision | **no** — no integrity at all | consumer, explicit step | documentation only | fallback for local development only |
+| (e-codeload) source tarball + build in place | no | no | no | sha in the URL | on the *source* only | consumer, inside `node_modules` | none | rejected — build erased by `npm ci` |
 
 **The recommendation is two-part, and the parts are not alternatives.**
 
@@ -494,7 +542,7 @@ release decision at all, it should take (c) and not (d2). But **that gate has no
 
 ## 7. What the bridge obliges cadenza to, and what it does not
 
-**Obliges:** keeping the seven commands of §5.5 true. If cadenza's build acquires a step — a copy
+**Obliges:** keeping §5.5's bootstrap phase true. If cadenza's build acquires a step — a copy
 script, a second config — the documented bridge is wrong the same day, and rondo's CI breaks on a step
 rondo wrote. That is the ownership cost, and it is one-directional: cadenza can break its consumers by
 changing its build, and the only thing that fixes it structurally is a route where cadenza builds.
@@ -538,9 +586,12 @@ For the record, so that taking the bridge is not read as a commitment either way
 - **Whether the bridge should live in cadenza's README or a `docs/` page**, and whether cadenza ships a
   script that runs it. §11 row D5.
 - **Byte-reproducibility of `npm pack` across machines and platforms.** Measured stable across time
-  and across a clean rebuild on one Linux machine (§5.6); unmeasured on Windows or a different npm.
-  It is load-bearing rather than cosmetic, because the enforced lockfile hash turns a differing pack
-  into a red CI run (§11 row D6).
+  and across a clean rebuild on one Linux machine (§5.6); unmeasured on Windows, where §5.6 names two
+  reasons it may differ. It is load-bearing only for form 2b, because the enforced lockfile hash turns
+  a differing pack into a red CI run; the recommended form 2a packs once and does not depend on it
+  (§11 rows D6, D9).
+- **Whether cadenza pins its own emitted and checked-out line endings** (`newLine`, `.gitattributes`).
+  Proposed as worth taking and left out of the recommendation, because 2a does not need it (§11 row D9).
 - **Windows behaviour of a route (b) drift gate**, which is only owed if the gate overturns the
   recommendation.
 
@@ -575,10 +626,13 @@ is the honest question of who builds it."
   the tarball's sha256, and installs *that tarball* with `--ignore-scripts`.** Not a `file:` link to
   the checkout, and not a build inside `node_modules`. **It has two phases, and they are not
   interchangeable**: a one-time bootstrap that runs `npm install <tarball>` and commits the lockfile it
-  writes, and a recurring phase — every CI run, every fresh clone — that rebuilds the tarball at the
-  same path, verifies it with `sha256sum -c`, and then runs `npm ci --ignore-scripts`, which enforces
-  the committed lockfile rather than rewriting it. The bridge is documented in this repository, because
-  a delivery route the consumer reconstructs is not a route cadenza can be held to.
+  writes, and a recurring phase — every CI run, every fresh clone — that is `sha256sum -c` followed by
+  `npm ci --ignore-scripts`, which enforces the committed lockfile rather than rewriting it. **The
+  recurring phase rebuilds nothing: the consumer commits the `.tgz`.** A variant that re-clones,
+  rebuilds and re-packs on every run is documented for a consumer who refuses a vendored binary, and it
+  requires `npm pack` to be byte-identical on that consumer's platform, which is measured on one
+  platform only. The bridge is documented in this repository, because a delivery route the consumer
+  reconstructs is not a route cadenza can be held to.
 - **No lifecycle script is added.** `prepare` is refused, and the reason D-0033 gave for refusing it is
   **corrected rather than repeated**: rondo measured npm 10.9.2 running a git dependency's `prepare`
   *despite* `--ignore-scripts`, so the claim that it "would be skipped exactly where it is needed" is
@@ -610,13 +664,17 @@ say where they came from; the chain from the sha to the tarball is the documente
 something npm verifies. The `version` field cannot help either way: every build of every revision is
 `0.0.0`, so identity is the sha and the digest or it is nothing.
 
-**One consequence, stated because it is a running cost rather than a one-off.** Because the lockfile
-hash is enforced, `npm pack` must be byte-stable or the consumer's CI goes red. It was measured stable
-across repeated packs and across a full clean rebuild on one Linux machine with npm 10.9.2 (npm
-normalises entry mtimes when packing), and it was **not** measured across machines or on Windows.
-`package-lock.json` pins `typescript@7.0.2` exactly, which is what makes cross-machine stability
-plausible. If it turns out not to hold, the bridge is not lost — the consumer commits the `.tgz`
-instead of rebuilding it — but that is a different trade and would be recorded.
+**Why the `.tgz` is committed rather than rebuilt, stated because it is the least obvious part.**
+Because the lockfile hash is enforced, any recurring phase that re-packs must produce byte-identical
+bytes or the consumer's CI goes red on a correct tree. Packing was measured stable across repeated
+packs and across a full clean rebuild on one Linux machine with npm 10.9.2 — npm normalises entry
+mtimes when packing — and was **not** measured across platforms, where two things in cadenza are
+unpinned and could differ: `tsconfig.build.json` sets no `newLine`, and no `.gitattributes` holds the
+packed `src/` to LF in a Windows checkout. Committing the tarball removes the question rather than
+betting on it, at the price of a ~128 KB unreviewable blob in the consumer's history that is
+regenerable from `<sha>` at any time. Pinning those two things in cadenza would make the rebuilding
+variant safe everywhere; it is proposed separately and is deliberately not a precondition of this
+entry.
 
 **What the consumer receives.** The packed tarball, so the whole of D-0033's type contract:
 `dist/**/*.js`, `.d.ts`, `.d.ts.map`, `.js.map`, and `src/` — which is packed deliberately because both
@@ -632,9 +690,10 @@ cannot reach a working cadenza without lifecycle scripts: the clone or build fai
 `npm pack` produces a tarball that does not install; the bare specifier
 `import ... from "@suisya-systems/cadenza"` does not resolve, or `tsc --noEmit` under `module: NodeNext`
 cannot find the declarations; or the committed sha256 cannot be checked against what was rebuilt; or
-`npm ci` fails `EINTEGRITY` on a tarball rebuilt from the pinned sha, which would mean `npm pack` is
-not byte-stable on that platform and the recurring phase does not work there. Any of those means the
-bridge is a story rather than a route, and the answer is a real route — which is publication.
+`npm ci` fails `EINTEGRITY` against the committed tarball. An `EINTEGRITY` from the *rebuilding*
+variant is not a falsifier of this entry — it is the platform hazard the entry avoids by committing the
+tarball, and it falsifies only that variant. Any of the others means the bridge is a story rather than
+a route, and the answer is a real route — which is publication.
 
 **What later publication changes.** It supersedes this entry wholesale. The clone, the build, the pack
 and the recorded digest all disappear and the consumer takes an ordinary pinned dependency with an
@@ -660,11 +719,12 @@ Each row is a question this document had to answer and that the gate can overtur
 
 | # | Open decision | Recommendation | Reason |
 |---|---|---|---|
-| D1 | Which route is the **temporary bridge**? | **(e-pack)**, in two phases: bootstrap once (clone at sha → verify sha → `npm ci --ignore-scripts` → `npm run build` → `npm pack` → commit sha256 → `npm install` that tarball), then every CI run rebuilds it at the same path, checks `sha256sum -c`, and runs `npm ci --ignore-scripts` against the committed lockfile | It is the only route delivering build output, the full type contract, resolution by package name and a checkable identity while changing nothing about what cadenza is. Cost is one page of documentation, and it is removable without residue when publication lands |
+| D1 | Which route is the **temporary bridge**? | **(e-pack)**, in two phases: bootstrap once (clone at sha → verify sha → `npm ci --ignore-scripts` → `npm run build` → `npm pack` → commit sha256 → `npm install` that tarball), then **form 2a** for the recurring phase — commit the `.tgz`, and every CI run is `sha256sum -c` plus `npm ci --ignore-scripts` | It is the only route delivering build output, the full type contract, resolution by package name and a checkable identity while changing nothing about what cadenza is. Cost is one page of documentation, and it is removable without residue when publication lands |
 | D2 | Is a `prepare` script added? | **No** | It *works* — rondo measured npm 10.9.2 running it under `--ignore-scripts`, falsifying D-0033's stated reason — and that is why it is refused: it executes cadenza's build inside a consumer whose policy forbids dependency code at install (D-0004). continuo refused the same line for the same reason (`continuo D-0045`) |
 | D3 | Is `dist/` committed? | **No** | It would repair the existing git specifier, and it is the one route whose cost survives publication. It also needs a new drift gate — `check:package` cannot serve, because `build` cleans `dist/` first and would mask stale committed output — plus a `.gitattributes` that does not exist yet and an emitted diff in every review |
 | D4 | Is publication (c) or a Release asset (d2) taken now? | **Neither.** (c) is named the permanent shape; both are left for a separate gate | `docs/repository-policy.md` §3 leaves registry name, release process and publisher open; D-0033 calls a registry name a one-way door and stays `private: true`. (d2) is not the cheap half of (c): it needs a version, a tag, a changelog entry and a `contents: write` release job, and it buys a channel (c) would then replace. Overturnable in one direction only — a gate that wants a release should take (c) |
 | D5 | Where does the bridge specification live? | **A `docs/` page in cadenza**, referenced from `README.md`; no script shipped | A route the consumer reconstructs is folklore. A shipped script would be cadenza taking responsibility for running commands in the consumer's CI, which is the ownership the bridge deliberately leaves on the consumer's side |
-| D6 | `npm pack` byte-stability is load-bearing — is the evidence enough? | **Adopt the bridge on it, and treat Windows as owed.** Measured stable across repeated packs and across a full clean rebuild on one Linux machine, npm 10.9.2 (§5.6); npm normalises entry mtimes, and `typescript@7.0.2` is lockfile-pinned | It stopped being a curiosity once the lockfile hash turned out to be enforced: an unstable pack means `EINTEGRITY` on every CI run, not merely a weaker record. The residue is a cross-machine and Windows measurement, which the first consumer performs by existing. Fallback if it fails: commit the `.tgz` rather than rebuild it |
+| D6 | Does the recurring phase rebuild the tarball, or is the `.tgz` committed? | **Committed (form 2a).** Rebuild (2b) stays documented for a consumer who refuses a vendored binary, with its platform caveat attached | Once the lockfile hash turned out to be enforced, `npm pack` byte-stability stopped being a curiosity: under 2b an unstable pack is `EINTEGRITY` on every CI run, not a weaker record. It was measured stable across repeated packs and a full clean rebuild on one Linux machine (§5.6) and **not** across platforms, and §5.6 names two reasons it may differ on Windows (no `newLine`, no `.gitattributes`). 2a packs once and is immune to all of it; its price is a ~128 KB unreviewable blob in the consumer's history, regenerable from the sha at any time |
 | D7 | Does any route trim `src/` from the artifact to reduce its size? | **No, in every route** | Both `.js.map` and `.d.ts.map` name `../src/*.ts` relatively with no inlined source (D-0033). Removing `src/` is a decision to drop or redesign the maps, and needs its own entry |
 | D8 | If a release route is ever taken, what does the release job do? | **Build once, pack once, check *that* file with publint/attw, smoke-install it with `--ignore-scripts` on Ubuntu **and** Windows, record its sha256, upload those exact bytes** | Today's `package` job builds and lets both tools pack independently, retains no named `.tgz`, and runs on Ubuntu only. That is fine for checking packaging and wrong for shipping: without the chain, the checked bytes and the shipped bytes are two different packs of a directory rebuilt in between (`continuo D-0045` reaches the same rule from its side) |
+| D9 | Does cadenza harden its own output so a rebuilt pack is platform-independent — `newLine: "lf"` in `tsconfig.build.json`, and a `.gitattributes` holding `src/` (and `dist/`) to LF? | **Worth taking, and not required by the recommendation.** Out of scope for this document, which changes no files | It is small, it is the difference between form 2b working everywhere and working on one platform, and it is wanted anyway by any future route (b). It is deliberately not folded into the bridge decision: 2a does not need it, so making it a precondition would price the recommendation above what it costs. A gate that wants 2b as the default should take D9 with it |
