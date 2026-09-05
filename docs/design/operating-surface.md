@@ -204,26 +204,58 @@ picks the shape below.
 **Recommendation (`S-1`, `S-2`, `S-3`).** Add to cadenza:
 
 1. **A port**, `src/ports/human-decision.ts`, naming a value cadenza cannot compute and will not
-   mint — the record that a human decision was taken at a surface:
+   mint — the record that a human decision was taken at a surface, **about one named successor**:
 
    ```
    interface HumanDecisionRecord {
-     readonly decisionId: string;   // opaque; minted by whoever recorded it
-     readonly recordedBy: string;   // the surface's own identity, the contract's issuer
-     readonly subject: string;      // the contract_digest the decision was taken about
+     readonly decisionId: string;            // the store's key for this decision
+     readonly recordedBy: string;            // the surface's identity; the successor's issuer
+     readonly outcome: "approved" | "refused";
+     readonly predecessor: string | null;    // contract_digest replaced; null opens a lineage
+     readonly approved: string;              // contract_digest of the successor approved
    }
    ```
 
-   Three opaque strings, validated the way `issuer` and `grantee` already are
-   (`MAX_IDENTITY_LENGTH`, `parseIdentifier`). **No HTTP, browser, session, token or gate
-   vocabulary** — which is testable form 1 of #22's loose-coupling comment, and section 8 makes it
-   mechanical.
+   **`approved` is the field that makes this a decision rather than a permission slip**, and it is
+   the correction to the obvious shorter design. A record naming only the *predecessor* would let
+   any successor over that predecessor be issued under it — a decision about a two-key widening
+   would authorise a ten-key one. So the human approves a **specific** successor, identified by the
+   digest of the exact contract they were shown, which is #22's "evidence is presented before
+   approval" made mechanical. The consequence to plan for is real and belongs in rondo's build: the
+   widening must be **composed before it is presented**, because the digest is what is presented.
+
+   Validation is **three different rules, not one** — the natural mistake here is to reach for
+   `parseIdentifier`, which would reject every digest it was given. `predecessor` and `approved`
+   take `DIGEST_PATTERN` (`src/domain/digest.ts`, `sha256:` plus 64 lowercase hex — a string
+   `IDENTIFIER_PATTERN` refuses twice over, for the colon and for the length,
+   `src/domain/identifiers.ts:19`). `recordedBy` and `decisionId` take the identity rules
+   `delegationContract` already applies to `issuer` and `grantee` — non-empty, no control
+   characters, at most `MAX_IDENTITY_LENGTH` — which live in `requireIdentity`
+   (`src/domain/contract.ts:190-220`) and are *not* `parseIdentifier`; if the port is added, that
+   function is what gets shared or restated, and `S-2` says which. `outcome` is a closed union.
+   **No HTTP, browser, session, token or gate vocabulary** appears in any of it — testable form 1 of
+   #22's loose-coupling comment, made mechanical by section 8.
 
 2. **An application function**, `supersedeOnDecision(current, input, decision)`, which composes
-   `delegationContract(input)` and `adopt(current, next)` and adds exactly one refusal on top:
-   `next.issuer` must equal `decision.recordedBy`, and `decision.subject` must equal
-   `contractDigest(current)`. A widening whose issuer is not the surface that recorded the decision
-   is refused at issue time, in the library, rather than promised in prose.
+   `delegationContract(input)` and `adopt(current, next)` and adds four refusals in this order:
+
+   1. `decision.outcome` is not `"approved"` — a refusal record authorises nothing, and without this
+      check the same value that records a denial would issue the widening it denied;
+   2. `decision.predecessor` does not equal `current === null ? null : contractDigest(current)`;
+   3. `contractDigest(next)` does not equal `decision.approved` — the successor issued is not the
+      successor approved;
+   4. `next.issuer` does not equal `decision.recordedBy`.
+
+   Only then `adopt(current, next)`, whose lineage, grantee and project refusals are unchanged.
+   Check 3 is the one that carries the weight: it is what makes `approved` a binding rather than a
+   label, and it is why replaying a decision inside a lineage buys nothing — the digest names one
+   contract, and `adopt` refuses that contract a second time once `current` has moved past it.
+
+   **`decisionId` is carried and not consulted, deliberately.** It exists so a refusal, an audit row
+   and the store's decision record name the same decision; treating it as an authority would be a
+   claim cadenza cannot support. Its real duty — **one decision authorises at most one issuance** —
+   is *consumption*, which needs durability, and cadenza persists nothing (D-0026 §2). That duty is
+   the store's, and §7 carries it as the sixth thing the store owes.
 
 **Why `adopt()` itself is left alone.** `adopt` is also the initial-adoption path (`current === null`,
 `src/domain/supersession.ts:62-71`), it is on the exported surface (`src/index.ts:149-154`), and
@@ -234,12 +266,23 @@ new rule opt-in at the call site — which is what lets rondo adopt it in one co
 breaking change. The alternative — the check inside `adopt` — is stated as an option in `S-3`
 because it is the shape rondo D-0009's falsifier literally names, and a gate may prefer literal.
 
-**What this does *not* do, said plainly.** It does not authenticate anybody. `recordedBy` is a
-string the caller supplies, exactly as `issuer` is today. What it buys is that the *string the
-surface recorded* and the *string on the contract* can no longer differ silently — the class of
-error where a conductor issues a widening and stamps the surface's name on it is refused by a value
-check instead of by a code review. That is the same grade of guarantee cadenza already gives with
-the self-issue refusal, and it should be claimed at that grade and no higher.
+**What this does *not* do, said plainly, because the grade of the guarantee is the whole of its
+honesty.** It does not authenticate anybody, and it cannot detect a **fabricated** record: a caller
+that composes a `HumanDecisionRecord` naming the successor it wants and its own identity passes
+every check, exactly as a caller supplying any `issuer` does today. cadenza mints nothing and
+persists nothing, so it cannot tell a record that came from a surface from one that came from a
+loop. What the four checks buy is narrower and still worth having:
+
+- the successor **issued** and the successor **approved** are the same contract, byte for byte
+  through their digests, so a widening cannot grow between the screen and the call;
+- a **denial** cannot be spent as an approval;
+- the decision's predecessor and the contract's lineage cannot disagree;
+- the surface named on the contract and the surface named on the decision cannot differ.
+
+That is the same grade cadenza already gives with the self-issue refusal — a value check against a
+class of silent error, not an authority — and it should be claimed at that grade and no higher.
+Detecting fabrication needs a provenance the seam does not have; rondo D-0009's own falsifier
+(continuo recording an *authenticated* answerer) is the event that would supply one.
 
 **The option of doing nothing is real** and is `S-1`'s first alternative: leave cadenza untouched,
 and let the rule keep holding by rondo's omission until a conductor needs a widening. Its cost is
@@ -362,6 +405,12 @@ whoever's `S-7` says:
    change; it does not hand back the policy a past run used.
 5. **The lineage of contracts** (`supersedes` chains), so `adopt()` — and 4.3's issuer check — can be
    replayed against history rather than against the current head only.
+6. **The human-decision records themselves, and their consumption.** If `S-1` is taken, the store
+   holds each `HumanDecisionRecord` and enforces the one rule cadenza structurally cannot: **a
+   decision authorises at most one issuance**. Single-use needs durability, and cadenza persists
+   nothing (D-0026 §2), so a decision replayed after the store has marked it spent is refused by the
+   store or by nothing at all. This is the sixth fact and the newest; it does not exist today
+   because no widening has been issued yet.
 
 **Recommendation (`S-7`): rondo's store.** Not continuo's `task` table: continuo states that neither
 `task` nor `assessment` has DDL and that *"they are not designed by implication: the first Issue that
@@ -398,12 +447,27 @@ nothing and still speaks HTTP, because the coupling arrived as a hand-written ty
 is one new parametrized case, in the shape the file already uses for
 `no module says provider-neutral` (`:918-921`), but scoped and structural rather than a text sweep:
 
-**"no port names a transport"** — over `src/ports/**` only, parse the module and collect every
-**declared name**: interface and type-alias names, their members, enum members, exported function
-names and their parameter names. Fail if any of them, lowercased, contains one of a fixed word list:
-`http`, `https`, `url`, `uri`, `header`, `cookie`, `session`, `browser`, `socket`, `oidc`, `oauth`,
-`jwt`, `bearer`, `token`, `csrf`, `websocket`. Three properties make this the right shape rather than
-a bigger grep:
+**"no port names a transport"** — over `src/ports/**` only, parse the module and collect **every
+declared name in it**, not a list of the declaration forms somebody remembered. Enumerating forms is
+the losing game the externals allowlist already learned once (`test/.../import-boundaries.test.ts:156-164` records `<computed>`, then `createRequire`, then `"module"` without the prefix, each closed
+by name and each followed by another): a list of "interfaces, type aliases and functions" passes
+`export class HttpClient {}` and `export const sessionToken = ""` without comment. So the sweep is
+over the declared identifier of **every** declaration the parser reports — interface, type alias,
+enum, class, function, `const`/`let`/`var`, and every member and parameter of each, plus the local
+and exported names of a re-export — and it fails closed on a form nobody has thought of, exactly as
+the externals allowlist does. Fail if any of those names, lowercased, contains one of a fixed word
+list: `http`, `https`, `url`, `uri`, `header`, `cookie`, `session`, `browser`, `socket`, `oidc`,
+`oauth`, `jwt`, `bearer`, `token`, `csrf`, `websocket`.
+
+**And the case must be shown not to be vacuous**, which AGENTS.md requires of any PR that adds a
+check: *"plant the failure the check exists to catch, show it goes red, revert"*
+(`AGENTS.md:133-138`). One planted violation is not enough here, because the defect this rule guards
+against is a *missed declaration form*: plant one per form — an `export interface
+GateAnswerRequest { sessionToken: string }`, an `export class HttpClient {}`, an
+`export const sessionToken = ""`, a function parameter named `cookieJar` — and show each turns the
+case red on its own.
+
+Three further properties make this the right shape rather than a bigger grep:
 
 - **Declarations, not source text.** A doc comment that says *"a browser never reaches this layer"*
   is exactly the sentence a boundary reviewer wants to keep, and a text sweep would forbid it. The
@@ -456,8 +520,8 @@ recommend into existence: they are about verbs cadenza has no say in.
 | id | Decision | Gate | Recommendation | Reason |
 |---|---|---|---|---|
 | **S-1** | Does cadenza expose anything at all for the operating surface — a port and an application function (4.3), or nothing, leaving D-0009 part 2 to hold by rondo's omission? | cadenza | **Yes, the minimum in 4.3**: one port and one application function, scoped to the widening successor and to nothing else | Half of rondo D-0009's own falsifier fired at rondo D-0018 (`rondo DECISIONS.md:826-831`, `:2127`), so the remaining half is cadenza's; and rondo cannot satisfy D-0009 part 2 by calling cadenza from the surface, because its layer table refuses `src/access -> src/cadenza` (`rondo test/.../import-boundaries.test.ts:143-148`) |
-| **S-2** | What does the human-decision value carry? | cadenza | **Three opaque strings** — `decisionId`, `recordedBy`, `subject` (the predecessor's `contract_digest`) — validated like `issuer`/`grantee` and naming no transport | Anything richer is cadenza modelling a surface it cannot see; anything poorer cannot bind a decision to the contract it authorised. `subject` is what stops a decision taken about one contract from authorising a successor to another |
-| **S-3** | Where does the issuer-authority check live — a new `application/` function, or inside `adopt()`? | cadenza | **A new application function**, leaving `adopt()` byte-identical | `adopt` is also the initial-adoption path and is on the exported surface (`src/domain/supersession.ts:62-71`, `src/index.ts:149-154`); a check added there changes every existing caller. The alternative is listed because rondo D-0009's falsifier names `adopt()` literally, and a gate may prefer the literal reading |
+| **S-2** | What does the human-decision value carry, and under which validators? | cadenza | **Five fields**: `decisionId`, `recordedBy`, `outcome` (`approved`/`refused`), `predecessor` and `approved`, the last two being `contract_digest`s. **Three validators, not one** — `DIGEST_PATTERN` for the two digests, the identity rules of `requireIdentity` for the two strings, a closed union for `outcome`. The gate also decides whether `requireIdentity` is shared out of `src/domain/contract.ts:190-220` or restated | `approved` is what stops a decision about a two-key widening from authorising a ten-key one; `outcome` is what stops a denial being spent as an approval. The validator split is not a nicety: `parseIdentifier` refuses every digest it is given, for the colon and for the length (`src/domain/identifiers.ts:19`), so one rule for all five fields cannot work |
+| **S-3** | Where do the four decision checks live — a new `application/` function, or inside `adopt()`? | cadenza | **A new application function**, leaving `adopt()` byte-identical | `adopt` is also the initial-adoption path and is on the exported surface (`src/domain/supersession.ts:62-71`, `src/index.ts:149-154`); a check added there changes every existing caller. The alternative is listed because rondo D-0009's falsifier names `adopt()` literally, and a gate may prefer the literal reading |
 | **S-4** | Is the first cut chat-primary (A, as #22 settled) or the decision list (B's centre column)? | rondo | **Keep B as the endpoint and build the gate panes first**: list, detail, `answer`, `close --outcome withdrawn` | B's rows ship today as `continuo.gate.list/1` (`continuo src/gate/cli.ts:355-366`); A's conversation has no store in any repository, and D-0009 puts this surface on the critical path of every gate. #22's reason for A-then-B ("both read the same data model") is unaffected — only which half has one has changed |
 | **S-5** | Is the OIDC subject what is passed as continuo's `--actor-id`, and what bounds the set of approvers? | rondo | **Yes, verbatim**, with the *surface's* identity as the contract `issuer` (two fields, two questions); and an **allowlist of OIDC subjects, size one for lap 1**, checked in rondo's application layer. **Precondition to verify first**: whether the chosen provider permits the redirect URI a LAN-reached console needs (5.2) | continuo records the actor id on the caller's word (`src/gate/cli.ts:126-129`), so an identity the surface did not choose is the only thing that makes the field worth reading. #22 fixes that access points never multiply the approver set; an allowlist is the smallest thing that makes that checkable |
 | **S-6** | LAN-first: does the host bind the LAN interface, or bind loopback with the LAN reached another way? | rondo | **Keep LAN-first**; decide the binding explicitly, together with `S-5` | Every rendered source is a local file or a child process (5.3), so LAN-first is where the data is rather than a posture — but the binding choice is what determines whether `S-5`'s redirect constraint bites |
@@ -465,7 +529,7 @@ recommend into existence: they are about verbs cadenza has no say in.
 | **S-8** | Where does the operator conversation live? | rondo | **rondo's store**, and **not** the slot that holds a gate answer | #22 recorded it as undecided and its cross-link says #40 answered it; #40's document does not (none of `conductor.md`'s seventeen rows is the conversation). `gate_transition.body` is the verbatim human answer, and prose in that slot records as approval (`continuo docs/production-schema.md:1378-1383`) |
 | **S-9** | Once a console exists, who acks the `presented` relay, and does the dropbox stay a second presentation channel? | continuo | **Not cadenza's to recommend.** Stated because the surface cannot answer a gate without it: `answerGate` admits only stage `presented`, that stage is reached only on the relay's ack, and `gate present` / `deliver` / `ack` carry no `--json` | `continuo src/gate/operator.ts:99,645`, `src/gate/cli.ts:800-836`; D-0076 assigns the dropbox to the operator, and a console makes that channel a duplicate of itself. Acking a relay nobody delivered records a delivery that did not happen |
 | **S-10** | How does the console read run and belt state, `awaiting_user` and the outbox? | continuo | **A read verb**, not a second reader of continuo's database | `run` has exactly `admit` and `close` (`continuo src/control_plane/run_cli.ts:469,517`), and rondo D-0015 rule 1 keeps continuo behind a CLI process boundary. The pane with no read path is exactly where somebody opens the SQLite file instead |
-| **S-11** | Is the "no port names a transport" case added, and with which word list? | cadenza | **Add it** in the shape §8 describes — declared names under `src/ports/**` only, structural rather than a text sweep — with the sixteen-word starting list as the part to argue about | The import allowlists already refuse `node:http`; what they cannot see is a hand-written `interface GateAnswerRequest { sessionToken: string }`, which is precisely the leak #22's testable form 1 names |
+| **S-11** | Is the "no port names a transport" case added, and with which word list? | cadenza | **Add it** in the shape §8 describes — **every** declared identifier under `src/ports/**`, not an enumerated set of declaration forms, structural rather than a text sweep, with one planted violation per form to show it is not vacuous (`AGENTS.md:133-138`). The sixteen-word starting list is the part to argue about | The import allowlists already refuse `node:http`; what they cannot see is a hand-written `interface GateAnswerRequest { sessionToken: string }`, which is precisely the leak #22's testable form 1 names. A form-by-form list would pass `export class HttpClient {}` and `export const sessionToken = ""`, which is the same losing game the externals allowlist already played once (`test/.../import-boundaries.test.ts:156-164`) |
 
 Two things that are **not** decisions here and are recorded so the design does not silently depend on
 them: continuo growing an authenticated answerer (which would supersede rondo D-0009 and shrink `S-1`
