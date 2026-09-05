@@ -2670,7 +2670,7 @@ this:
 
 | # | rule | error |
 |---|---|---|
-| 1 | the input table is closed: no member this build does not know | `InvalidPolicyError` |
+| 1 | the input is a table, and a closed one: no member this build does not know | `InvalidPolicyError` |
 | 2 | `vocabularyVersion` is a version this build knows | `UnknownVocabularyVersionError` |
 | 3 | every `granted` key is in that version | `UnknownCapabilityError` |
 | 4 | every `askable` key is in that version | `UnknownCapabilityError` |
@@ -2690,7 +2690,14 @@ aligning them would suggest a correspondence between two rule sets that only par
 
 **Why the closed-table check is first.** It is the only rule that is about the *shape of the
 request* rather than about a field's value: a caller who misspelled a member is told that, rather
-than being told something about the default the misspelling left in place.
+than being told something about the default the misspelling left in place. Being first also means
+it is what stands between a caller who passed nothing at all and JavaScript's own `TypeError` --
+every refusal here is named, and that has to include the least careful call.
+
+**The bounded fields are bounded before they are copied.** A declared length is the caller's, so a
+snapshot taken before the ceiling is applied would let a length of a billion allocate a billion
+slots on the way to being refused. The copy is taken one past the ceiling, which is all that is
+needed to know the ceiling was exceeded.
 
 **And every element of a caller's array is read exactly once.** An array index may be an accessor,
 and `Array.isArray` is true of such an array and of a `Proxy` over one, so a validate-then-re-read

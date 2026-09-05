@@ -186,8 +186,16 @@ const EXECUTOR_POLICY_KEYS = new Set(["roleName", "modelTier", "reportingDuties"
  * would be a second thing that can drift apart while both look right.
  */
 export function agentType(input: AgentTypeInput): AgentType {
-  // Rule 1.
-  refuseUnknownMembers(input, INPUT_KEYS, "the agent-type record");
+  // Rule 1. The table check comes before the closed-member check for a plain
+  // reason: `Object.keys(null)` throws a native `TypeError`, and a caller who
+  // passed nothing at all would meet JavaScript's refusal instead of this
+  // module's. Every refusal here is named (D-0007's sibling requirement), and
+  // "named" has to include the least careful call.
+  refuseUnknownMembers(
+    requireTable(input, "the agent-type record"),
+    INPUT_KEYS,
+    "the agent-type record",
+  );
 
   const version = requireKnownVocabularyVersion(input.vocabularyVersion);
   const vocabulary = vocabularyFor(version) as ReadonlySet<string>;
@@ -384,10 +392,22 @@ function requireExecutorPolicy(value: unknown): ExecutorPolicy {
   // into the payload and make `digestOf` throw where a named refusal was
   // promised. This module exists to make an invalid record unreachable, and
   // "unreachable" has to hold against the exotic caller too.
-  const entries = [...supplied];
+  // The copy is **bounded**, and that is not caution for its own sake: the
+  // length is the caller's, so spreading first would let a declared length of a
+  // billion allocate a billion slots before the ceiling below refused it.
+  // Slicing one past the ceiling is all that is needed to know the ceiling was
+  // exceeded, and going through `Array.prototype` rather than through
+  // `supplied.slice` keeps a Proxy from supplying the method that does the
+  // copying.
+  const declared = supplied.length;
+  const entries = Array.prototype.slice.call(
+    supplied,
+    0,
+    MAX_REPORTING_DUTIES + 1,
+  ) as readonly unknown[];
   if (entries.length > MAX_REPORTING_DUTIES) {
     throw new InvalidPolicyError(
-      `executor_policy.reporting_duties holds ${entries.length} entries, which is more than ` +
+      `executor_policy.reporting_duties holds ${declared} entries, which is more than ` +
         `the ${MAX_REPORTING_DUTIES} allowed`,
     );
   }

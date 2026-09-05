@@ -397,6 +397,28 @@ describe("agentType", () => {
     expect(caught === undefined || caught instanceof InvalidPolicyError).toBe(true);
   });
 
+  test("refuses a call that passed no table at all, by name", () => {
+    // `Object.keys(null)` throws a native TypeError, so without the table
+    // check the least careful caller would meet JavaScript's refusal rather
+    // than this module's.
+    for (const value of [null, undefined, 7, "reviewer", ["reviewer"]]) {
+      refusal(InvalidPolicyError, () => agentType(value as unknown as AgentTypeInput));
+    }
+  });
+
+  test("refuses an over-long reporting list without first copying it", () => {
+    // The length is the caller's. A snapshot taken before the ceiling was
+    // applied would allocate the declared length on the way to refusing it, so
+    // the refusal has to come first -- asserted here with a length no machine
+    // should try to materialise.
+    const enormous: string[] = [];
+    Object.defineProperty(enormous, "length", { value: 2 ** 31, writable: false });
+    const caught = refusal(InvalidPolicyError, () =>
+      agentType(valid({ executorPolicy: executorPolicy({ reportingDuties: enormous }) })),
+    );
+    expect(caught.message).toContain(String(MAX_REPORTING_DUTIES));
+  });
+
   // --- the order of the refusals ------------------------------------------
 
   test("reports the earlier rule when an input is wrong in more than one way", () => {
