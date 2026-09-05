@@ -16,11 +16,10 @@
  * digested value (D-0015).
  */
 
-import { compareByCodePoint } from "./canonical-json.js";
 import {
-  isCapabilityKey,
-  KNOWN_VOCABULARY_VERSIONS,
-  MAX_CAPABILITY_KEY_LENGTH,
+  canonicalCapabilityKeys,
+  refuseCapabilityOverlap,
+  requireKnownVocabularyVersion,
   vocabularyFor,
 } from "./capability.js";
 import { DIGEST_PATTERN } from "./digest.js";
@@ -29,10 +28,7 @@ import {
   InvalidDigestError,
   InvalidIdentifierError,
   InvalidIdentityError,
-  OverlappingCapabilityError,
   SelfIssuedContractError,
-  UnknownCapabilityError,
-  UnknownVocabularyVersionError,
 } from "./errors.js";
 import { parseIdentifier } from "./identifiers.js";
 import {
@@ -113,12 +109,12 @@ export interface DelegationContractInput {
  * implementation happened to write first.
  */
 export function delegationContract(input: DelegationContractInput): DelegationContract {
-  const version = requireKnownVersion(input.vocabularyVersion);
+  const version = requireKnownVocabularyVersion(input.vocabularyVersion);
   const vocabulary = vocabularyFor(version) as ReadonlySet<string>;
 
-  const granted = canonicalKeys(input.granted, "granted", version, vocabulary);
-  const askable = canonicalKeys(input.askable, "askable", version, vocabulary);
-  refuseOverlap(granted, askable);
+  const granted = canonicalCapabilityKeys(input.granted, "granted", version, vocabulary);
+  const askable = canonicalCapabilityKeys(input.askable, "askable", version, vocabulary);
+  refuseCapabilityOverlap(granted, askable);
 
   const issuer = requireIdentity(input.issuer, "issuer");
   const grantee = requireIdentity(input.grantee, "grantee");
@@ -173,74 +169,13 @@ export function requireContract(value: unknown): DelegationContract {
   return value;
 }
 
-/** Rule 1. A version this build does not know refuses the whole contract. */
-function requireKnownVersion(value: unknown): number {
-  if (
-    typeof value !== "number" ||
-    !Number.isInteger(value) ||
-    !KNOWN_VOCABULARY_VERSIONS.has(value)
-  ) {
-    throw new UnknownVocabularyVersionError(
-      `vocabulary_version ${describe(value)} is not a capability vocabulary this build knows: ` +
-        `expected one of ${known(KNOWN_VOCABULARY_VERSIONS)}`,
-    );
-  }
-  return value;
-}
-
 /**
- * Rule 2, plus the canonical form.
+ * Rules 1, 2 and 3 are `src/domain/capability.ts`'s.
  *
- * A key is checked against the vocabulary the contract **pinned**, never the
- * newest this build knows: a contract that gained meaning it did not have when
- * it was issued is the drift D-0026 section 1 refuses. The refusal names the
- * version for that reason -- "unknown capability" on its own sends the reader
- * hunting for a typo when the fault is a contract pinned one version too low.
+ * They moved there when the agent-type record (D-0034) needed the same three
+ * rules over the same vocabulary; the sequence below is still this module's,
+ * and `delegationContract()` is still the only place that runs all of it.
  */
-function canonicalKeys(
-  values: readonly string[],
-  field: string,
-  version: number,
-  vocabulary: ReadonlySet<string>,
-): readonly string[] {
-  if (!Array.isArray(values)) {
-    throw new UnknownCapabilityError(
-      `${field} must be a list of capability keys, got ${pythonTypeName(values)}`,
-    );
-  }
-  for (const value of values) {
-    if (!isCapabilityKey(value) || !vocabulary.has(value)) {
-      throw new UnknownCapabilityError(
-        `${field} names ${describe(value)}, which is not a capability in vocabulary ` +
-          `version ${version}` +
-          (typeof value === "string" && value.length > MAX_CAPABILITY_KEY_LENGTH
-            ? " (and is longer than a capability key may be)"
-            : ""),
-      );
-    }
-  }
-  // Sorted and de-duplicated, so two generators that mean the same grant produce
-  // the same value and therefore the same digest (design document section 4).
-  return Object.freeze([...new Set(values)].sort(compareByCodePoint));
-}
-
-/**
- * Rule 3. An overlap is the one shape that would leave an action classifiable
- * two ways, and refusing beats inventing a precedence at classification time --
- * the move G1 section 5.4 makes for a colliding namespace.
- */
-function refuseOverlap(granted: readonly string[], askable: readonly string[]): void {
-  const asked = new Set(askable);
-  // `granted` is already in code-point order, so the key named is a function of
-  // the contract rather than of the order the caller wrote its lists in.
-  for (const key of granted) {
-    if (asked.has(key)) {
-      throw new OverlappingCapabilityError(
-        `capability ${pythonAscii(key)} is both granted and askable: the two sets are disjoint`,
-      );
-    }
-  }
-}
 
 /**
  * Rule 4. Opaque, but not unbounded (design document section 4.1).
@@ -337,24 +272,4 @@ function hasLoneSurrogate(value: string): boolean {
     return true;
   }
   return false;
-}
-
-/**
- * A value in a refusal message: quoted if it is a string, named if it is not.
- *
- * Both branches escape. A non-string is reached only from a JavaScript caller or
- * a cast, and `String(value)` on one can still carry any text at all --
- * `Symbol("\u30c6")` stringifies to `Symbol(\u30c6)` -- so the branch that
- * exists for malformed input is exactly the branch that must not be the one that
- * puts non-ASCII on a cp932 console (D-0007).
- */
-function describe(value: unknown): string {
-  return typeof value === "string" ? pythonAscii(value) : escapeNonAscii(String(value));
-}
-
-function known(versions: ReadonlySet<number>): string {
-  return [...versions]
-    .sort((left, right) => left - right)
-    .map((version) => String(version))
-    .join(", ");
 }

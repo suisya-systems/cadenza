@@ -7,6 +7,14 @@
  * three-valued classifier, and supersession with onward delegation. G2's belt is
  * complete as far as D-0026 and D-0027 fix it.
  *
+ * Beside G2 rather than inside it: the **agent-type record** (D-0031, with its
+ * schema fixed by D-0034) -- a frozen value carrying two capability key sets, a
+ * loop policy the conductor reads, an executor policy nothing here reads, and
+ * its own `agent_type_digest`, plus the renderer that turns one into a
+ * `DelegationContractInput`. It is not a second authority: the sets are inputs
+ * to contract construction, and `delegationContract()` remains the only
+ * constructor.
+ *
  * G1's answer to "given a name an operator typed, which project is that?" needs
  * composition and resolution, and both are here now: the digest pilot brought
  * the configuration digest and the value types it reads, and the composition
@@ -28,13 +36,31 @@
  * {@link classify}, which is the whole of cadenza's relationship to gates. The
  * verbs belong to continuo.
  */
+
 export {
   LOCAL_FILENAME,
   TomlCatalogSource,
   TRACKED_FILENAME,
 } from "./adapters/toml-catalog/loader.js";
+export {
+  contractInputForAgentType,
+  type IssuanceParties,
+} from "./application/agent-type-issuance.js";
 export { type Catalog, composeCatalog, SUPPORTED_SCHEMA_VERSIONS } from "./application/compose.js";
 export { resolveProject } from "./application/resolve.js";
+export {
+  type AgentType,
+  type AgentTypeInput,
+  agentType,
+  agentTypeDigest,
+  agentTypePayload,
+  type ExecutorPolicy,
+  isAgentType,
+  type LoopPolicy,
+  MAX_POLICY_THRESHOLD,
+  MAX_REPORTING_DUTIES,
+  requireAgentType,
+} from "./domain/agent-type.js";
 export {
   type CanonicalValue,
   canonicalJson,
@@ -87,12 +113,14 @@ export {
   AmplifiedGrantError,
   CadenzaError,
   CatalogError,
+  ForgedAgentTypeError,
   ForgedContractError,
   InvalidBaseBranchError,
   InvalidCloneSourceError,
   InvalidDigestError,
   InvalidIdentifierError,
   InvalidIdentityError,
+  InvalidPolicyError,
   MissingFieldError,
   NameCollisionError,
   OverlappingCapabilityError,

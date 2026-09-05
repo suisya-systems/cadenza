@@ -366,6 +366,49 @@ describe("delegationContract", () => {
     }
   });
 
+  // --- the wording of the three rules capability.ts now owns ---------------
+
+  test("spells rules 1, 2 and 3 exactly as it did before they moved", () => {
+    // Rules 1-3 live in `src/domain/capability.ts`, because the agent-type
+    // record (D-0034) reads the same vocabulary and a second implementation
+    // would be a second thing that can drift. Every other assertion in this
+    // file checks a substring, so the move could have reflowed any of these
+    // four messages and stayed green -- which is exactly the kind of silent
+    // change a refactor is supposed to be prevented from making. These are the
+    // bytes, pinned.
+    const overLength = `${"a".repeat(40)}.${"b".repeat(40)}`;
+
+    expect(
+      refusal(UnknownVocabularyVersionError, () =>
+        delegationContract(valid({ vocabularyVersion: 2 })),
+      ).message,
+    ).toBe(
+      "vocabulary_version 2 is not a capability vocabulary this build knows: expected one of 1",
+    );
+    expect(
+      refusal(UnknownCapabilityError, () =>
+        delegationContract(valid({ granted: ["network.fetch"] })),
+      ).message,
+    ).toBe("granted names 'network.fetch', which is not a capability in vocabulary version 1");
+    expect(
+      refusal(UnknownCapabilityError, () => delegationContract(valid({ askable: [overLength] })))
+        .message,
+    ).toBe(
+      `askable names '${overLength}', which is not a capability in vocabulary version 1 ` +
+        "(and is longer than a capability key may be)",
+    );
+    expect(
+      refusal(UnknownCapabilityError, () =>
+        delegationContract(valid({ granted: 1 as unknown as readonly string[] })),
+      ).message,
+    ).toBe("granted must be a list of capability keys, got int");
+    expect(
+      refusal(OverlappingCapabilityError, () =>
+        delegationContract(valid({ granted: ["command.run"], askable: ["command.run"] })),
+      ).message,
+    ).toBe("capability 'command.run' is both granted and askable: the two sets are disjoint");
+  });
+
   // --- the negative property the classifier depends on ---------------------
 
   test("every key of a constructed contract is in the vocabulary it pinned", () => {
