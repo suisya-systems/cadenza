@@ -140,6 +140,14 @@ or takes a packed tarball. **Nothing is published**: the package is
 `private: true` at `0.0.0`, and the first publish is still an untaken decision
 (`docs/repository-policy.md` section 3).
 
+Until it is published, the supported way to depend on cadenza is
+[`docs/artifact-delivery-bridge.md`](docs/artifact-delivery-bridge.md): clone at
+a pinned commit sha, build, `npm pack`, commit the tarball and its sha256, and
+install that tarball with `--ignore-scripts` - the exact commands, the portable
+digest check and the rebuild variant's platform caveat are on that page
+(`DECISIONS.md` D-0035). cadenza adds no `prepare` script: the build runs in a
+step the consumer wrote, never during `npm install`.
+
 One CI job runs Python, and it is not a build step: the differential oracle at
 `scripts/oracle/dump_config_digest.py` re-derives what CPython's JSON encoder
 says about the digest corpus and compares it with the committed vector. It needs
@@ -281,6 +289,12 @@ a boundary review harder than it needs to be.
   have been taken: C-17 (D-0029: the host is `rondo`), C-12 (D-0032) and
   C-1/C-2/C-3/C-10/C-16 (D-0031, the agent-type record). The nine still open
   are rondo's and continuo's, and C-9 is retired unreached.
+- `docs/artifact-delivery-bridge.md` - the supported way to depend on cadenza
+  until it publishes: the two phases, the exact commands, the portable digest
+  check, and what the bridge does not give you (D-0035).
+- `docs/design/artifact-delivery.md` - the argument behind D-0035: the eight
+  routes weighed for getting a built cadenza across the install boundary, what
+  was measured, and why the bridge is the recommended one.
 - `DECISIONS.md` - the append-only record of design decisions. Cadenza's own
   numbering space, starting at D-0001.
 - `docs/porting.md` - the TypeScript rewrite: the oracle order, the parity

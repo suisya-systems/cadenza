@@ -1,0 +1,14 @@
+# Line endings for the bytes that leave this repository (DECISIONS.md D-0035,
+# row D9).
+#
+# `files` packs `src/` beside `dist/`, so the sources in a tarball are whatever
+# the packer's checkout holds. Without an attribute, a clone under
+# `core.autocrlf=true` writes CRLF `.ts` files and packs different bytes than a
+# Linux clone does, with no compiler involved at all. `eol=lf` makes the working
+# tree LF on every platform, so a rebuilt tarball is the same tarball.
+#
+# `dist/` is gitignored today and the rule is therefore inert for it; it is
+# written because the emitted tree is the other half of the same question, and a
+# route that ever tracks build output must not have to remember this.
+src/** text eol=lf
+dist/** text eol=lf

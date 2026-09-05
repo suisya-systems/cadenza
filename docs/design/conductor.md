@@ -811,9 +811,10 @@ rondo consume both, so this must be said separately rather than by generalisatio
 | build | a seven-command `build` producing `dist/`, gitignored and absent from a fresh checkout | `npm run build` (clean, then `tsc -p tsconfig.build.json`) producing `dist/`, gitignored and absent from a fresh checkout, with `publint` and `attw` over the packed tarball in the merge gate (D-0033; D-0008's "no build output yet" was still current when this row was first read) |
 | `prepare` | none, which is what breaks option B | none, and adding one collides with D-0004 exactly as it does for continuo (D-0009) |
 
-So option A needs a publication step in each repository; option B is broken in both for the same
-`prepare`/`--ignore-scripts` reason, and in cadenza it would install a package with no entry point at
-all; option C's lockfile objection applies to whoever holds the lockfile, which is rondo. **What
+So option A needs a publication step in each repository; option B is refused in both for the same
+`prepare`/`--ignore-scripts` reason — refused rather than broken, which is the correction D-0035
+makes: see the table row below — and in cadenza it would additionally install a package with no entry
+point at all; option C's lockfile objection applies to whoever holds the lockfile, which is rondo. **What
 cadenza owes before rondo can import it is therefore a decision D-0008 deliberately deferred — that
 it emits build output and declares an entry point.** That is not taken here and is not C-8: it is
 cadenza's own, and it is the concrete shape of D-0029's "two packages must become consumable instead
@@ -822,15 +823,25 @@ of one".
 **Taken, on 2026-09-05, as D-0033.** cadenza now has the entry point, the build and the `files`
 allowlist, and its packed tarball is checked by `publint` and `attw` in the merge gate. Two things in
 this section are unchanged by that: **nothing is published** — cadenza is still `private: true` at
-`0.0.0`, so option A still needs a publication step in each repository — and option B is still broken
+`0.0.0`, so option A still needs a publication step in each repository — and option B is still closed
 for the `prepare`/`--ignore-scripts` reason, which no amount of build output cures. What has changed
 is only the last clause of the sentence above it: a git dependency on cadenza would now install a
 package whose entry point exists but whose `dist/` was never built.
 
+**Corrected on 2026-09-05 by D-0035.** The `prepare`/`--ignore-scripts` reason above and in the table
+row below was stated as *`--ignore-scripts` skips a `prepare`, so the install is empty*. That is
+false: rondo measured npm 10.9.2 running a git dependency's `prepare` **despite** `--ignore-scripts`,
+against a package built for the purpose (`rondo D-0001`, option (a)). The conclusion survives and the
+reason is replaced by a stronger one — a `prepare` **works**, and that is why it is refused: it runs
+the dependency's build inside a consumer whose install policy exists to stop dependency code running
+at install time (D-0004; continuo reaches the same place in `continuo D-0045`). Option B is therefore
+*declined*, not *broken*, and the delivery question it leaves open is answered by D-0035's bridge
+rather than by a lifecycle script. `docs/design/artifact-delivery.md` §1.1 carries the measurement.
+
 | Option | Status today |
 |---|---|
 | **A. the published npm package** | The package does not exist: `npm view @suisya-systems/continuo version` returns `E404` (run 2026-09-04), and continuo's HEAD `package.json` is still `"private": true` at `"version": "0.0.0"`. D-0045 states in its own consequences that it "changes no files other than `DECISIONS.md`" |
-| **B. a git dependency pinned by sha** | npm builds a git dependency by running its `prepare` script and continuo has none (`grep prepack\|prepare` on continuo's `package.json`: no matches), so the install produces a package whose `main: ./dist/index.js` points at nothing. Adding `prepare` collides with **both** repositories' `--ignore-scripts` policy (continuo D-0009, cadenza D-0004), so cadenza's CI would skip it and install an empty package — a green install producing an unimportable module |
+| **B. a git dependency pinned by sha** | npm builds a git dependency by running its `prepare` script and continuo has none (`grep prepack\|prepare` on continuo's `package.json`: no matches), so the install produces a package whose `main: ./dist/index.js` points at nothing. Adding `prepare` collides with **both** repositories' `--ignore-scripts` policy (continuo D-0009, cadenza D-0004) — **and it collides by running, not by being skipped**: npm 10.9.2 runs a git dependency's `prepare` despite `--ignore-scripts` (measured, `rondo D-0001`), so a `prepare` here would execute the dependency's build inside a consumer whose install policy forbids exactly that. Refused for that reason (D-0035), not because the install would come out empty |
 | **C. a cross-repository workspace** | There is no monorepo to add a workspace to: two git repositories, two lockfiles, no `workspaces` field in either `package.json`. A `file:`/workspace link records a path rather than a resolved artifact, so cadenza's lockfile stops answering "which continuo is this" — which is the property D-0004 and `npm ci --ignore-scripts` exist to hold. And `dist/` is gitignored and absent from the checkout, so the link resolves to nothing until somebody runs continuo's seven-command `build`, which `--ignore-scripts` will never do |
 
 **Three cadenza-side facts used to ride on this, and D-0029 retires all three.** They were the cost
