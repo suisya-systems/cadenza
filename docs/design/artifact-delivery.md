@@ -352,10 +352,14 @@ git -C vendor/cadenza-src checkout <sha>
 git -C vendor/cadenza-src rev-parse HEAD                       # must equal <sha>        [I1]
 npm --prefix vendor/cadenza-src ci --ignore-scripts
 npm --prefix vendor/cadenza-src run build
-npm pack vendor/cadenza-src --pack-destination vendor          # -> vendor/suisya-systems-cadenza-0.0.0.tgz
+npm pack ./vendor/cadenza-src --pack-destination vendor        # -> vendor/suisya-systems-cadenza-0.0.0.tgz
 node vendor/pin.mjs record                                     # writes vendor/cadenza.tgz.sha256   [I2]
-npm install --ignore-scripts vendor/suisya-systems-cadenza-0.0.0.tgz                    [I3, written]
+npm install --ignore-scripts ./vendor/suisya-systems-cadenza-0.0.0.tgz                  [I3, written]
 ```
+
+(The `./` on the local paths is load-bearing and was missing when this section was first written: npm
+reads a bare `vendor/cadenza-src` as the GitHub shorthand `github:vendor/cadenza-src` and tries to
+clone it. Corrected here and in the bridge page, where the commands are normative.)
 
 **Committed afterwards, and this list is the contract:** the `.tgz` itself, `vendor/cadenza.tgz.sha256`,
 `vendor/pin.mjs`, `<sha>` (in the consumer's own decision record or a pinning file), and the
@@ -418,7 +422,7 @@ git clone ... vendor/cadenza-src && git -C vendor/cadenza-src checkout <sha>
 git -C vendor/cadenza-src rev-parse HEAD                       # must equal <sha>        [I1 checked]
 npm --prefix vendor/cadenza-src ci --ignore-scripts
 npm --prefix vendor/cadenza-src run build
-npm pack vendor/cadenza-src --pack-destination vendor          # same path as phase 1
+npm pack ./vendor/cadenza-src --pack-destination vendor        # same path as phase 1
 node vendor/pin.mjs check                                      # fails loudly on drift   [I2 checked]
 npm ci --ignore-scripts                                        # enforces the lockfile   [I3 checked]
 ```

@@ -47,10 +47,15 @@ $ git -C vendor/cadenza-src checkout <sha>
 $ git -C vendor/cadenza-src rev-parse HEAD                    # must print <sha>
 $ npm --prefix vendor/cadenza-src ci --ignore-scripts
 $ npm --prefix vendor/cadenza-src run build
-$ npm pack vendor/cadenza-src --pack-destination vendor       # -> vendor/suisya-systems-cadenza-0.0.0.tgz
+$ npm pack ./vendor/cadenza-src --pack-destination vendor     # -> vendor/suisya-systems-cadenza-0.0.0.tgz
 $ node vendor/pin.mjs record                                  # writes vendor/cadenza.tgz.sha256
-$ npm install --ignore-scripts vendor/suisya-systems-cadenza-0.0.0.tgz
+$ npm install --ignore-scripts ./vendor/suisya-systems-cadenza-0.0.0.tgz
 ```
+
+**The `./` is not decoration.** npm parses a bare `vendor/cadenza-src` as the GitHub shorthand
+`github:vendor/cadenza-src` and tries to clone it (measured: `Host key verification failed`), so every
+local path handed to `npm pack` or `npm install` is written `./...` here. `--prefix` takes a path
+rather than a package spec and needs no prefix.
 
 The last command is an `npm install` on purpose: it is what *writes* the dependency entry and the
 integrity hash into your `package.json` and `package-lock.json`. Phase 2 never installs — it
@@ -124,7 +129,7 @@ $ git -C vendor/cadenza-src checkout <sha>
 $ git -C vendor/cadenza-src rev-parse HEAD                    # must print <sha>
 $ npm --prefix vendor/cadenza-src ci --ignore-scripts
 $ npm --prefix vendor/cadenza-src run build
-$ npm pack vendor/cadenza-src --pack-destination vendor       # same path as phase 1
+$ npm pack ./vendor/cadenza-src --pack-destination vendor     # same path as phase 1
 $ node vendor/pin.mjs check                                   # fails loudly on drift
 $ npm ci --ignore-scripts                                     # enforces the lockfile
 ```
