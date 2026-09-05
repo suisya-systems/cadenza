@@ -2540,7 +2540,8 @@ mtimes when packing — and was **not** measured across platforms, where two thi
 unpinned and could differ: `tsconfig.build.json` set no `newLine`, and no `.gitattributes` held the
 packed `src/` to LF in a Windows checkout. Committing the tarball removes the question rather than
 betting on it, at the price of a ~128 KB unreviewable blob in the consumer's history that is
-regenerable from `<sha>` at any time. **Both of those two are pinned by this entry** (row D9 below),
+regenerable from `<sha>` at any time. **Both of those two are pinned by this entry** (row D9 below, which covers every packed path rather
+than only the sources),
 which makes the rebuilding variant sound everywhere rather than on one platform — but it is not a
 precondition of the bridge, and the recommended recurring form does not depend on it.
 
@@ -2566,7 +2567,7 @@ each overturnable on its own. All nine were taken as recommended.
 | D6 | Does the recurring phase rebuild the tarball, or is the `.tgz` committed? | **Committed (form 2a).** The rebuilding form 2b stays documented, with its platform caveat attached, for a consumer who refuses a vendored binary |
 | D7 | Does any route trim `src/` from the artifact? | **No, in every route.** Both map families name `../src/*.ts` relatively with no inlined source; removing `src/` is a decision about the maps and needs its own entry |
 | D8 | If a release route is ever taken, what does the release job do? | **Build once, pack once, check *that* file with publint and attw, smoke-install it with `--ignore-scripts` on Ubuntu and Windows, record its sha256, upload those exact bytes.** Recorded now, owed only when a release route is taken |
-| D9 | Does cadenza harden its own output so a rebuilt pack is platform-independent? | **Yes, and taken with this entry.** `newLine: "lf"` in `tsconfig.build.json`, and a `.gitattributes` holding `src/**` and `dist/**` to LF. It is not a precondition of the bridge — form 2a does not need it — and it is what makes form 2b sound off one platform |
+| D9 | Does cadenza harden its own output so a rebuilt pack is platform-independent? | **Yes, and taken with this entry.** `newLine: "lf"` in `tsconfig.build.json`, and a `.gitattributes` holding to LF everything `files` packs — `src/**`, `dist/**`, `README.md`, `LICENSE` and `package.json` — since a rebuilt pack has to reproduce all of it, not only the sources. It is not a precondition of the bridge — form 2a does not need it — and it is what makes form 2b sound off one platform |
 
 **What would falsify it.** A clean Ubuntu **or Windows** consumer that follows the documented steps and
 cannot reach a working cadenza without lifecycle scripts: the clone or build fails on their platform;
@@ -2588,7 +2589,7 @@ it is true of a cadenza that has not published, and of nothing else.
 - No change to `package.json`, CI, `.gitignore`, or any lifecycle script. The bridge itself is
   documentation: `docs/artifact-delivery-bridge.md`, linked from `README.md`.
 - Row D9 is the only code change: `newLine: "lf"` in `tsconfig.build.json` and a new `.gitattributes`
-  holding `src/**` and `dist/**` to LF. Measured on Linux with npm 10.9.2 and Node v22.17.0, the
+  holding every packed path to LF — `src/**`, `dist/**`, `README.md`, `LICENSE`, `package.json`. Measured on Linux with npm 10.9.2 and Node v22.17.0, the
   emitted `dist/` and a fresh `npm pack` are byte-identical before and after the change
   (`7010decfef4175b7ff491a46e9dc99eec7613123349b87f75129a3818301a4fa` both times), which is what a
   no-op on the platform that already emitted LF looks like. The change is for the platform this

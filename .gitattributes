@@ -1,14 +1,21 @@
 # Line endings for the bytes that leave this repository (DECISIONS.md D-0035,
 # row D9).
 #
-# `files` packs `src/` beside `dist/`, so the sources in a tarball are whatever
-# the packer's checkout holds. Without an attribute, a clone under
-# `core.autocrlf=true` writes CRLF `.ts` files and packs different bytes than a
-# Linux clone does, with no compiler involved at all. `eol=lf` makes the working
-# tree LF on every platform, so a rebuilt tarball is the same tarball.
+# The scope is what `files` packs, because that is what a rebuilt `npm pack` has
+# to reproduce byte for byte: `dist/`, `src/`, `README.md`, `LICENSE`, and the
+# `package.json` npm packs alongside them. Without an attribute, a clone under
+# `core.autocrlf=true` writes CRLF and packs different bytes than a Linux clone
+# does, with no compiler involved at all -- and under the bridge's rebuilding
+# variant a one-byte difference is `EINTEGRITY` on a correct tree. `eol=lf`
+# makes the working tree LF on every platform, so a rebuilt tarball is the same
+# tarball. `tsconfig.build.json` pins the other half, the compiler's own emit,
+# with `newLine: "lf"`.
 #
 # `dist/` is gitignored today and the rule is therefore inert for it; it is
 # written because the emitted tree is the other half of the same question, and a
 # route that ever tracks build output must not have to remember this.
 src/** text eol=lf
 dist/** text eol=lf
+README.md text eol=lf
+LICENSE text eol=lf
+package.json text eol=lf

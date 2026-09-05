@@ -136,8 +136,9 @@ across a full clean rebuild on **one Linux machine** with npm 10.9.2 (npm normal
 it packs, which is the usual source of tar variance); it has **not** been measured across platforms.
 
 cadenza has since pinned the two things that were most likely to differ — `newLine: "lf"` in
-`tsconfig.build.json`, and a `.gitattributes` holding `src/**` and `dist/**` to LF, so neither the
-compiler's emit nor a `core.autocrlf` checkout changes the bytes (D-0035, row D9). That removes the
+`tsconfig.build.json`, and a `.gitattributes` holding every packed path to LF (`src/**`, `dist/**`,
+`README.md`, `LICENSE`, `package.json`), so neither the compiler's emit nor a `core.autocrlf` checkout
+changes the bytes (D-0035, row D9). That removes the
 two known reasons; it does not turn one platform's measurement into a cross-platform guarantee. If your
 bootstrap machine and your CI runners are different platforms, prefer 2a.
 
