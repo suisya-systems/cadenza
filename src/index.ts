@@ -13,6 +13,20 @@
  * belt brought the composer, the resolver and the TOML layer loader. What the
  * barrel exports is a statement about progress, and `parity/` is where that
  * statement is checked.
+ *
+ * **This file is also the package's one public entry point** (D-0033). It is
+ * the only module `exports` names, so a consumer -- rondo, under D-0029 --
+ * reaches everything through `@suisya-systems/cadenza` and nothing through a
+ * deep path into `dist/`. That makes the list below two things at once: the
+ * progress statement it always was, and the surface cadenza is answerable for.
+ * Adding a name here is now a commitment, and D-0029's falsifier is the other
+ * edge of it -- a host that has to reach past this file for a value or a type
+ * says the boundary is in the wrong place.
+ *
+ * There is deliberately **no gate API**. D-0026 section 2 leaves G3 unfixed and
+ * D-0029 says so in as many words: a gate *outcome* is an input to
+ * {@link classify}, which is the whole of cadenza's relationship to gates. The
+ * verbs belong to continuo.
  */
 export {
   LOCAL_FILENAME,

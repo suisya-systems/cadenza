@@ -158,6 +158,45 @@ jobs:
           CADENZA_TEST_SEED: "1"
         run: npx vitest run test/architecture/import-boundaries.test.ts
 
+  package:
+    # The library surface, checked against the packed tarball rather than
+    # against the repository (D-0033). `exports`, `types` and `files` are
+    # claims about a package nobody in this repository consumes -- the suite
+    # imports `src/` directly -- so nothing here would notice a broken map, a
+    # declaration NodeNext cannot resolve, or a `dist/` the `files` list leaves
+    # out. publint and attw are the consumer this repository does not have.
+    #
+    # One cell, for the reason `checks` gives: both tools read the tarball's
+    # metadata and resolve its types under module-resolution modes they model
+    # themselves, so the answer does not depend on the runner.
+    name: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      - name: Build the distribution
+        # `dist/` is gitignored and absent from a fresh checkout, so this is not
+        # a convenience step: without it publint and attw would be reporting on
+        # a tarball with no library in it.
+        run: npm run build
+
+      - name: Package metadata and exports (publint)
+        run: npm run publint
+
+      - name: Type resolution per module mode (attw)
+        # `.attw.json` ignores exactly one rule, `cjs-resolves-to-esm`, because
+        # the package is ESM-only by D-0003 and ships no CommonJS artefact. Every
+        # other rule stays live -- see D-0033.
+        run: npm run attw
+
   oracle:
     # The differential oracle's CPython half, re-run against the committed
     # vector. Without this the vector is a fossil: the TypeScript suite would
@@ -201,7 +240,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
-    needs: [double-green, checks, oracle]
+    needs: [double-green, checks, package, oracle]
     steps:
       - name: Every upstream job must have succeeded
         shell: python

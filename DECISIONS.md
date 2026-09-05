@@ -38,7 +38,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0005 | TypeScript strictness beyond `strict` | accepted |
 | D-0006 | The double-green rule, and where it is enforced | accepted |
 | D-0007 | ASCII-only for anything cadenza prints | accepted |
-| D-0008 | Biome, knip, and no build output yet | accepted |
+| D-0008 | Biome, knip, and no build output yet | accepted; build clause superseded by D-0033 |
 | D-0009 | The parity ledger and the source inventory, and a seventh failure class | accepted |
 | D-0010 | The ledger's unit is the pytest node id, not the test function | accepted |
 | D-0011 | The differential oracle, and the one face this pilot implements | accepted |
@@ -63,6 +63,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0030 | The conductor is built on cadenza's semantics: the 2026-09-04 premise, ratified as an entry | accepted |
 | D-0031 | The agent-type record: inputs to a contract rather than a second authority, keyed separately with its own digest, in the TypeScript tree, and immutable | accepted |
 | D-0032 | The Python G1 is retired; one oracle face stays live on CPython and the other is frozen | accepted |
+| D-0033 | cadenza is consumable as a library: one entry point, an emitted `dist/`, and the packed tarball as what CI checks | accepted |
 
 ---
 
@@ -234,7 +235,10 @@ Prose in Markdown and doc comments is exempt: it is not printed.
 
 ## D-0008 — Biome, knip, and no build output yet
 
-**Status:** accepted
+**Status:** accepted; the "no build output" clause is superseded by D-0033 (2026-09-05). Biome as the
+single linter-and-formatter and knip as the guard on the export surface stand unchanged; the third
+clause below ended on the trigger this entry itself named, when rondo became the first consumer
+(D-0029).
 
 **Decision.** Biome 2.x is the single linter *and* formatter. Knip guards the export surface. There
 is no `build` script, no `dist/`, and no `tsconfig.build.json`.
@@ -2324,3 +2328,140 @@ node ids from 127 test functions across 8 files).
   that first relied on it. That reasoning is discharged rather than overturned — the oracle's Python
   half is still here, standing on the standard library.
 - Nothing in G2 is touched.
+
+---
+
+## D-0033 — cadenza is consumable as a library: one entry point, an emitted `dist/`, and the packed tarball as what CI checks
+
+**Status:** accepted (2026-09-05, cadenza#50)
+
+**Context.** D-0029 puts the host application in a third repository, `rondo`, which consumes cadenza
+and continuo as libraries, and names the price in the same entry: "two packages must become
+consumable instead of one, and cadenza is the further of the two from it." D-0008 recorded "no build
+output yet" as a decision rather than an oversight, on the reasoning that a build with no consumer on
+the other end of it is a second thing to keep correct for nothing, and it named the moment the
+deferral ends — "it arrives with the first consumer, not before." rondo is that consumer, and
+`docs/design/conductor.md` §9 measured exactly what was missing on 2026-09-05: no `main`, no
+`exports`, no `types`, no `files`, and `typecheck` as the only thing `tsc` was asked to do. This
+entry pays that price and no more. **It does not publish anything**: nothing is pushed to a registry,
+and the package stays `private: true`.
+
+**Decision.** Six parts.
+
+- **One public entry point, and it is `src/index.ts`.** `exports` names `.` and `./package.json` and
+  nothing else, so a consumer reaches every value through `@suisya-systems/cadenza` and no deep path
+  into `dist/` is part of the contract. The barrel already held what D-0029 names — the G1 registry
+  (`composeCatalog`, `resolveProject`, the TOML layer loader, `configDigest` and the value types), the
+  G2 delegation contract, and `classify()` — so the surface is **not widened here**: what changes is
+  that the list stops being only a statement about porting progress and becomes the surface cadenza is
+  answerable for. **No gate API is added**, deliberately: D-0026 §2 leaves G3 unfixed and D-0029 says
+  a gate *outcome* is an input to a classification, so there is nothing here to export.
+- **`tsconfig.build.json` emits; `tsconfig.json` keeps `noEmit`.** The check configuration covers
+  `test/`, `scripts/` and `vitest.config.ts` as well as `src/`, none of which ships, so one
+  configuration cannot both check what must be checked and emit only what must be emitted. The build
+  configuration `extends` the check configuration and overrides four things — `noEmit`, `rootDir`,
+  `outDir`, and the three emit switches (`declaration`, `declarationMap`, `sourceMap`) — so every
+  strictness setting D-0003 and D-0005 fix applies to the emitted files by inheritance rather than by
+  a copy that can drift.
+- **`build` cleans first.** `npm run build` is `npm run clean && tsc -p tsconfig.build.json`, and
+  `clean` is `node scripts/clean.mjs` rather than `rm -rf dist` so the Windows matrix cell runs the
+  same command as everyone else. Without the clean, a module that is renamed or deleted leaves its
+  output behind and `files` packs it: a stale artefact in a published tarball is the failure mode a
+  build step is supposed to remove, not introduce.
+- **`files` is `dist`, `src`, `README.md`, `LICENSE`.** An allowlist, not an ignore list.
+  `parity/`, `docs/`, `DECISIONS.md` and the suite are the repository's, not the package's. `src/`
+  is packed because the emit produces both a `.js.map` and a `.d.ts.map` per module and both name
+  `../src/*.ts` **relatively, with no inlined source**: a tarball holding the maps but not the
+  sources ships two files that resolve to nothing, which is worse than emitting neither. The other
+  two ways out were considered and are worse — `inlineSources` fixes only the JavaScript map, since
+  a declaration map has no equivalent, and dropping the maps trades a real consumer benefit (a stack
+  trace and a "go to definition" landing on cadenza's source rather than on generated output) for
+  nothing but a smaller tarball. Found by review before this landed, not after.
+- **publint and attw check the packed tarball, in a required CI job.** `npm run check:package` builds
+  and then runs `publint --strict` and `attw --pack .`; CI runs the same three steps in a new
+  `package` job, wired into `ts-gate`'s `needs`. `.attw.json` ignores exactly one rule,
+  **`cjs-resolves-to-esm`**: the package is ESM-only by D-0003 and ships no CommonJS artefact, so a
+  `require()` from a CJS consumer resolving to an ESM file is this package's *declared* shape rather
+  than a packaging accident. Every other rule stays live, including the node10 and node16 resolution
+  checks, which pass today.
+- **`check:package` is part of `npm run verify`.** The local gate and the merge gate check the same
+  things.
+
+**Why the tarball rather than the repository.** This is the substance of the entry. `exports`,
+`types` and `files` are claims about a package that **nothing in this repository consumes**: the
+suite imports `src/` directly, by relative path, and vitest transforms it from source. So the entire
+class of defect this change makes possible — a map pointing at a file `files` does not pack, a
+declaration NodeNext cannot resolve, a `main` that survives a rename of the module it names — is
+invisible to `npm test`, to `tsc --noEmit`, and to knip, all of which would stay green with a
+`dist/` nobody could import. publint and attw are the consumer this repository does not have, and
+they are in the gate for the same reason the parity check is: a claim nobody checks is a spreadsheet.
+
+**What this does to D-0008.** D-0008 stated three things and two of them are untouched: Biome is
+still the single linter and formatter, and knip still guards the export surface — with more to guard,
+because the barrel is now the published surface rather than a progress note. Its third clause ("no
+`build` script, no `dist/`, and no `tsconfig.build.json`") is **superseded by this entry**, on the
+trigger D-0008 itself wrote down. The ID is kept and its `Status` line records the partial
+supersession; nothing is renumbered.
+
+**Alternatives.**
+
+- **Publishing to npm as part of this change (rejected, and out of scope).** A registry name is a
+  one-way door and a release process is its own decision — versioning, provenance, who may publish.
+  Being consumable and being published are separable, and rondo can consume a `file:` or git
+  dependency of a repository that has never published. What is deliberately *not* deferred is the
+  packaging quality: the tarball is checked now, so the eventual first publish is a decision rather
+  than a packaging project.
+- **Emitting from `tsconfig.json` with an `exclude` (rejected).** One configuration, with `test/`
+  and `scripts/` excluded from the build, would either stop type-checking them or need a second
+  configuration anyway. The split is the honest shape: what is checked is a superset of what is
+  shipped.
+- **A `prepare` script so a git dependency builds on install (rejected).** `conductor.md` §9.1
+  records why: both repositories install with `--ignore-scripts` (D-0004), so a `prepare` would be
+  skipped exactly where it is needed and would install an empty package — a green install producing
+  an unimportable module. A consumer of a git dependency builds cadenza explicitly, or consumes a
+  packed tarball.
+- **Keeping `check:package` out of `verify`, as continuo does (rejected here).** continuo's reason is
+  that publint and attw need a current `dist/` and `verify` should run on a clean worktree without a
+  build; `check:package` *builds first*, so the stale-`dist` false green that reasoning guards
+  against cannot occur. The cost is a `tsc` emit added to a local `verify` — under a second on this
+  tree — and the benefit is that the surface is checked somewhere other than CI. cadenza takes the
+  other side of continuo's call deliberately rather than by oversight.
+
+**What was verified, and when.** On 2026-09-05, against typescript 7.0.2, publint 0.3.24 and
+@arethetypeswrong/cli 0.18.5. `npm run verify` is green: lint, knip, typecheck, 531 tests, the parity
+ledger (531 target tests collected), the source inventory (330 node ids from 127 test functions
+across 8 files), and `check:package`. Consumption was proven from a **fresh directory outside the
+repository**, against `npm pack`'s tarball rather than the working tree: a package with
+`"@suisya-systems/cadenza": "file:./suisya-systems-cadenza-0.0.0.tgz"`, one `.ts` file importing the
+G1 registry, the G2 contract and `classify()` **through the package name only**, type-checked with
+`tsc --noEmit` under `module: NodeNext` and then executed. Both were clean; the commands and their
+output are in the pull request.
+
+**What would falsify it.**
+
+- **rondo needing something this entry point does not export.** That is D-0029's own falsifier
+  reaching this file: a host forced to reach past the barrel would say the surface is drawn in the
+  wrong place, and the answer would be to widen it deliberately here rather than to let a deep import
+  become the de facto contract.
+- **The tarball checks going quiet.** If publint and attw pass on a package that a consumer then
+  cannot import, they are not the consumer-of-record this entry claims they are, and the answer is a
+  real consumption smoke test in CI — packing, installing into a temporary directory, and importing —
+  rather than a third linter.
+- **`dist/` drifting from `src/`.** A defect reproducible against the built package but not against
+  the suite would mean the build's settings and the check's have separated in a way the `extends`
+  was supposed to prevent.
+
+**Consequences.**
+
+- D-0008 gains a partial-supersession line. D-0029's stated price is paid on cadenza's side; the
+  continuo half is continuo's.
+- `docs/repository-policy.md` §5 and `docs/design/conductor.md` §9 are updated: the rows that
+  recorded "**none**: `package.json` declares no `main`, no `exports`, no `types` and no `files`" and
+  "no build" are no longer true of cadenza.
+- Two devDependencies are added (publint, @arethetypeswrong/cli), both pure JavaScript, neither with
+  an install script that matters under `--ignore-scripts` (D-0004). The single runtime dependency of
+  D-0016 is unchanged.
+- The import boundary (D-0022) is untouched: its walk is rooted at `src/`, `dist/` is gitignored, and
+  nothing about the emit gives a module a new edge.
+- **Nothing is published.** The package stays `private: true` at `0.0.0`, and the first publish
+  remains an untaken decision.

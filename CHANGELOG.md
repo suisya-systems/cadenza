@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Library surface (cadenza#50, D-0033): the package declares `main`, `types`, an
+  `exports` map over the single entry point `src/index.ts`, and a `files`
+  allowlist; `npm run build` emits `dist/` with declarations and source maps from
+  a new `tsconfig.build.json`, and a required `package` CI job runs `publint`
+  and `attw` over the packed tarball. `tsconfig.json` keeps `noEmit` and stays
+  the type-check configuration. Nothing is published - the package remains
+  `private: true`.
 - TypeScript rewrite bootstrap for G1 (cadenza#8): vitest with randomised
   ordering and a double-green CI gate, biome, knip, and a 3-OS x 2-Node matrix
   added alongside the existing Python jobs.
