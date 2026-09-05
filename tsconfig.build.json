@@ -17,7 +17,11 @@
     // `declaration` the `types` entry in `package.json` would point at nothing
     // and `attw` would say so. The two map files are what make a stack trace or
     // a "go to definition" in rondo land on cadenza's source rather than on
-    // generated output.
+    // generated output -- which is why `files` packs `src/` beside `dist/`:
+    // both maps name `../src/*.ts` relatively and carry no inlined source, so
+    // a tarball without the sources would ship two maps that resolve to
+    // nothing. Emitting them and not packing what they point at is the one
+    // combination that is worse than emitting neither.
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true

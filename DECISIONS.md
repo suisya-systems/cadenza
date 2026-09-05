@@ -2368,8 +2368,15 @@ and the package stays `private: true`.
   same command as everyone else. Without the clean, a module that is renamed or deleted leaves its
   output behind and `files` packs it: a stale artefact in a published tarball is the failure mode a
   build step is supposed to remove, not introduce.
-- **`files` is `dist`, `README.md`, `LICENSE`.** An allowlist, not an ignore list. `parity/`,
-  `docs/`, `DECISIONS.md` and the suite are the repository's, not the package's.
+- **`files` is `dist`, `src`, `README.md`, `LICENSE`.** An allowlist, not an ignore list.
+  `parity/`, `docs/`, `DECISIONS.md` and the suite are the repository's, not the package's. `src/`
+  is packed because the emit produces both a `.js.map` and a `.d.ts.map` per module and both name
+  `../src/*.ts` **relatively, with no inlined source**: a tarball holding the maps but not the
+  sources ships two files that resolve to nothing, which is worse than emitting neither. The other
+  two ways out were considered and are worse — `inlineSources` fixes only the JavaScript map, since
+  a declaration map has no equivalent, and dropping the maps trades a real consumer benefit (a stack
+  trace and a "go to definition" landing on cadenza's source rather than on generated output) for
+  nothing but a smaller tarball. Found by review before this landed, not after.
 - **publint and attw check the packed tarball, in a required CI job.** `npm run check:package` builds
   and then runs `publint --strict` and `attw --pack .`; CI runs the same three steps in a new
   `package` job, wired into `ts-gate`'s `needs`. `.attw.json` ignores exactly one rule,
