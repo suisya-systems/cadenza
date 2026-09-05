@@ -400,11 +400,16 @@ function requireExecutorPolicy(value: unknown): ExecutorPolicy {
   // `supplied.slice` keeps a Proxy from supplying the method that does the
   // copying.
   const declared = supplied.length;
-  const entries = Array.prototype.slice.call(
-    supplied,
-    0,
-    MAX_REPORTING_DUTIES + 1,
-  ) as readonly unknown[];
+  // `Array.from` rather than the slice on its own, because a JavaScript array
+  // may have **holes** and `slice` preserves them. A hole is skipped by `map`
+  // and then materialises as `undefined` when a `Set` iterates it, so a
+  // validate-with-`map` over a sparse array would put `undefined` into the
+  // payload and make `canonicalJson` throw a native `TypeError` -- the same
+  // shape of failure as the shifting element above, arriving by a different
+  // route. `Array.from` turns every hole into a value the rules can refuse.
+  const entries = Array.from(
+    Array.prototype.slice.call(supplied, 0, MAX_REPORTING_DUTIES + 1) as ArrayLike<unknown>,
+  );
   if (entries.length > MAX_REPORTING_DUTIES) {
     throw new InvalidPolicyError(
       `executor_policy.reporting_duties holds ${declared} entries, which is more than ` +

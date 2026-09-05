@@ -419,6 +419,22 @@ describe("agentType", () => {
     expect(caught.message).toContain(String(MAX_REPORTING_DUTIES));
   });
 
+  test("refuses a hole in a list, rather than letting one reach the encoder", () => {
+    // A JavaScript array may be sparse, and a hole is skipped by `map` and by
+    // `forEach` while a `Set` materialises it as `undefined`. Left alone it
+    // would reach `canonicalJson` and throw a native `TypeError` from inside
+    // the digest -- a record that validated and could not be digested.
+    const sparseDuties = new Array<string>(2);
+    sparseDuties[0] = "post_summary";
+    refusal(InvalidPolicyError, () =>
+      agentType(valid({ executorPolicy: executorPolicy({ reportingDuties: sparseDuties }) })),
+    );
+
+    const sparseKeys = new Array<string>(2);
+    sparseKeys[0] = "command.run";
+    refusal(UnknownCapabilityError, () => agentType(valid({ granted: sparseKeys })));
+  });
+
   // --- the order of the refusals ------------------------------------------
 
   test("reports the earlier rule when an input is wrong in more than one way", () => {
