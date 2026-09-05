@@ -51,7 +51,9 @@ the control plane's (D-0026 §2).
 
 ```
 src/domain/
-  capability.ts       capability keys and the versioned vocabulary   (S3)
+  capability.ts       capability keys and the versioned vocabulary,  (S3)
+                      and the three refusals over them that the
+                      agent-type record shares (D-0034)
   contract.ts         DelegationContract, issue-time validation      (S4)
   contract-digest.ts  contract_digest, over the same path as G1's    (S5)
   classification.ts   classify(): total, three-valued                (S6)
@@ -171,6 +173,16 @@ G2's quote a run identity, which may legitimately hold any printable Unicode
 So G2 formats quoted values with Python's `ascii()` rather than its `repr()` --
 the same choice CPython offers for the same reason -- and every non-ASCII
 character reaches the console as an escape.
+
+**Rules 1, 2 and 3 are raised from `capability.ts`, not from `contract.ts`.**
+They moved there when the agent-type record needed the same three rules over the
+same vocabulary (DECISIONS.md D-0031, D-0034): a version this build does not
+know, a key outside the version that was pinned, and a key in both sets at once
+are facts about the vocabulary rather than about a contract, and a second
+implementation of them would be a second thing that can drift while both look
+right. What did **not** move is the sequence: `delegationContract()` is still the
+only function that runs the whole table below, in this order, and it is still
+the only constructor of a contract.
 
 | # | rule | error | source |
 | --- | --- | --- | --- |

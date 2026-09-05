@@ -121,3 +121,23 @@ export class UngrantedDelegationError extends CadenzaError {}
 
 /** A sub-contract would carry more than the granter holds. */
 export class AmplifiedGrantError extends CadenzaError {}
+
+/**
+ * The agent-type record's refusals (D-0034).
+ *
+ * `CadenzaError` directly, for the reason G2's do: the record is a value and
+ * not a file in this belt -- D-0034 keeps the belt value-only and leaves the
+ * store to its owner -- so there is no location to carry.
+ *
+ * Only two are new. Everything the record shares with a contract reuses the
+ * contract's refusal rather than gaining a parallel one: the vocabulary
+ * version, the capability keys, the disjointness of the two sets and the
+ * identifier shape are the same rules over the same vocabulary, and a second
+ * error type for each would say the rule had two meanings.
+ */
+
+/** A `loopPolicy` or `executorPolicy` member is absent, ill-typed, out of range, or unknown. */
+export class InvalidPolicyError extends CadenzaError {}
+
+/** A value reached a record-reading function without coming from `agentType`. */
+export class ForgedAgentTypeError extends CadenzaError {}

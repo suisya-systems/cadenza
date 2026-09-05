@@ -126,7 +126,9 @@ ledger, the source inventory and the package check, in that order.
 
 The package has one public entry point, `src/index.ts`, reached through the
 package name and no deep path (`DECISIONS.md` D-0033). It exports what D-0029
-names: the G1 project registry, the G2 delegation contract, and `classify()`.
+names: the G1 project registry, the G2 delegation contract, `classify()`, and
+the agent-type record with the renderer that turns one into a contract input
+(D-0031, D-0034).
 There is no gate API - a gate *outcome* is an input to a classification, and
 the gate verbs belong to continuo.
 

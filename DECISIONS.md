@@ -64,6 +64,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0031 | The agent-type record: inputs to a contract rather than a second authority, keyed separately with its own digest, in the TypeScript tree, and immutable | accepted |
 | D-0032 | The Python G1 is retired; one oracle face stays live on CPython and the other is frozen | accepted |
 | D-0033 | cadenza is consumable as a library: one entry point, an emitted `dist/`, and the packed tarball as what CI checks | accepted |
+| D-0034 | The agent-type record's value schema: a closed input, three shared vocabulary rules, three loop counts with named readers, an opaque executor bag, and a value-only belt | accepted |
 | D-0035 | The artifact-delivery bridge: a consumer builds cadenza from a pinned checkout and installs what it packed; publication remains the destination and remains untaken | accepted |
 
 ---
@@ -2466,6 +2467,289 @@ output are in the pull request.
   nothing about the emit gives a module a new edge.
 - **Nothing is published.** The package stays `private: true` at `0.0.0`, and the first publish
   remains an untaken decision.
+
+## D-0034 — the agent-type record's value schema: a closed input, three shared vocabulary rules, three loop counts with named readers, an opaque executor bag, and a value-only belt
+
+**Status:** accepted (2026-09-05, taken at cadenza's human gate against D-0031)
+
+**Context.** D-0031 fixed what the agent-type record *means* and said in as many words that it is
+not an implementation: "The concrete schema, field encodings and the digest's canonical payload"
+are on its **Deliberately not fixed** list, and it invites the belt that needs them to settle them
+as a new entry. A pre-delegation design review found the same hole from the other side — the field
+names are fixed semantically while the grammar, the policy members, the payload keys and the
+value-or-store scope are all still open, so code that chose them would be choosing them silently.
+This entry chooses them, and it is written so that a later reader can tell a decision from an
+implementation detail: everything below is observable to a consumer, which is why it is here
+rather than in a doc comment.
+
+Nothing in D-0031 is reopened. Sections 1 to 5 of that entry stand exactly as written; this one
+adds the layer beneath them.
+
+### 1. The identifier, the key sets, and the version are G1's and G2's, reused
+
+**Decision.** `agentTypeId` is a **G1 identifier** — `parseIdentifier`, `^[a-z][a-z0-9_-]{0,63}$`
+— refused with the same non-ASCII escaping wrapper the contract's `project_id` gets (D-0007).
+`granted` and `askable` are supplied as arrays of strings and canonicalised **exactly as a
+contract's are**: validated against the vocabulary the record pinned, sorted by code point,
+de-duplicated, snapshotted, frozen, and refused if they overlap. `vocabularyVersion` is accepted
+only if it is a version **this build knows**.
+
+**And the three rules are shared code, not a second copy.** `requireKnownVocabularyVersion`,
+`canonicalCapabilityKeys` and `refuseCapabilityOverlap` moved out of `contract.ts`'s private
+helpers into `capability.ts`, and `delegationContract()` now calls them too.
+
+**Why.** A second implementation of "is this key in version 1" is a second thing that can drift,
+and the two would drift into disagreeing about *how much authority a run holds* — the digest
+argument `src/domain/digest.ts` already makes about the `sha256:` framing, one artefact along. The
+identifier is reused for the same reason G2 reuses it for `project_id`: it is the same shape from
+the same rule, and a second grammar would say the shape had two meanings.
+
+**What the move cost, and what paid for it.** The four refusal messages it touches were pinned by
+**nothing** before it: every assertion in the contract's suite was a substring, a relational
+equality or the ASCII sweep, so a refactor could have reflowed any of them and stayed green. Exact
+goldens were added to `test/domain/contract.test.ts` first, so the move is checked rather than
+promised. `docs/design/g2-delegation-contract.md` §2 and §5 are updated to say where rules 1-3 are
+raised from; that document is G2's own oracle, so leaving it stale would have been a declared
+defect rather than an oversight.
+
+### 2. `loopPolicy` is exactly three integer counts, and the fourth was refused
+
+**Decision.**
+
+```
+loopPolicy
+  maxReviewRounds    integer, 1..1024
+  noProgressWindow   integer, 1..1024
+  noProgressRepeat   integer, 1..noProgressWindow
+```
+
+No clock, no wall-time duration, no callback, no predicate. `noProgressRepeat > noProgressWindow`
+is refused.
+
+**Why these three and no fourth.** D-0031 §3 admits `loopPolicy` into the record on one specific
+ground — that its members "have a real interpreter in the loop". `docs/design/conductor.md` §4
+gives review to the conductor, so `maxReviewRounds` has one; §6.3 spells the halt condition
+`NoProgress(window, repeat, key=verify detail)`, so the other two do; and §10 walks the loop end to
+end naming no third reader. A hard attempt cap was drafted and **dropped**: every member is
+digested, so a member added now and removed later moves every record's `agent_type_digest`, and a
+field with no reader is not free. If one is wanted later it is a new entry that must name its
+reader and say explicitly that it is not §6.3's halt threshold — otherwise a later implementer
+keys no-progress off an attempt tally, which is the trap §5.2 spends a section refusing.
+
+**Why counts and not clocks.** A halt predicate over a running process needs an observer and a
+clock; cadenza's layers have neither, and D-0026 §2 assigns both to the control plane. A duration
+in this record would be a field that could only be honoured somewhere else.
+
+**Why bounded.** `1..1024` rather than an open positive integer: the value is written by a human
+and digested, so a count three orders of magnitude past anything a review loop could run is a typo
+rather than a policy, and an unbounded field is unbounded input to a persisted value. The
+`noProgressRepeat <= noProgressWindow` rule refuses a condition that could never fire — a policy
+that says it halts and does not is worse than one refused at the door.
+
+### 3. `executorPolicy` is three members, validated structurally and interpreted nowhere
+
+**Decision.**
+
+```
+executorPolicy
+  roleName          a G1 identifier: cadenza's own neutral role name
+  modelTier         a G1 identifier: a neutral tier label
+  reportingDuties   0..32 G1 identifiers, sorted by code point, de-duplicated, frozen
+```
+
+cadenza checks that each is **of that shape** and nothing else. It does not ask whether the role
+exists, what the tier denotes, or whether a duty is dischargeable. The record is snapshotted,
+frozen and digested whole; interpretation is the invocation adapter's, and there is exactly one
+(D-0031 §3, rondo D-0014; the roster C-15 names is rondo's gate's).
+
+**Why a shape at all, if it is opaque.** Because it is digested. A bag of arbitrary JSON would be
+arbitrary input to a persisted value and to the canonical encoder, which refuses a non-integer
+number and a lone surrogate — a record that validated and then could not be digested would exist
+and could not be persisted. A shape is the smallest thing that makes the digest total.
+
+**What cadenza cannot check, stated rather than implied.** The identifier grammar makes a concrete
+model name awkward; it does not make one impossible. Refusing "a provider's product name" would
+require knowing the provider, which is precisely the knowledge D-0031 §3 exists to keep out of
+`domain`, `application` and `ports`. So the neutrality of these two names is a **discipline the
+record's authors hold**, backed by the one-word grep the import-boundary suite already runs, and
+not a validation this build performs.
+
+### 4. Every input table is closed; `DelegationContractInput` is deliberately not
+
+**Decision.** `AgentTypeInput`, `loopPolicy` and `executorPolicy` are **closed tables**: a member
+this build does not recognise is refused, naming the first such key in code-point order. G2's
+`DelegationContractInput` is **not** changed to match.
+
+**Why closed.** Every member of every table is digested. An unrecognised key would be dropped
+silently, so two records a caller meant differently would share one `agent_type_digest` — the
+single failure the digest exists to prevent. It is G1 §5.6's move ("every table is closed"),
+applied to a value rather than to a file, and D-0031 §2 named that closedness as a constraint the
+record's belt inherits.
+
+**Why the divergence is recorded rather than removed.** Closing the contract's input would be this
+belt reopening G2, which D-0031's consequences forbid. So the two differ, on purpose, and the
+difference is written here instead of being found later by someone who assumes the newer shape is
+a mistake.
+
+### 5. The canonical payload, over `digestOf`, excluding the digest
+
+**Decision.** `agent_type_digest` is `digestOf(agentTypePayload(record))` — the shared
+canonical-JSON and `sha256:` framing `config_digest` and `contract_digest` take (D-0011, D-0017),
+**not** `configDigest`, which is typed over a `Project`. The payload is fixed, in wire spelling:
+
+```
+agent_type_id       string
+vocabulary_version  integer
+granted             [string]        sorted, unique
+askable             [string]        sorted, unique
+loop_policy         { max_review_rounds, no_progress_window, no_progress_repeat }
+executor_policy     { role_name, model_tier, reporting_duties [sorted, unique] }
+```
+
+A digest cannot cover itself, so D-0031's "over all of the above" is read as **the six semantic
+fields preceding it**. The digest is a **field of the record**, computed at construction and never
+accepted from a caller; `agentTypeDigest(record)` recomputes rather than returning the field, so
+the field is checkable rather than merely asserted.
+
+**One module, not two.** The payload and the digest live in `src/domain/agent-type.ts` beside the
+record rather than in an `agent-type-digest.ts` mirroring G2's split. A contract does not carry its
+digest, so `contract-digest.ts` can import `contract.ts` one way; this record does carry it, so the
+same split would be a cycle.
+
+**No CPython oracle vector is added, and the honest reason is not the obvious one.** It is *not*
+that the oracle already covers these shapes. The corpus is built entirely from `Project` values
+and `canonicalPayload` emits only strings and arrays of strings, so **no oracle row holds a number
+at all** — `src/domain/canonical-json.ts` says so in as many words. The integer is the one encoder
+shape this payload adds over `config_digest`, and its spelling is pinned directly by
+`test/domain/canonical-json.test.ts`, exactly as `contract_digest`'s own `vocabulary_version`
+already relies on. A fixed canonical-JSON and digest golden is pinned in situ as well. Expanding
+the CPython corpus would mean a second Python implementation of agent-type semantics, which is the
+same-author self-agreement D-0032 warns against; if a later policy shape introduces a value the
+encoder oracle has never seen, **that** expansion is its own entry.
+
+### 6. The record renders; it never issues
+
+**Decision.** `contractInputForAgentType(record, project, parties)` is a **pure renderer**: it maps
+the record's `vocabularyVersion`/`granted`/`askable`, the project's `projectId`/`configDigest` and
+the caller's `issuer`/`grantee` into the existing `DelegationContractInput`, with `supersedes:
+null` for an initial issuance. It mints no identity and reads no clock. `delegationContract()`
+remains the only constructor of a contract and the only enforcement boundary, and `agentTypeId` and
+`agentTypeDigest` do **not** enter `DelegationContract` — they are run provenance the host persists
+beside it (D-0031 §2).
+
+**Why a renderer and not a second authority.** D-0026 §1 rejected roles as the authority model
+because "a role name in a durable record means whatever the role table meant at the time". The
+agent-type record survives that objection only by expanding to a grant **before** the contract
+exists. A function that consulted the record at classification time would be the rejected shape
+returning, and D-0026 would have to be superseded rather than extended.
+
+**Why a successor is not this function's business.** `supersedes` names the `contract_digest` of a
+contract that already exists, which is a fact about the contract side; `delegate` and `adopt`
+already own it (D-0026 §3).
+
+### 7. The belt is value-only, and says which obligation it has not discharged
+
+**Decision.** This belt supplies the **value**. It supplies no persisted schema, no
+`schema_version`, no TOML surface, no merge rule and no migration, and it adds nothing to
+`config/projects.toml`, to the loader, to `Project`, to `ResolvedProject` or to `canonicalPayload`.
+
+**D-0031 §2's schema and migration obligation is therefore NOT discharged**, and neither is its
+requirement that per-operator merge semantics be stated. Both remain owed by whoever owns the
+store — rondo, under D-0029 — and this sentence exists so that a later reader does not mistake a
+value that exists for a record that can be persisted and read back.
+
+**Why.** A store is I/O, and the layers this record lives in have none (D-0026 §2). D-0031 §5
+already left retention to the store's owner for the same reason. Building a schema here to satisfy
+a checklist would put a store inside a pure layer and would fix a format before its only consumer
+exists.
+
+### 8. The order of the refusals, because it is observable
+
+**Decision.** An input wrong in more than one way reports the **earlier** rule, and the order is
+this:
+
+| # | rule | error |
+|---|---|---|
+| 1 | the input is a table, and a closed one: no member this build does not know | `InvalidPolicyError` |
+| 2 | `vocabularyVersion` is a version this build knows | `UnknownVocabularyVersionError` |
+| 3 | every `granted` key is in that version | `UnknownCapabilityError` |
+| 4 | every `askable` key is in that version | `UnknownCapabilityError` |
+| 5 | the two sets are disjoint | `OverlappingCapabilityError` |
+| 6 | `agentTypeId` is a G1 identifier | `InvalidIdentifierError` |
+| 7 | `loopPolicy` is a closed table of three counts, repeat within window | `InvalidPolicyError` |
+| 8 | `executorPolicy` is a closed table of two names and a bounded list | `InvalidPolicyError` |
+
+**Why fix it at all.** Which refusal a doubly-wrong input gets is observable to every caller, so
+leaving it to "whichever check the implementation happened to write first" would make a
+refactor able to change what a host sees without anything recording that it had. G2 fixes its own
+order for the same reason (`docs/design/g2-delegation-contract.md` §5), and a test pins this one.
+
+**These numbers are not that document's numbers.** Rules 2 to 5 here are that table's rules 1 to 3
+over a different value; the rest have no counterpart. The two are deliberately not aligned, because
+aligning them would suggest a correspondence between two rule sets that only partly overlap.
+
+**Why the closed-table check is first.** It is the only rule that is about the *shape of the
+request* rather than about a field's value: a caller who misspelled a member is told that, rather
+than being told something about the default the misspelling left in place. Being first also means
+it is what stands between a caller who passed nothing at all and JavaScript's own `TypeError` --
+every refusal here is named, and that has to include the least careful call.
+
+**A closed table is closed over every own key, not over the enumerable string ones.**
+`Object.keys` omits a non-enumerable property and every symbol-keyed one, so a member hidden that
+way would pass the check and then be dropped from the payload -- two records a caller meant
+differently sharing one digest, which is the failure this rule exists to prevent. The check reads
+`Reflect.ownKeys`.
+
+**The bounded fields are bounded before they are copied.** A declared length is the caller's, so a
+snapshot taken before the ceiling is applied would let a length of a billion allocate a billion
+slots on the way to being refused. The copy is taken one past the ceiling, which is all that is
+needed to know the ceiling was exceeded.
+
+**And every element of a caller's array is read exactly once.** An array index may be an accessor,
+and `Array.isArray` is true of such an array and of a `Proxy` over one, so a validate-then-re-read
+would let the second read place a value into the frozen record that the first read never showed --
+a capability key outside the pinned vocabulary, or a lone surrogate that would make `digestOf`
+throw where a named refusal was promised. The input is snapshotted before it is checked, and the
+canonical form is built from what was validated. This applies to `capability.ts`'s shared helper as
+well, so it closes the same hole on the contract's path.
+
+**What would falsify it.**
+
+- **Against §2.** The conductor's loop turning out to need a fourth `loopPolicy` member — most
+  likely a hard iteration cap — which would mean the "named reader" test was drawn too tightly and
+  the cost of moving every digest has to be paid deliberately.
+- **Against §3.** A second reader of `executorPolicy` appearing anywhere outside the invocation
+  adapter, or the identifier grammar proving unable to spell a tier the adapter actually needs.
+  Either would mean the bag is in the wrong place or the wrong shape, and D-0031 §3's own falsifier
+  is the entry that would have to answer.
+- **Against §4.** A host that legitimately needs to carry a member cadenza does not know — record
+  provenance, an operator annotation — finding the closed table an obstacle rather than a guard.
+  The answer would be a named extension field inside the digest, not an open table.
+- **Against §5.** A consumer computing `agent_type_digest` independently and disagreeing with this
+  build on the same record. That is what the golden is for, and a disagreement would mean the
+  payload needs an oracle after all.
+- **Against §6.** A conductor that cannot build a usable contract from `granted`/`askable` alone.
+  That is D-0031 §1's falsifier reaching the code.
+- **Against §7.** rondo finding the value unusable without a schema — that superseded records
+  cannot be addressed by digest because nothing writes them down — which would mean the schema was
+  this belt's after all and deferring it was the mistake.
+
+**Consequences.**
+
+- **D-0033's entry point is widened.** That entry recorded that the surface "is not widened here";
+  it is widened here, deliberately, and `src/index.ts` and `README.md` are updated so the
+  enumeration a consumer reads stays true. This clears the first of the two blockers rondo D-0016
+  records.
+- **G2 is not reopened**, and the one file of it that changed did not change semantics: three
+  refusals moved to `capability.ts` and are now shared, pinned byte for byte by goldens added for
+  the purpose. `classify()`, the contract's fields and the D-0027 vocabulary are untouched.
+- **`config_digest` does not move.** A regression test pins an existing project's digest against a
+  fixed value and pins `ResolvedProject`'s key set, because the mass-revocation failure D-0031 §2
+  describes is invisible from inside this belt.
+- **The parity accounting grows and the source inventory does not.** Three target-only test files
+  are declared with reasons, and the two new modules add ten generated import-boundary ids to
+  `parity/import-boundaries.ledger.json`. No Python is written and `parity/source-inventory` is
+  untouched, which is what D-0032 leaves as the standing arrangement.
 
 ---
 

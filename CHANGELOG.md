@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The agent-type record (D-0031, with its value schema fixed by D-0034): a frozen,
+  digested value carrying two D-0027 capability key sets, a `loopPolicy` the
+  conductor reads, an `executorPolicy` cadenza carries and never interprets, and
+  its own `agent_type_digest` over a canonical payload that excludes the digest
+  itself. A renderer, `contractInputForAgentType`, maps one plus a
+  `ResolvedProject` and two caller-supplied identities into the existing
+  `DelegationContractInput`; `delegationContract()` remains the only constructor
+  and the only enforcement boundary. Nothing enters `Project`,
+  `ResolvedProject` or `config_digest`. The three vocabulary refusals G2 already
+  had moved to `capability.ts` so both callers raise the same ones. The belt is
+  value-only: no persisted schema, no `schema_version` and no migration, which
+  stay owed by the store's owner.
 - Artifact-delivery bridge (D-0035): `docs/artifact-delivery-bridge.md` is the
   supported way to depend on cadenza until it publishes - clone at a pinned
   commit sha, build, `npm pack`, commit the tarball and its sha256, and install
