@@ -288,9 +288,13 @@ a boundary review harder than it needs to be.
 - `docs/design/conductor.md` - the conductor proposal: how a one-line request
   becomes admitted continuo runs and comes back as gate and merge decisions.
   Propose-only; its decisions C-1..C-17 are the human gate's to take. Seven
-  have been taken: C-17 (D-0029: the host is `rondo`), C-12 (D-0032) and
+  have been taken: C-17 (D-0029: the host is `rondo`), C-12 (D-0030) and
   C-1/C-2/C-3/C-10/C-16 (D-0031, the agent-type record). The nine still open
   are rondo's and continuo's, and C-9 is retired unreached.
+- `docs/design/operating-surface.md` - the operating-surface proposal (#22):
+  what the console renders, which of the three repositories owns each source,
+  and what cadenza must expose so the surface - not the conductor - is the
+  recorded actor. Propose-only; its decisions S-1..S-11 are for three gates.
 - `docs/artifact-delivery-bridge.md` - the supported way to depend on cadenza
   until it publishes: the two phases, the exact commands, the portable digest
   check, and what the bridge does not give you (D-0035).
