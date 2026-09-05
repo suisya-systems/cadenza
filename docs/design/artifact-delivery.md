@@ -346,13 +346,42 @@ git -C vendor/cadenza-src rev-parse HEAD                       # must equal <sha
 npm --prefix vendor/cadenza-src ci --ignore-scripts
 npm --prefix vendor/cadenza-src run build
 npm pack vendor/cadenza-src --pack-destination vendor          # -> vendor/suisya-systems-cadenza-0.0.0.tgz
-sha256sum vendor/suisya-systems-cadenza-0.0.0.tgz > vendor/cadenza.tgz.sha256           [I2, recorded]
+node vendor/pin.mjs record                                     # writes vendor/cadenza.tgz.sha256   [I2]
 npm install --ignore-scripts vendor/suisya-systems-cadenza-0.0.0.tgz                    [I3, written]
 ```
 
-Committed afterwards: `<sha>` (in the consumer's own decision record or a pinning file),
-`vendor/cadenza.tgz.sha256`, and the `package.json` / `package-lock.json` the install wrote. **The
-`.tgz` itself is not committed** — it is 118 files of build output, and phase 2 rebuilds it.
+**Committed afterwards, and this list is the contract:** the `.tgz` itself, `vendor/cadenza.tgz.sha256`,
+`vendor/pin.mjs`, `<sha>` (in the consumer's own decision record or a pinning file), and the
+`package.json` / `package-lock.json` the install wrote. `vendor/cadenza-src` — the clone — is **not**
+committed and can be deleted the moment phase 1 ends; it is the only thing here that is scratch.
+
+**Why `node vendor/pin.mjs` and not `sha256sum`.** `sha256sum` is a GNU coreutils command: it is absent
+on a stock macOS (`shasum -a 256`) and on Windows (`Get-FileHash`), and the whole point of this bridge
+is that it works on a consumer whose matrix includes both. Node is the one interpreter a consumer of a
+Node library certainly has, so the check is a script rather than a shell builtin — the same call
+cadenza made for its own `clean`, whose comment says it in as many words: "written as a script rather
+than `rm -rf dist` so the same command works on the Windows matrix cell ... nothing cadenza asks a
+developer to run may assume a POSIX shell". The helper is small enough to state in full:
+
+```js
+// vendor/pin.mjs -- record or check the pinned cadenza tarball. `node vendor/pin.mjs record|check`.
+import { createHash } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
+
+const TARBALL = "vendor/suisya-systems-cadenza-0.0.0.tgz";
+const DIGEST = "vendor/cadenza.tgz.sha256";
+const actual = createHash("sha256").update(readFileSync(TARBALL)).digest("hex");
+
+if (process.argv[2] === "record") {
+  writeFileSync(DIGEST, `${actual}\n`);
+} else {
+  const expected = readFileSync(DIGEST, "utf8").trim();
+  if (actual !== expected) {
+    console.error(`${TARBALL} is not the pinned artifact.\n  expected ${expected}\n  actual   ${actual}`);
+    process.exit(1);
+  }
+}
+```
 
 *Phase 2 — every CI run and every fresh clone. No `npm install`, and nothing is rewritten.* There are
 two forms, and **the first is recommended**.
@@ -360,8 +389,8 @@ two forms, and **the first is recommended**.
 **2a (recommended) — commit the `.tgz`; phase 2 rebuilds nothing.**
 
 ```
-sha256sum -c vendor/cadenza.tgz.sha256    # cheap, and fails with a diagnosis    [I2 checked]
-npm ci --ignore-scripts                   # enforces the committed lockfile      [I3 checked]
+node vendor/pin.mjs check     # cheap, portable, and fails with a diagnosis      [I2 checked]
+npm ci --ignore-scripts       # enforces the committed lockfile                  [I3 checked]
 ```
 
 The consumer commits `vendor/suisya-systems-cadenza-0.0.0.tgz` (118 files, ~128 KB) alongside the
@@ -383,7 +412,7 @@ git -C vendor/cadenza-src rev-parse HEAD                       # must equal <sha
 npm --prefix vendor/cadenza-src ci --ignore-scripts
 npm --prefix vendor/cadenza-src run build
 npm pack vendor/cadenza-src --pack-destination vendor          # same path as phase 1
-sha256sum -c vendor/cadenza.tgz.sha256                         # fails loudly on drift   [I2 checked]
+node vendor/pin.mjs check                                      # fails loudly on drift   [I2 checked]
 npm ci --ignore-scripts                                        # enforces the lockfile   [I3 checked]
 ```
 
@@ -393,10 +422,10 @@ platforms**: cadenza sets no `newLine` in `tsconfig.build.json`, and has no `.gi
 `src/` to LF in a checkout. A consumer whose bootstrap and CI platforms differ should use 2a, or wait
 for the cadenza-side hardening §11 row D9 proposes.
 
-In both forms the `sha256sum -c` is not decoration beside the lockfile: it fails with a *diagnosis*
+In both forms the `pin.mjs check` is not decoration beside the lockfile: it fails with a *diagnosis*
 ("the tarball is not the one this repository was pinned to"), whereas the `npm ci` that would fail a
-moment later reports `EINTEGRITY` against a hash nobody can read. It is also cache-independent, which
-§5.6 shows matters. Both are wanted, in that order.
+moment later reports `EINTEGRITY` against a hash nobody can read. It is also cache-independent, which §5.6 shows
+matters. Both are wanted, in that order.
 
 - **D1, D2:** yes, by the same mechanism as every other tarball route — `npm pack` honours `files`, so
   `dist/`, `src/` and both map families arrive together. rondo ran the equivalent steps and got
@@ -405,7 +434,7 @@ moment later reports `EINTEGRITY` against a hash nobody can read. It is also cac
   declarations resolve as they do from a registry. This is what (e-pack) buys over a bare checkout.
 - **D4a and D4b, and D4b is stronger than an earlier draft of this document claimed.** D4a is the
   committed sha beside the committed digest. D4b is a **real, npm-enforced** lockfile integrity hash —
-  §5.6 measured `npm ci` rejecting a swapped tarball with `EINTEGRITY` — plus the `sha256sum -c`, which
+  §5.6 measured `npm ci` rejecting a swapped tarball with `EINTEGRITY` — plus `pin.mjs check`, which
   is cache-independent where npm is not. The `resolved` value is a path relative to the consumer's
   root, so unlike a directory link it is not machine-specific. What it still lacks against (c) and (d2)
   is **provenance**: npm can say these are the pinned bytes and cannot say where they came from. The
@@ -495,12 +524,25 @@ npm error sha512-ZbEn1q... integrity checksum failed when using sha512: wanted s
 **So the integrity is real and enforced**, which is the opposite of the directory-link case and the
 opposite of what an earlier draft of this document asserted by analogy with it.
 
+**Q3 — does §5.5's helper do what the document says?** The `vendor/pin.mjs` block above was extracted
+from this file verbatim and run against the same tarballs, so the code in the document is checked
+rather than sketched:
+
+```
+node vendor/pin.mjs record   ->  wrote 7010decf...a4fa
+node vendor/pin.mjs check    ->  exit 0
+node vendor/pin.mjs check    ->  exit 1, after the tampered tarball was put in place:
+    vendor/suisya-systems-cadenza-0.0.0.tgz is not the pinned artifact.
+      expected 7010decf...a4fa
+      actual   5f749d40...b541d
+```
+
 **One wrinkle, recorded because it will confuse somebody.** The same swap with a *warm* npm cache
 exited 0, and the installed `README.md` was the **original** content, not the tampered file. That is
 integrity working rather than failing — npm resolved the recorded hash to bytes it already held and
 declined to use the file on disk — but it means a tampered or drifted tarball produces `EINTEGRITY` on
 a cold cache (a CI runner) and a silent, correct install on a warm one (a developer's laptop). It is
-another reason §5.5 keeps the explicit `sha256sum -c`: that check is cache-independent and reports the
+another reason §5.5 keeps the explicit `pin.mjs check`: that check is cache-independent and reports the
 drift in the one place npm will not.
 
 ---
@@ -626,7 +668,8 @@ is the honest question of who builds it."
   the tarball's sha256, and installs *that tarball* with `--ignore-scripts`.** Not a `file:` link to
   the checkout, and not a build inside `node_modules`. **It has two phases, and they are not
   interchangeable**: a one-time bootstrap that runs `npm install <tarball>` and commits the lockfile it
-  writes, and a recurring phase — every CI run, every fresh clone — that is `sha256sum -c` followed by
+  writes, and a recurring phase — every CI run, every fresh clone — that is a portable digest check
+  (a committed Node helper, because `sha256sum` is not on macOS or Windows) followed by
   `npm ci --ignore-scripts`, which enforces the committed lockfile rather than rewriting it. **The
   recurring phase rebuilds nothing: the consumer commits the `.tgz`.** A variant that re-clones,
   rebuilds and re-packs on every run is documented for a consumer who refuses a vendored binary, and it
@@ -719,7 +762,7 @@ Each row is a question this document had to answer and that the gate can overtur
 
 | # | Open decision | Recommendation | Reason |
 |---|---|---|---|
-| D1 | Which route is the **temporary bridge**? | **(e-pack)**, in two phases: bootstrap once (clone at sha → verify sha → `npm ci --ignore-scripts` → `npm run build` → `npm pack` → commit sha256 → `npm install` that tarball), then **form 2a** for the recurring phase — commit the `.tgz`, and every CI run is `sha256sum -c` plus `npm ci --ignore-scripts` | It is the only route delivering build output, the full type contract, resolution by package name and a checkable identity while changing nothing about what cadenza is. Cost is one page of documentation, and it is removable without residue when publication lands |
+| D1 | Which route is the **temporary bridge**? | **(e-pack)**, in two phases: bootstrap once (clone at sha → verify sha → `npm ci --ignore-scripts` → `npm run build` → `npm pack` → commit sha256 → `npm install` that tarball), then **form 2a** for the recurring phase — commit the `.tgz`, and every CI run is a portable digest check plus `npm ci --ignore-scripts` | It is the only route delivering build output, the full type contract, resolution by package name and a checkable identity while changing nothing about what cadenza is. Cost is one page of documentation, and it is removable without residue when publication lands |
 | D2 | Is a `prepare` script added? | **No** | It *works* — rondo measured npm 10.9.2 running it under `--ignore-scripts`, falsifying D-0033's stated reason — and that is why it is refused: it executes cadenza's build inside a consumer whose policy forbids dependency code at install (D-0004). continuo refused the same line for the same reason (`continuo D-0045`) |
 | D3 | Is `dist/` committed? | **No** | It would repair the existing git specifier, and it is the one route whose cost survives publication. It also needs a new drift gate — `check:package` cannot serve, because `build` cleans `dist/` first and would mask stale committed output — plus a `.gitattributes` that does not exist yet and an emitted diff in every review |
 | D4 | Is publication (c) or a Release asset (d2) taken now? | **Neither.** (c) is named the permanent shape; both are left for a separate gate | `docs/repository-policy.md` §3 leaves registry name, release process and publisher open; D-0033 calls a registry name a one-way door and stays `private: true`. (d2) is not the cheap half of (c): it needs a version, a tag, a changelog entry and a `contents: write` release job, and it buys a channel (c) would then replace. Overturnable in one direction only — a gate that wants a release should take (c) |
