@@ -284,6 +284,22 @@ describe("agentType", () => {
     expect(caught.message).toContain("schemaVersion");
   });
 
+  test("refuses a member a caller hid from Object.keys", () => {
+    // `Object.keys` omits a non-enumerable property and every symbol-keyed
+    // one, so a closed table asked that way would accept the member and then
+    // drop it from the payload -- two records a caller meant differently
+    // sharing one digest, which is the failure closing the table prevents.
+    const hidden = { ...valid() };
+    Object.defineProperty(hidden, "schemaVersion", { value: 1, enumerable: false });
+    const caught = refusal(InvalidPolicyError, () =>
+      agentType(hidden as unknown as AgentTypeInput),
+    );
+    expect(caught.message).toContain("schemaVersion");
+
+    const symbolKeyed = { ...valid(), [Symbol("schemaVersion")]: 1 };
+    refusal(InvalidPolicyError, () => agentType(symbolKeyed as unknown as AgentTypeInput));
+  });
+
   test("names the first unknown member in code-point order, not in the caller's", () => {
     // Otherwise which key a refusal names would depend on how the caller's
     // object literal happened to be written.

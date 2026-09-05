@@ -2694,6 +2694,12 @@ than being told something about the default the misspelling left in place. Being
 it is what stands between a caller who passed nothing at all and JavaScript's own `TypeError` --
 every refusal here is named, and that has to include the least careful call.
 
+**A closed table is closed over every own key, not over the enumerable string ones.**
+`Object.keys` omits a non-enumerable property and every symbol-keyed one, so a member hidden that
+way would pass the check and then be dropped from the payload -- two records a caller meant
+differently sharing one digest, which is the failure this rule exists to prevent. The check reads
+`Reflect.ownKeys`.
+
 **The bounded fields are bounded before they are copied.** A declared length is the caller's, so a
 snapshot taken before the ceiling is applied would let a length of a billion allocate a billion
 slots on the way to being refused. The copy is taken one past the ceiling, which is all that is
@@ -2744,6 +2750,7 @@ well, so it closes the same hole on the contract's path.
   are declared with reasons, and the two new modules add ten generated import-boundary ids to
   `parity/import-boundaries.ledger.json`. No Python is written and `parity/source-inventory` is
   untouched, which is what D-0032 leaves as the standing arrangement.
+
 ---
 
 ## D-0035 — The artifact-delivery bridge: a consumer builds cadenza from a pinned checkout and installs what it packed; publication remains the destination and remains untaken

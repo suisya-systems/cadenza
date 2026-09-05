@@ -448,10 +448,19 @@ function requireTable(value: unknown, field: string): Record<string, unknown> {
  * belt, so the difference is recorded in D-0034 rather than smoothed over.
  */
 function refuseUnknownMembers(value: object, allowed: ReadonlySet<string>, field: string): void {
+  // `Reflect.ownKeys` rather than `Object.keys`, and the difference is the
+  // whole point of the check. `Object.keys` omits a non-enumerable property and
+  // every symbol-keyed one, so `Object.defineProperty(input, "schemaVersion",
+  // { value: 1 })` would pass a closed table and then be dropped from the
+  // payload -- two records a caller meant differently sharing one digest,
+  // which is exactly the failure closing the table exists to prevent.
+  //
   // Sorted, so the key a refusal names is a function of the input rather than
-  // of the order the caller's object literal happened to be written in.
-  const unknown = Object.keys(value)
-    .filter((key) => !allowed.has(key))
+  // of the order the caller's object literal happened to be written in. A
+  // symbol is named by its description, which is what a reader has to go on.
+  const unknown = Reflect.ownKeys(value)
+    .filter((key) => typeof key !== "string" || !allowed.has(key))
+    .map((key) => (typeof key === "string" ? key : String(key)))
     .sort(compareByCodePoint);
   if (unknown.length > 0) {
     throw new InvalidPolicyError(
