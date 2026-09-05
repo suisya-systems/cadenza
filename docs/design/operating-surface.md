@@ -1,7 +1,13 @@
 # The operating surface for the human gate — what cadenza must expose, now that the console is rondo's
 
-Status: **proposed** (design only, propose-only — cadenza#22)
-Applies to: nothing in `src/`. This document proposes no code and takes no decision.
+Status: **taken for cadenza's four rows** (`S-1`, `S-2`, `S-3`, `S-11`), at cadenza's human gate on
+2026-09-06, recorded as **D-0036**. `S-4`..`S-8` (rondo's) and `S-9`/`S-10` (continuo's) are
+**still open at their own gates**, and D-0036 takes no position on any of them.
+Applies to: `src/ports/human-decision.ts`, `src/application/human-decision.ts` and the
+`no port names a transport` case in `test/architecture/import-boundaries.test.ts`, all added by
+D-0036. Everything below is the argument that was put to the gate, kept as it was argued: where it
+says "recommendation" for a cadenza row, read "recommendation, since taken as recommended"; where it
+says so for anyone else's row, it is still a recommendation and nothing more.
 
 This document takes the role `docs/design/conductor.md` and `docs/design/artifact-delivery.md` take
 for their issues: it measures, lays out the options, states which one it recommends and why, and
@@ -534,9 +540,10 @@ policy, and this document proposes a starting set rather than a complete one.
 
 ## 10. The decision rows
 
-Propose-only: this document takes none of these. Per AGENTS.md §6 an issue carrying open decisions is
-not started until they are answered. Each row names the gate that owns it, because a row with no
-stated gate is a row nobody picks up.
+The four rows at cadenza's gate were taken as recommended and are recorded as **D-0036**; the seven
+at the other two gates are untaken and stay that way until those gates answer them. Per AGENTS.md §6
+an issue carrying open decisions is not started until they are answered. Each row names the gate that
+owns it, because a row with no stated gate is a row nobody picks up.
 
 **By gate:** cadenza's — `S-1`, `S-2`, `S-3`, `S-11`. rondo's — `S-4`, `S-5`, `S-6`, `S-7`, `S-8`.
 continuo's — `S-9`, `S-10`. The two at continuo's gate are the two this document cannot even
@@ -555,6 +562,15 @@ recommend into existence: they are about verbs cadenza has no say in.
 | **S-9** | Once a console exists, who acks the `presented` relay, and does the dropbox stay a second presentation channel? | continuo | **Not cadenza's to recommend.** Stated because the surface cannot answer a gate without it: `answerGate` admits only stage `presented`, that stage is reached only on the relay's ack, and `gate present` / `deliver` / `ack` carry no `--json` | `continuo src/gate/operator.ts:99,645`, `src/gate/cli.ts:800-836`; D-0076 assigns the dropbox to the operator, and a console makes that channel a duplicate of itself. Acking a relay nobody delivered records a delivery that did not happen |
 | **S-10** | How does the console read run and belt state, `awaiting_user` and the outbox? | continuo | **A read verb**, not a second reader of continuo's database | `run` has exactly `admit` and `close` (`continuo src/control_plane/run_cli.ts:469,517`), and rondo D-0015 rule 1 keeps continuo behind a CLI process boundary. The pane with no read path is exactly where somebody opens the SQLite file instead |
 | **S-11** | Is the "no port names a transport" case added, and with which word list? | cadenza | **Add it** in the shape §8 describes — **every** declared identifier under `src/ports/**`, not an enumerated set of declaration forms, structural rather than a text sweep, **matched as whole tokens** after splitting each name into words, with one planted violation per form to show it is not vacuous (`AGENTS.md:133-138`). The sixteen-word starting list is the part to argue about | The import allowlists already refuse `node:http`; what they cannot see is a hand-written `interface GateAnswerRequest { sessionToken: string }`, which is precisely the leak #22's testable form 1 names. Token matching is not a refinement but a correctness condition: a substring sweep refuses `SecurityPolicy` for `uri`. A form-by-form list would pass `export class HttpClient {}` and `export const sessionToken = ""`, which is the same losing game the externals allowlist already played once (`test/.../import-boundaries.test.ts:156-164`) |
+
+**Outcome, row by row, for the four this document's own gate owns** (D-0036, 2026-09-06):
+
+| id | Taken |
+|---|---|
+| `S-1` | **(b), with its price stated.** `src/ports/human-decision.ts` and `src/application/human-decision.ts`. The price is that the four checks cannot detect a **fabricated** record, which the entry states and a passing test asserts; rondo D-0009's issuer-**authority** falsifier is explicitly **not** claimed to fire |
+| `S-2` | **Five fields, three validators.** `DIGEST_PATTERN` for `predecessor` and `approved`, `requireIdentity` **reused** for `decisionId` and `recordedBy` -- which is what makes it non-private in `src/domain/contract.ts`, and it stays off the barrel -- and a closed union for `outcome` |
+| `S-3` | **A new application function**, `supersedeOnDecision()`. `adopt()` is byte-identical, and a regression case asserts it still takes no decision |
+| `S-11` | **Added**, in the shape section 8 describes, with two decisions section 8 left open settled in the entry: token matching accepts `SecurityPolicy` and still refuses a name that genuinely uses a listed word, and two departures from the literal reading are taken -- the **plural** of each word matches, and every run of adjacent fragments is offered as a word, without which `OAuth` (cut to `o` + `auth`) and `URLs` (cut to `ur` + `ls`) could never match the list. Ten planted violations show it is not vacuous |
 
 Two things that are **not** decisions here and are recorded so the design does not silently depend on
 them: continuo growing an authenticated answerer (which would supersede rondo D-0009 and shrink `S-1`

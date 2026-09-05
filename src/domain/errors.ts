@@ -141,3 +141,38 @@ export class InvalidPolicyError extends CadenzaError {}
 
 /** A value reached a record-reading function without coming from `agentType`. */
 export class ForgedAgentTypeError extends CadenzaError {}
+
+/**
+ * The human-decision record's refusals (D-0036).
+ *
+ * `CadenzaError` directly, for the reason G2's do: a decision record is a value
+ * this belt carries and never a file -- cadenza persists nothing (D-0026
+ * section 2) -- so there is no location to carry and a `location` that was
+ * always `null` would be a field pretending to be evidence.
+ *
+ * Only three are new. The two digest fields and the two identity fields reuse
+ * `InvalidDigestError` and `InvalidIdentityError` rather than gaining parallel
+ * types: they are the same rules over the same shapes, and a second error type
+ * for each would say the rule had two meanings.
+ */
+
+/** `outcome` is not a member of the closed union. */
+export class InvalidOutcomeError extends CadenzaError {}
+
+/**
+ * A decision that records a denial was offered as authority to issue.
+ *
+ * Distinct from {@link InvalidOutcomeError}: the record is well formed and the
+ * human's answer was "no". Spending it as an approval is the one silent error
+ * the enum exists to stop.
+ */
+export class UnapprovedDecisionError extends CadenzaError {}
+
+/**
+ * The successor issued is not the successor the decision names.
+ *
+ * The predecessor disagrees with the contract the run holds, the successor's
+ * digest is not the one approved, or the surface on the contract is not the
+ * surface on the decision.
+ */
+export class DecisionMismatchError extends CadenzaError {}

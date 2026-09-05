@@ -66,6 +66,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0033 | cadenza is consumable as a library: one entry point, an emitted `dist/`, and the packed tarball as what CI checks | accepted |
 | D-0034 | The agent-type record's value schema: a closed input, three shared vocabulary rules, three loop counts with named readers, an opaque executor bag, and a value-only belt | accepted |
 | D-0035 | The artifact-delivery bridge: a consumer builds cadenza from a pinned checkout and installs what it packed; publication remains the destination and remains untaken | accepted |
+| D-0036 | What cadenza exposes for the operating surface: a human-decision port, four value checks in a new application function, and a transport-word rule over `src/ports/**` | accepted |
 
 ---
 
@@ -2886,3 +2887,195 @@ it is true of a cadenza that has not published, and of nothing else.
   record) is not touched by this entry, and whether rondo consumes cadenza remains rondo's decision.
 - Nothing is published. The package stays `private: true` at `0.0.0`, and the first publish remains an
   untaken decision — now with its price written down.
+
+## D-0036 — What cadenza exposes for the operating surface: a human-decision port, four value checks in a new application function, and a transport-word rule over `src/ports/**`
+
+**Status:** accepted (2026-09-06, taken at cadenza's human gate)
+
+**Context.** `docs/design/operating-surface.md` measured cadenza `e56d7e7`, rondo `92edb17` and
+continuo `44f6233` on 2026-09-06 and put eleven rows to three gates. Four are cadenza's — `S-1`,
+`S-2`, `S-3`, `S-11` — and this entry takes all four as the document recommends. `S-4`..`S-8` are
+rondo's and `S-9`/`S-10` are continuo's; nothing here takes, pre-empts or depends on any of them.
+
+What made the rows live is rondo D-0009 part 2: the operating surface must be the **issuer** of any
+widening successor contract. Until now that obligation had nowhere to land. `adopt()` deliberately
+does not refuse widening (*"Whether the issuer held what it granted is the control plane's to
+establish"*), `issuer` is an opaque identity with no actor kind, and rondo's facade imports neither
+`delegate` nor `adopt` — so the rule held by **omission**: rondo could not issue a widening at all.
+Two things changed that. rondo D-0018 made cadenza a consumed library, so a check now has somewhere
+to live; and a conductor that needs a widening will otherwise write the first one under deadline, in
+rondo, where D-0009 part 2 is prose.
+
+**Decision.** Four parts, one per row.
+
+- **`S-1` (b): cadenza exposes one port and one application function, and no new verb.** Not
+  option (a), doing nothing; not option (c), provenance the conductor cannot forge. **(c) is not
+  reachable in-process**: rondo's loop and its surface share an address space, and its only
+  enforcement is a layer table, which is the same grade of guarantee again.
+- **`S-2`: the human-decision value carries five fields, under three validators.**
+  `src/ports/human-decision.ts` names `HumanDecisionRecord` — `decisionId`, `recordedBy`, `outcome`
+  (`approved`/`refused`), `predecessor` (a `contract_digest` or `null`) and `approved` (a
+  `contract_digest`) — with `humanDecisionRecord()` as the one way to obtain a validated, frozen one.
+  **All five are required**, and `null` is the only value of `predecessor` that opens a lineage: a
+  record that omits the field is refused, because against a run that holds nothing an omission would
+  otherwise read as a human's decision to open one.
+  The two digests take `DIGEST_PATTERN`; `decisionId` and `recordedBy` take **`requireIdentity`,
+  reused rather than restated**, which is why that function stops being private to
+  `src/domain/contract.ts`; `outcome` is checked against the closed union. It stays **off the
+  barrel**: it is a rule shared by two modules, not a name cadenza offers a consumer (D-0033).
+- **`S-3`: the four checks live in a new application function, and `adopt()` is byte-identical.**
+  `supersedeOnDecision(current, input, decision)` validates the record, composes
+  `delegationContract(input)`, and refuses in this fixed order: the outcome is not `approved`; the
+  decision's `predecessor` is not `current === null ? null : contractDigest(current)`;
+  `contractDigest(next)` is not `decision.approved`; `next.issuer` is not `decision.recordedBy`.
+  Only then `adopt(current, next)`, whose lineage, grantee and project refusals run unchanged.
+- **`S-11`: `test/architecture/import-boundaries.test.ts` gains "no port names a transport".** Over
+  `src/ports/**` only, it collects **every declared name** the parser reports — not an enumerated
+  list of declaration forms — splits each into words on camelCase and PascalCase boundaries, on
+  non-alphanumerics and on digit runs, and refuses a **whole-token** match against sixteen words:
+  `http`, `https`, `url`, `uri`, `header`, `cookie`, `session`, `browser`, `socket`, `oidc`, `oauth`,
+  `jwt`, `bearer`, `token`, `csrf`, `websocket`.
+
+**The price of `S-1`, stated plainly because the grade of the guarantee is the whole of its honesty.**
+The four checks are **not authentication and cannot detect a fabricated decision record**. A caller
+that composes a `HumanDecisionRecord` naming the successor it wants and its own identity passes all
+four with no surface having recorded anything — exactly as a caller supplying any `issuer` does
+today. cadenza mints no identity and persists nothing (D-0026 §2), so it cannot tell a record that
+came from a surface from one that came from a loop.
+`test/application/human-decision.test.ts` asserts that as a **passing** case, so a later reader is
+told the hole is open rather than left to assume it was closed. What the four checks buy is narrower
+and still worth having: the successor issued and the successor approved are the same contract, byte
+for byte through their digests, so a widening cannot grow between the screen and the call; a denial
+cannot be spent as an approval; the decision's predecessor and the contract's lineage cannot
+disagree; and the surface named on the contract and the surface named on the decision cannot differ.
+That is the same grade cadenza already gives with the self-issue refusal — a value check against a
+class of silent error, not an authority — and it is claimed at that grade and no higher.
+
+**This entry does not claim to fire rondo D-0009's falsifier.** That falsifier asks for an
+issuer-**authority** check in `adopt()` *and* rondo consuming cadenza. The second half fired with
+rondo D-0018; the first has **not**, and what is added here is deliberately not it. Authority is the
+thing cadenza cannot supply: anything it checks is a caller-supplied string against another
+caller-supplied string. The falsifier stays unfired until something can tell a claimed answerer from
+a proven one, which is continuo recording an authenticated answerer — rondo D-0009's *other*
+falsifier, and nobody's to take here. What **does** change with this entry is the omission: rondo
+gains a widening path where it had none, which is the trade the gate made.
+
+**Why `approved` rather than the shorter design.** A record naming only the *predecessor* would let
+any successor over that predecessor be issued under it — a decision about a two-key widening would
+authorise a ten-key one. So the human approves a **specific** successor, identified by the digest of
+the exact contract they were shown. The consequence belongs to whoever builds the surface and is
+real: the widening must be **composed before it is presented**, because the digest is what is
+presented.
+
+**Why three validators and not one.** `parseIdentifier` refuses every digest it is given, twice over,
+for the colon and for the length — the test asserts that against the digests these fields actually
+carry, so the reason survives as a measurement rather than as a claim. And `requireIdentity` applies
+**six** checks, not the three a summary remembers: a string at all; non-empty; at most
+`MAX_IDENTITY_LENGTH` **codepoints**; no control character; no leading or trailing whitespace by
+Python's definition; and no lone surrogate, the last because an unpaired surrogate cannot be UTF-8
+encoded and so could not be digested (D-0013). A restatement that dropped the last two would admit
+values the promise does not cover, which is why the row asks for reuse and why the export is part of
+the decision rather than an implementation detail.
+
+**Why `decisionId` is carried and never consulted.** It exists so that a refusal, an audit row and the
+store's decision record name the same decision. Its real duty — **one decision authorises at most one
+issuance** — is *consumption*, which needs durability, and cadenza persists nothing. That duty is the
+store's, and it is row `S-7`, rondo's. Treating the field as an authority here would be a claim
+cadenza cannot support.
+
+**Why the check is not inside `adopt()`.** `adopt` is also the initial-adoption path
+(`current === null`) and is on the exported surface, so a check added there changes every existing
+caller. A new application function keeps every existing caller's semantics identical, keeps `domain/`
+free of a port-shaped argument, and makes the rule opt-in at the call site — which is what lets a
+consumer adopt it in one commit rather than as a breaking change. The alternative is recorded because
+rondo D-0009's falsifier names `adopt()` literally and a gate could have preferred the literal
+reading; it did not.
+
+**Four things about `S-11` that the row leaves to the implementation, decided here.**
+
+- **Token matching is a correctness condition, not a refinement**, and it does not mean "no port
+  touches a transport". `SecurityPolicy` contains `uri` as a substring and is **accepted**, which is
+  the point: a check a reader learns to route around by renaming an innocent type is worse than no
+  check. A name that genuinely *uses* a listed word is refused whatever it means by it —
+  `CancellationToken` is refused for `token` — because the rule is over the vocabulary a port names,
+  and the sixteen words are a policy this entry starts rather than closes.
+- **The plural is matched too**, which is the first of two departures from §8's literal reading:
+  `headers`, `cookies` and `tokens` are the names somebody would actually write, and a list of
+  singulars matched as whole tokens would pass all three. A word matches if it is in the list, or if
+  it ends in `s` and its stem is. No innocent English word collides with a listed word plus `s`.
+- **Every run of adjacent fragments is offered as a word**, which is the second departure and the
+  correction to a hole the first implementation of this rule had. Where an acronym ends is a *guess*:
+  the same boundary rule that reads `HTTPClient` as `http` + `client` reads `OAuth` as `o` + `auth`
+  and `URLs` as `ur` + `ls`, so `oauth` and `url` -- both on the list -- could never be produced from
+  the spellings every specification and library actually writes, and `export class OAuthClient {}`
+  in a port passed the check in silence. Joining adjacent fragments closes that and is **not** a
+  substring sweep: the candidates are still words the name is built from, in order, so
+  `SecurityPolicy` still yields only `security`, `policy` and `securitypolicy` and is still accepted.
+  Joining stops at a `_`, a `-` or a digit run, because those are boundaries the writer put there
+  rather than boundaries the rule guessed at.
+
+- **A star re-export is refused as a form**, because it is a shape the sweep cannot read:
+  `export * from "../domain/python-urlsplit.js"` carries `urlsplit` and `UrlValueError` into a port's
+  surface while naming neither of them anywhere in the port's own text, so every rule above would
+  pass it. Resolving the target would turn this scan into a module-graph walk; refusing the form
+  keeps it a scan and fails **closed**, which is what the rest of the case does with a shape it
+  cannot read. A port that wants one name from another module can name it -- `export { x } from ...`
+  is read here in full. The reported name is also **escaped to ASCII** before it reaches a failure
+  message: an identifier may hold any Unicode letter, and on the cp932 console this repository is
+  developed against an unencodable character kills the process at the print rather than at the bug
+  (D-0007), which would make a violation look like a crash.
+
+**Non-vacuity, as AGENTS.md requires of a PR that adds a check.** The defect the rule guards against
+is a *missed declaration form*, so one planted violation is not enough: **ten** are asserted and each
+turns the sweep red on its own. Eight are one per declaration form — an interface member, a class, a
+`const`, a function parameter, a type alias member, an enum member, a re-export's **exported** name,
+and a computed property whose key is a literal. The ninth is the other half of a specifier, an
+alias's **source** name (`import { sessionToken as recorded }`), which is the only planted case the
+collector's `propertyName` branch can see: without it that branch was asserted by nothing and could
+have been deleted with the suite still green, which is exactly the vacuity this rule is written
+against. The tenth is not a form but the splitter — `export class OAuthClient {}` — and it is there
+because that is how the hole above was found. The complementary case asserts what it must **not** refuse: `SecurityPolicy`,
+a doc comment saying *"no browser, cookie or session reaches this layer"*, and a URL in a string
+literal. On the tree itself, planting `sessionToken` in `src/ports/human-decision.ts` turns exactly
+`no port names a transport[src/ports/human-decision.ts]` red, and reverting restores green.
+
+**What would falsify it.**
+
+- **`S-1` and `S-3`**, if continuo grows a seam that can tell a claimed answerer from a proven one, or
+  if rondo D-0009 is superseded. Then the issuer check becomes a belt over a stronger mechanism rather
+  than the mechanism, and where the rule lives is reopened — in the repository that does the write.
+- **`S-1` again**, if a consumer can show that the four checks refuse a call that should have
+  succeeded, or admit one whose *shape* the checks were meant to catch. A **fabricated** record
+  passing is not a falsifier: it is the stated price, asserted as a passing test.
+- **`S-2`**, if a decision record needs a field these five do not carry — a timestamp, a second
+  approver, a scope narrower than one successor. That is a schema change to a value a consumer
+  persists, and it is a new entry rather than an edit to this one.
+- **`S-3`**, if `adopt()` acquires a decision-shaped argument for any reason. That is this row
+  reversed, and `src/domain/supersession.ts` changing is how a reader would notice.
+- **`S-11`**, if the case fires on a name a reviewer agrees is not a transport, or fails to fire on
+  one that is. Either is an argument about the sixteen words rather than about the shape of the rule,
+  and the word list is where it gets settled. The *shape* is falsified by a declaration form the
+  positional rule misses — the sweep collects the `name` of whatever node an identifier sits in, so a
+  binding that is not its node's `name` would go unseen.
+- **The whole entry**, if D-0029 is revisited and the host application returns to this repository.
+  Then this is not a library boundary at all but an adapter layer, which is a different design.
+
+**Consequences.**
+
+- Two new modules, `src/ports/human-decision.ts` and `src/application/human-decision.ts`, and four new
+  names on the barrel — `HumanDecisionRecord`, `DecisionOutcome`, `humanDecisionRecord`,
+  `supersedeOnDecision` — plus three refusals, `InvalidOutcomeError`, `UnapprovedDecisionError` and
+  `DecisionMismatchError`. Under D-0033 each of those is a commitment.
+- `requireIdentity` is exported from `src/domain/contract.ts` and is **not** on the barrel.
+  `delegationContract()` remains the only contract constructor.
+- **Nothing in `domain/` changes semantically.** `adopt()`, `delegate()`, `delegationContract()` and
+  every digest input are untouched; `src/domain/errors.ts` gains three classes and nothing else.
+- The existing boundary tables need no widening: `ALLOWED_BY_LAYER["src/ports"]` already permits
+  `src/domain` and `src/ports`, and `ALLOWED_EXTERNALS_BY_LAYER["src/ports"]` is already `{}`, which
+  refuses `node:http` and every package by construction.
+- `src/index.ts`'s standing sentence that *"a gate outcome is an input to `classify`"* is **corrected
+  where it appears**: `ClassificationContext` is exactly `{ runId, configDigest }` and names no gate.
+  A human approval enters cadenza's semantics as a new **contract**, never as a field on a
+  classification. D-0026 §3's totality argument is untouched, and no `D-` entry's text is edited.
+- `docs/design/operating-surface.md` is marked taken **for its four cadenza rows only**. `S-4`..`S-10`
+  stay open at their own gates, and this entry takes no position on them.
