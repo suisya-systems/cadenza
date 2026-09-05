@@ -524,6 +524,8 @@ function moduleFiles(directory: string = SRC_ROOT): string[] {
 const MODULES = moduleFiles();
 const DOMAIN_MODULES = MODULES.filter((module) => module.startsWith("src/domain/"));
 const APPLICATION_MODULES = MODULES.filter((module) => module.startsWith("src/application/"));
+/** The layer the transport-word case sweeps, and the only one it sweeps. */
+const PORT_MODULES = MODULES.filter((module) => module.startsWith("src/ports/"));
 /** Every module in a layer section 8 marks `(no I/O)`, whichever layer that is. */
 const PURE_LAYER_MODULES = MODULES.filter((module) =>
   PURE_LAYERS.some((layer) => module.startsWith(`${layer}/`)),
@@ -832,6 +834,7 @@ test("the walk found the module graph it is supposed to guard", () => {
 const PER_MODULE = MODULES.map((module) => [module, module] as const);
 const PER_DOMAIN_MODULE = DOMAIN_MODULES.map((module) => [module, module] as const);
 const PER_APPLICATION_MODULE = APPLICATION_MODULES.map((module) => [module, module] as const);
+const PER_PORT_MODULE = PORT_MODULES.map((module) => [module, module] as const);
 
 parametrize("no module imports interlock", PER_MODULE, (module) => {
   // A specifier nothing can read is counted here rather than ignored. The
@@ -1275,6 +1278,245 @@ test("no module manufactures a loader or an unapproved dependency", () => {
     offenders.push(...loaderRoutesIn(module, sourceOf(module)));
   }
   expect(offenders.sort(), `unapproved: ${offenders.join(", ")}`).toEqual([]);
+});
+
+// --- ports name no transport ------------------------------------------------
+
+/**
+ * The words a port may not name (D-0036, row `S-11`).
+ *
+ * A policy rather than a derivation, and `docs/design/operating-surface.md`
+ * section 8 says so: this is a starting set, and the entry that took the row is
+ * where a later reader argues with it.
+ */
+const TRANSPORT_WORDS: readonly string[] = [
+  "http",
+  "https",
+  "url",
+  "uri",
+  "header",
+  "cookie",
+  "session",
+  "browser",
+  "socket",
+  "oidc",
+  "oauth",
+  "jwt",
+  "bearer",
+  "token",
+  "csrf",
+  "websocket",
+];
+
+const TRANSPORT_WORD_SET = new Set(TRANSPORT_WORDS);
+
+/**
+ * A declared name, split into the words a reader reads in it.
+ *
+ * On camelCase and PascalCase boundaries, on every non-alphanumeric character
+ * (which covers `_` and `-`), and on digit runs, then lowercased. `PascalCase`
+ * needs two boundaries rather than one: `HttpClient` breaks between a lower and
+ * an upper, and `HTTPClient` breaks between the last upper of a run and the
+ * upper that starts the next word.
+ */
+function wordsIn(name: string): string[] {
+  return name
+    .split(/[^A-Za-z0-9]+/u)
+    .flatMap((part) =>
+      part.split(
+        /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|(?<=[A-Za-z])(?=[0-9])|(?<=[0-9])(?=[A-Za-z])/u,
+      ),
+    )
+    .filter((word) => word !== "")
+    .map((word) => word.toLowerCase());
+}
+
+/**
+ * The transport words a name uses, matched **whole** and never as substrings.
+ *
+ * A substring sweep is not a smaller version of this rule, it is a broken one:
+ * `SecurityPolicy` contains `uri` and would be refused for a word it does not
+ * use, and a check a reader learns to route around by renaming an innocent type
+ * is worse than no check. The plural is matched too, because `headers` and
+ * `cookies` are the names somebody would actually write and a list of singulars
+ * would pass both -- D-0036 records that as the one departure from section 8's
+ * literal sixteen.
+ */
+function transportWordsIn(name: string): string[] {
+  const words = new Set(wordsIn(name));
+  const used = new Set<string>();
+  for (const word of words) {
+    const singular = word.endsWith("s") ? word.slice(0, -1) : word;
+    if (TRANSPORT_WORD_SET.has(word)) {
+      used.add(word);
+    } else if (TRANSPORT_WORD_SET.has(singular)) {
+      used.add(singular);
+    }
+  }
+  return [...used].sort();
+}
+
+/**
+ * Every name a module **declares**, as `module:line: name`.
+ *
+ * Structural rather than a text sweep, for two reasons section 8 states. A doc
+ * comment saying "a browser never reaches this layer" is exactly the sentence a
+ * boundary reviewer wants to keep, and a text sweep would forbid it; and the
+ * words here have legitimate uses in prose, which is why the existing
+ * `provider-neutral` case can afford to be a text sweep and this one cannot.
+ *
+ * It collects the declared name of **every** declaration the parser reports
+ * rather than an enumerated list of forms. Enumerating forms is the losing game
+ * the externals allowlist already played once -- `<computed>`, then
+ * `createRequire`, then `"module"` without the prefix, each closed by name and
+ * each followed by another -- and a list of "interfaces, type aliases and
+ * functions" would pass `export class HttpClient {}` and
+ * `export const sessionToken = ""` without comment. The rule instead is
+ * positional: an identifier or a literal that is the `name` of whatever node it
+ * sits in is a declared name, whatever kind of node that turns out to be, so a
+ * form nobody has thought of fails closed.
+ *
+ * The two exclusions are uses rather than declarations: the `name` half of a
+ * property access (`value.session`) reads a property somebody else declared, and
+ * `import.meta` is a keyword pair rather than a binding. The two additions are
+ * the halves a bare `name` misses: an import or export specifier's
+ * `propertyName` (`import { sessionToken as recorded }` and the same shape in a
+ * re-export both name a transport in this module's text), and a computed
+ * property whose key is a literal, which declares exactly what the quoted
+ * spelling declares.
+ */
+function declaredNamesIn(module: string, source: string): string[] {
+  const found: string[] = [];
+  const tree = parseSourceFile(module, source);
+  const report = (node: ts.Node, name: string): void => {
+    const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
+    found.push(`${module}:${line}: ${name}`);
+  };
+  const textOf = (node: ts.Node): string | null => {
+    if (ts.isIdentifier(node) || ts.isPrivateIdentifier(node)) {
+      return node.text;
+    }
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+      return node.text;
+    }
+    return null;
+  };
+  const visit = (node: ts.Node): void => {
+    const name = textOf(node);
+    const parent = node.parent;
+    if (name !== null && parent !== undefined) {
+      const isUse =
+        ts.isPropertyAccessExpression(parent) ||
+        ts.isMetaProperty(parent) ||
+        ts.isQualifiedName(parent);
+      const named = parent as ts.Node & { name?: ts.Node; propertyName?: ts.Node };
+      if (!isUse && (named.name === node || named.propertyName === node)) {
+        report(node, name);
+      } else if (ts.isComputedPropertyName(parent)) {
+        // `{ ["sessionToken"]: "" }` declares the property the quoted spelling
+        // declares, so the literal inside is read as the name it is.
+        const grandparent = parent.parent as (ts.Node & { name?: ts.Node }) | undefined;
+        if (grandparent !== undefined && grandparent.name === parent) {
+          report(node, name);
+        }
+      }
+    }
+    node.forEachChild(visit);
+  };
+  visit(tree);
+  return found;
+}
+
+/** Every declared name in a module that names a transport, with the word it used. */
+function transportNamesIn(module: string, source: string): string[] {
+  const offenders: string[] = [];
+  for (const declared of declaredNamesIn(module, source)) {
+    const name = declared.slice(declared.lastIndexOf(": ") + 2);
+    const words = transportWordsIn(name);
+    if (words.length > 0) {
+      offenders.push(`${declared} (${words.join(", ")})`);
+    }
+  }
+  return offenders;
+}
+
+parametrize("no port names a transport", PER_PORT_MODULE, (module) => {
+  // Testable form 1 of cadenza#22's loose-coupling comment, made mechanical
+  // (D-0036, row `S-11`). The import allowlists already refuse `node:http` and
+  // every package: `ALLOWED_EXTERNALS_BY_LAYER["src/ports"]` is `{}`. What they
+  // cannot see is `interface GateAnswerRequest { sessionToken: string }`, which
+  // imports nothing and is exactly the leak -- the coupling arrives as a
+  // hand-written type. Scoped to `src/ports` because the domain is not where it
+  // would leak in, and because `DelegationRequest` is not a transport type.
+  const offenders = transportNamesIn(module, sourceOf(module));
+  expect(offenders, `${module} names a transport: ${offenders.join(", ")}`).toEqual([]);
+});
+
+test("the transport sweep catches a planted violation in every declaration form", () => {
+  // Target-only, and the non-vacuity AGENTS.md requires of a PR that adds a
+  // check. One planted violation is not enough here: the defect this rule
+  // guards against is a MISSED DECLARATION FORM, so there is one per form, and
+  // each must go red on its own.
+  const from = "src/ports/probe.ts";
+  const planted: readonly (readonly [string, string])[] = [
+    ["export interface GateAnswerRequest {\n  sessionToken: string;\n}\n", "sessionToken"],
+    ["export class HttpClient {}\n", "HttpClient"],
+    ['export const sessionToken = "";\n', "sessionToken"],
+    ["export function keep(cookieJar: string): void {}\n", "cookieJar"],
+    ["export type Reach = { readonly url: string };\n", "url"],
+    ["export enum Scheme {\n  Https = 1,\n}\n", "Https"],
+    ['export { fetchIt as bearerToken } from "./client.js";\n', "bearerToken"],
+    ['const held = { ["oauthState"]: 1 };\n', "oauthState"],
+  ];
+  for (const [source, name] of planted) {
+    const offenders = transportNamesIn(from, source);
+    expect(offenders.join(" | "), `${name} was not caught in: ${source}`).toContain(` ${name} (`);
+  }
+  // A walk that found no port module would make the parametrized case above
+  // generate nothing, and a suite of zero assertions is green. The ledger says
+  // the same in reverse -- every id here is claimed -- but a case that guards
+  // its own subject should say so where it is read.
+  expect(PORT_MODULES.length).toBeGreaterThan(0);
+});
+
+test("the transport sweep matches whole words and reads declarations, not text", () => {
+  // Target-only, and the other half of the rule: what it must NOT refuse. A
+  // substring sweep refuses `SecurityPolicy` for `uri` and `CatalogSource` for
+  // `uri` is not even the point -- the point is that a check a reader learns to
+  // route around by renaming an innocent type teaches the tree that this case
+  // fires for the wrong reason.
+  const from = "src/ports/probe.ts";
+  expect(
+    transportNamesIn(from, "export interface SecurityPolicy {\n  purity: number;\n}\n"),
+  ).toEqual([]);
+  // Prose is kept: the sentence a boundary reviewer wants is the sentence a
+  // text sweep would forbid.
+  expect(
+    transportNamesIn(
+      from,
+      "/** No browser, cookie or session reaches this layer. */\nexport const kept = 1;\n",
+    ),
+  ).toEqual([]);
+  // A property somebody else declared, read here, is a use rather than a
+  // declaration -- and a string that is not a name is not a name.
+  expect(transportNamesIn(from, "export const read = (v: { session: 1 }) => v.session;\n")).toEqual(
+    [`${from}:1: session (session)`],
+  );
+  expect(transportNamesIn(from, 'export const kept = "https://example.invalid";\n')).toEqual([]);
+  // Split on `_`, on `-` inside a quoted name, on a digit run, and on both
+  // Pascal boundaries; and the plural counts.
+  expect(transportNamesIn(from, "export const recorded_by_url = 1;\n")).toEqual([
+    `${from}:1: recorded_by_url (url)`,
+  ]);
+  expect(
+    transportNamesIn(from, "export interface Held {\n  readonly oauth2Client: string;\n}\n"),
+  ).toEqual([`${from}:2: oauth2Client (oauth)`]);
+  expect(
+    transportNamesIn(from, "export interface Held {\n  readonly HTTPClient: string;\n}\n"),
+  ).toEqual([`${from}:2: HTTPClient (http)`]);
+  expect(
+    transportNamesIn(from, "export interface Held {\n  readonly headers: string;\n}\n"),
+  ).toEqual([`${from}:2: headers (header)`]);
 });
 
 // --- the anchors ------------------------------------------------------------

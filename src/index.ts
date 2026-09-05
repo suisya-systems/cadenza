@@ -31,10 +31,17 @@
  * edge of it -- a host that has to reach past this file for a value or a type
  * says the boundary is in the wrong place.
  *
- * There is deliberately **no gate API**. D-0026 section 2 leaves G3 unfixed and
- * D-0029 says so in as many words: a gate *outcome* is an input to
- * {@link classify}, which is the whole of cadenza's relationship to gates. The
- * verbs belong to continuo.
+ * There is deliberately **no gate API**, and D-0036 corrects how that used to be
+ * said here. The verbs belong to continuo; what is new is the one shape a human
+ * answer takes on the way in. It is **not** a field on a classification --
+ * `ClassificationContext` is exactly `{ runId, configDigest }` and names no gate
+ * -- so the older wording ("a gate outcome is an input to {@link classify}")
+ * sent a reader looking for a parameter that does not exist. A human approval
+ * enters cadenza's semantics as a **new contract**: a widening successor,
+ * carried in by {@link supersedeOnDecision} against a
+ * {@link HumanDecisionRecord} the surface supplies. That is a value check and
+ * not an authority -- cadenza mints no identity, so it cannot tell a claimed
+ * answerer from a proven one, and D-0036 states the price.
  */
 
 export {
@@ -47,6 +54,7 @@ export {
   type IssuanceParties,
 } from "./application/agent-type-issuance.js";
 export { type Catalog, composeCatalog, SUPPORTED_SCHEMA_VERSIONS } from "./application/compose.js";
+export { supersedeOnDecision } from "./application/human-decision.js";
 export { resolveProject } from "./application/resolve.js";
 export {
   type AgentType,
@@ -113,6 +121,7 @@ export {
   AmplifiedGrantError,
   CadenzaError,
   CatalogError,
+  DecisionMismatchError,
   ForgedAgentTypeError,
   ForgedContractError,
   InvalidBaseBranchError,
@@ -120,6 +129,7 @@ export {
   InvalidDigestError,
   InvalidIdentifierError,
   InvalidIdentityError,
+  InvalidOutcomeError,
   InvalidPolicyError,
   MissingFieldError,
   NameCollisionError,
@@ -130,6 +140,7 @@ export {
   SupersessionLineageError,
   SupersessionSubjectError,
   TombstoneError,
+  UnapprovedDecisionError,
   UngrantedDelegationError,
   UnknownCapabilityError,
   UnknownFieldError,
@@ -157,4 +168,9 @@ export {
   type LayerDocument,
   layerDocument,
 } from "./ports/catalog-source.js";
+export {
+  type DecisionOutcome,
+  type HumanDecisionRecord,
+  humanDecisionRecord,
+} from "./ports/human-decision.js";
 export type { LocalPathVerifier } from "./ports/path-verifier.js";

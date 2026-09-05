@@ -186,8 +186,20 @@ export function requireContract(value: unknown): DelegationContract {
  * the digest throw would be a contract that exists and cannot be classified,
  * since every classification carries the digest. It is refused here, where a
  * refusal is what the caller is expecting.
+ *
+ * **Exported since D-0036**, and the export is the decision rather than a
+ * convenience. The human-decision record (`src/ports/human-decision.ts`) carries
+ * two identity-shaped fields, `decisionId` and `recordedBy`, and the latter
+ * becomes a contract's `issuer` -- so the two must be validated by the same rule
+ * or a record could name a surface no contract could carry. Row `S-2` asks for
+ * **reuse rather than a copy** because the six checks below are more than a
+ * summary remembers: a restatement that dropped the leading-whitespace or the
+ * lone-surrogate check would admit values the promise does not cover. It stays
+ * off the barrel: `delegationContract()` is still the only constructor, and this
+ * is a rule shared between two modules rather than a name cadenza offers a
+ * consumer (D-0033).
  */
-function requireIdentity(value: unknown, field: string): string {
+export function requireIdentity(value: unknown, field: string): string {
   if (typeof value !== "string") {
     throw new InvalidIdentityError(`${field} must be a string, got ${pythonTypeName(value)}`);
   }

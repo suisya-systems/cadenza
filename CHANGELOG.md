@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The operating surface's cadenza-owned rows (D-0036, cadenza#22): a
+  `HumanDecisionRecord` port - `decisionId`, `recordedBy`, `outcome`
+  (`approved`/`refused`), `predecessor` and `approved`, the last two
+  `contract_digest`s - validated by three validators rather than one
+  (`DIGEST_PATTERN` for the digests, `requireIdentity` reused for the two
+  identities, a closed union for the outcome), and an application function
+  `supersedeOnDecision()` that composes a successor, refuses it against the
+  decision on four counts - a denial spent as an approval, a predecessor that
+  disagrees with the lineage, a successor that is not the one approved, and an
+  issuer that is not the surface that recorded the decision - and then adopts it.
+  `adopt()` is byte-identical and every existing export is unchanged. The checks
+  are value checks, not authentication: a fabricated record passes them, which is
+  the entry's stated price and a passing test.
+- A boundary case, `no port names a transport` (D-0036, row `S-11`): every
+  declared name under `src/ports/**` is split into words and refused on a
+  whole-token match against sixteen transport words, which catches the
+  hand-written `interface GateAnswerRequest { sessionToken: string }` that
+  imports nothing and so is invisible to the import allowlists. Eight planted
+  violations, one per declaration form, show it is not vacuous.
 - The agent-type record (D-0031, with its value schema fixed by D-0034): a frozen,
   digested value carrying two D-0027 capability key sets, a `loopPolicy` the
   conductor reads, an `executorPolicy` cadenza carries and never interprets, and
