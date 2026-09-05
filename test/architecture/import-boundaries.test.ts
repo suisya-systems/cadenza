@@ -1405,12 +1405,17 @@ function transportWordsIn(name: string): string[] {
  * property whose key is a literal, which declares exactly what the quoted
  * spelling declares.
  */
-function declaredNamesIn(module: string, source: string): string[] {
-  const found: string[] = [];
+function declaredNamesIn(
+  module: string,
+  source: string,
+): { names: { name: string; line: number }[]; opaque: number[] } {
+  const names: { name: string; line: number }[] = [];
+  const opaque: number[] = [];
   const tree = parseSourceFile(module, source);
+  const lineOf = (node: ts.Node): number =>
+    tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
   const report = (node: ts.Node, name: string): void => {
-    const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
-    found.push(`${module}:${line}: ${name}`);
+    names.push({ name, line: lineOf(node) });
   };
   const textOf = (node: ts.Node): string | null => {
     if (ts.isIdentifier(node) || ts.isPrivateIdentifier(node)) {
@@ -1422,6 +1427,20 @@ function declaredNamesIn(module: string, source: string): string[] {
     return null;
   };
   const visit = (node: ts.Node): void => {
+    // `export * from "./x.js"` and `export * as ns from "./x.js"` name nothing
+    // this sweep can read: the identifiers they re-export live in another file
+    // and appear nowhere in this one, so every rule above would pass a port that
+    // re-exported `urlsplit` and `UrlValueError` wholesale. Resolving the target
+    // would make this scan a module graph walk; refusing the form keeps it a
+    // scan and fails CLOSED, which is what the rest of this case does with a
+    // shape it cannot read. A port that wants a name from another module can
+    // name it: `export { layerDocument } from ...` is read here in full.
+    if (ts.isExportDeclaration(node) && node.moduleSpecifier !== undefined) {
+      const clause = node.exportClause;
+      if (clause === undefined || ts.isNamespaceExport(clause)) {
+        opaque.push(lineOf(node));
+      }
+    }
     const name = textOf(node);
     const parent = node.parent;
     if (name !== null && parent !== undefined) {
@@ -1444,17 +1463,38 @@ function declaredNamesIn(module: string, source: string): string[] {
     node.forEachChild(visit);
   };
   visit(tree);
-  return found;
+  return { names, opaque };
+}
+
+/**
+ * `name`, with every non-ASCII character escaped.
+ *
+ * An identifier may hold any Unicode letter, and what this function feeds is a
+ * failure message. D-0007 is about what this repository prints: the console it
+ * is developed against is cp932, where an unencodable character kills the
+ * process at the print rather than at the bug -- so an offender named
+ * `sessionEmoji` in a script nobody can read would take its own report down with
+ * it, and the violation would look like a crash.
+ */
+function asciiOnly(name: string): string {
+  return [...name]
+    .map((character) => {
+      const code = character.codePointAt(0) ?? 0;
+      return code < 0x80 ? character : `\\u{${code.toString(16)}}`;
+    })
+    .join("");
 }
 
 /** Every declared name in a module that names a transport, with the word it used. */
 function transportNamesIn(module: string, source: string): string[] {
-  const offenders: string[] = [];
-  for (const declared of declaredNamesIn(module, source)) {
-    const name = declared.slice(declared.lastIndexOf(": ") + 2);
+  const { names, opaque } = declaredNamesIn(module, source);
+  const offenders = opaque.map(
+    (line) => `${module}:${line}: export * (re-exports names this sweep cannot read)`,
+  );
+  for (const { name, line } of names) {
     const words = transportWordsIn(name);
     if (words.length > 0) {
-      offenders.push(`${declared} (${words.join(", ")})`);
+      offenders.push(`${module}:${line}: ${asciiOnly(name)} (${words.join(", ")})`);
     }
   }
   return offenders;
@@ -1554,6 +1594,23 @@ test("the transport sweep matches whole words and reads declarations, not text",
   expect(
     transportNamesIn(from, "export interface Held {\n  readonly redirectURLs: string;\n}\n"),
   ).toEqual([`${from}:2: redirectURLs (url)`]);
+  // A star re-export names nothing this sweep can read, so it is refused as a
+  // form rather than passed: the names it carries into the port live in another
+  // file. Both spellings, and only when there is a module to re-export from --
+  // `export { local }` re-exports nothing and is read in full above.
+  expect(transportNamesIn(from, 'export * from "../domain/python-urlsplit.js";\n')).toEqual([
+    `${from}:1: export * (re-exports names this sweep cannot read)`,
+  ]);
+  expect(transportNamesIn(from, 'export * as kept from "../domain/refs.js";\n')).toEqual([
+    `${from}:1: export * (re-exports names this sweep cannot read)`,
+  ]);
+  expect(transportNamesIn(from, "const local = 1;\nexport { local };\n")).toEqual([]);
+  // A non-ASCII identifier is escaped before it reaches a failure message: the
+  // console this is developed against is cp932, and an unencodable character
+  // would kill the process at the print rather than at the bug (D-0007).
+  expect(transportNamesIn(from, "export const session\u00c9 = 1;\n")).toEqual([
+    `${from}:1: session\\u{c9} (session)`,
+  ]);
   // And joining stops at a boundary the writer wrote: `url` is not assembled
   // out of two parts a `_` separates, and an innocent compound stays innocent.
   expect(transportNamesIn(from, "export const ur_ls = 1;\n")).toEqual([]);

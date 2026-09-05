@@ -2991,7 +2991,7 @@ consumer adopt it in one commit rather than as a breaking change. The alternativ
 rondo D-0009's falsifier names `adopt()` literally and a gate could have preferred the literal
 reading; it did not.
 
-**Two things about `S-11` that the row leaves to the implementation, decided here.**
+**Four things about `S-11` that the row leaves to the implementation, decided here.**
 
 - **Token matching is a correctness condition, not a refinement**, and it does not mean "no port
   touches a transport". `SecurityPolicy` contains `uri` as a substring and is **accepted**, which is
@@ -3013,6 +3013,17 @@ reading; it did not.
   `SecurityPolicy` still yields only `security`, `policy` and `securitypolicy` and is still accepted.
   Joining stops at a `_`, a `-` or a digit run, because those are boundaries the writer put there
   rather than boundaries the rule guessed at.
+
+- **A star re-export is refused as a form**, because it is a shape the sweep cannot read:
+  `export * from "../domain/python-urlsplit.js"` carries `urlsplit` and `UrlValueError` into a port's
+  surface while naming neither of them anywhere in the port's own text, so every rule above would
+  pass it. Resolving the target would turn this scan into a module-graph walk; refusing the form
+  keeps it a scan and fails **closed**, which is what the rest of the case does with a shape it
+  cannot read. A port that wants one name from another module can name it -- `export { x } from ...`
+  is read here in full. The reported name is also **escaped to ASCII** before it reaches a failure
+  message: an identifier may hold any Unicode letter, and on the cp932 console this repository is
+  developed against an unencodable character kills the process at the print rather than at the bug
+  (D-0007), which would make a violation look like a crash.
 
 **Non-vacuity, as AGENTS.md requires of a PR that adds a check.** The defect the rule guards against
 is a *missed declaration form*, so one planted violation is not enough: **ten** are asserted and each
