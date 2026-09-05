@@ -11,8 +11,10 @@ decision is a recommendation that has not been taken, **except where the text sa
 which it does wherever it bears.
 
 **Measured against.** cadenza `e56d7e7`, rondo `92edb17`, continuo `44f6233`, all read on
-2026-09-06. Every claim about another repository carries a path and a line so a later reader can
-tell "still true" from "was true in 2026". Section 9 states what would falsify the document.
+2026-09-06. Every claim about a **source file** carries a path and a line so a later reader can tell
+"still true" from "was true in 2026". Every claim about a **decision** cites the entry by its
+permanent ID and never by line — `AGENTS.md:56-63` requires it, and a ledger is appended to.
+Section 9 states what would falsify the document.
 
 **Vocabulary.** cadenza says **provider-agnostic** and never *provider-neutral*
 (`test/architecture/import-boundaries.test.ts:918-921` fails any module under `src/` containing the
@@ -57,13 +59,13 @@ operating surface as the **invoker** of a continuo verb, and they are the whole 
 write path today.
 
 **D-0009 — `gate answer` is invoked by the operating surface, not by the conductor**
-(`rondo DECISIONS.md:721-841`). Three parts, quoted in the entry's own order: the body reaching
+(rondo **D-0009**). Three parts, quoted in the entry's own order: the body reaching
 continuo is the one a person typed into that surface; a widening successor contract is issued only
 on an answer that surface recorded, with that surface as the issuer; and no approximation counts as
 carrying — summarising or reformatting is composing.
 
 **D-0013 — an aborted iteration's open gate is closed `gate close --outcome withdrawn` by the
-operating surface** (`rondo DECISIONS.md:1069-1144`). The conductor asks for the close and reports
+operating surface** (rondo **D-0013**). The conductor asks for the close and reports
 why; it does not write the outcome.
 
 Both rest on the same measured fact, and it is worth restating in cadenza's own file because two
@@ -149,7 +151,7 @@ opposite directions.
 
 The recorded actor on a `gate answer` is a property of `continuo`'s transition table and of who
 invoked the verb. cadenza has no part in it: it mints no identity, reads no clock, persists nothing
-(D-0026 §2, `DECISIONS.md:1531-1534`), and the barrel says a gate API is deliberately absent
+(D-0026 §2), and the barrel says a gate API is deliberately absent
 (`src/index.ts:34-38`). rondo's boundary already permits the only arrow needed —
 `src/access` may import `src/continuo` (`rondo test/architecture/import-boundaries.test.ts:148`) —
 so the surface can invoke the verb without cadenza appearing anywhere on that path.
@@ -184,9 +186,9 @@ stable state only until a conductor needs one.
 **Half of rondo D-0009's own falsifier has fired.** The entry names it precisely: *"cadenza's
 `adopt()` gains an issuer-authority check **and** rondo consumes cadenza. The check alone changes
 nothing here: D-0001 records that rondo imports no cadenza code at all ... Both halves together move
-part 2 into the library; either half alone leaves it here"* (`rondo DECISIONS.md:826-831`). The
+part 2 into the library; either half alone leaves it here"* (rondo D-0009, its own "what would falsify it" section). The
 second half fired the next day: **rondo D-0018** (2026-09-06) makes cadenza a consumed library
-through the delivery bridge (`rondo DECISIONS.md:2127-2160`, facade granted the package at
+through the delivery bridge (rondo D-0018; facade granted the package at
 `test/architecture/import-boundaries.test.ts:218-230`). The remaining half is cadenza's, and this
 document is where it is proposed.
 
@@ -224,15 +226,19 @@ picks the shape below.
    approval" made mechanical. The consequence to plan for is real and belongs in rondo's build: the
    widening must be **composed before it is presented**, because the digest is what is presented.
 
-   Validation is **three different rules, not one** — the natural mistake here is to reach for
+   Validation takes **three different validators, not one** — the natural mistake is to reach for
    `parseIdentifier`, which would reject every digest it was given. `predecessor` and `approved`
    take `DIGEST_PATTERN` (`src/domain/digest.ts`, `sha256:` plus 64 lowercase hex — a string
    `IDENTIFIER_PATTERN` refuses twice over, for the colon and for the length,
    `src/domain/identifiers.ts:19`). `recordedBy` and `decisionId` take the identity rules
-   `delegationContract` already applies to `issuer` and `grantee` — non-empty, no control
-   characters, at most `MAX_IDENTITY_LENGTH` — which live in `requireIdentity`
-   (`src/domain/contract.ts:190-220`) and are *not* `parseIdentifier`; if the port is added, that
-   function is what gets shared or restated, and `S-2` says which. `outcome` is a closed union.
+   `delegationContract` already applies to `issuer` and `grantee`, and the recommendation is to
+   **reuse `requireIdentity` rather than restate it** (`src/domain/contract.ts:190-220`, today
+   private to that module). It applies **six** checks, not the three a summary remembers: a string
+   at all; non-empty; at most `MAX_IDENTITY_LENGTH` **codepoints**; no control character; no leading
+   or trailing whitespace by Python's definition; and no lone surrogate — the last because an
+   unpaired surrogate cannot be UTF-8 encoded and so could not be digested (D-0013). A restatement
+   that drops the last two admits values the promise does not cover, which is why `S-2` asks the
+   gate for reuse rather than for a copy. It is *not* `parseIdentifier`, which is `project_id`'s. `outcome` is a closed union.
    **No HTTP, browser, session, token or gate vocabulary** appears in any of it — testable form 1 of
    #22's loose-coupling comment, made mechanical by section 8.
 
@@ -387,7 +393,7 @@ fifth. Each is checkable now, and two of them are already true by mechanism rath
 
 The brief asks what cadenza *needs* from a store, not how rondo builds one. cadenza needs nothing
 persisted for its own sake — it stores nothing by decision, and a contract is reproducible from its
-inputs (D-0026 §2, `DECISIONS.md:1531-1534`). What the *console* needs is the ability to answer, for
+inputs (D-0026 §2). What the *console* needs is the ability to answer, for
 a run that is standing at a gate, the question #22's table names: **what was delegated, to whom, and
 under what authority.** Rendering that requires five values, and the store that holds them is
 whoever's `S-7` says:
@@ -398,7 +404,7 @@ whoever's `S-7` says:
 2. **`contract_digest`** beside them, so a mismatch is detectable rather than theoretical.
 3. **`agentTypeId` and `agent_type_digest`.** D-0034 §6 is explicit that these do **not** enter
    `DelegationContract` and are *"run provenance the host persists beside it"*
-   (`DECISIONS.md:2633-2638`). If the host does not persist them, "under what policy did it do that"
+   (D-0034 §6). If the host does not persist them, "under what policy did it do that"
    stops being answerable — which is the exact property D-0031 §2 created the digest for.
 4. **The superseded records themselves.** D-0031 §5 makes agent-type records immutable by minting a
    new one on every edit and assigns durability to the store owner, not to cadenza. A digest detects
@@ -419,7 +425,7 @@ issue that needs them is rondo's, in rondo's ledger, over values rondo mints fro
 does not consume. rondo already owns one SQLite module by decision (`rondo D-0005`) and already has
 an outstanding store-schema item that this would join: D-0015 rule 6's per-run continuo revision is
 recorded as *"persisting the observed revision per run waits on a store schema"*
-(`rondo DECISIONS.md:1236-1237`, `:2072`). Three homeless facts, one schema, one gate.
+(rondo D-0015 rule 6, and D-0017's own list of what it leaves outstanding). Three homeless facts, one schema, one gate.
 
 **The operator conversation (`S-8`) is the same store and a different question.** #22 listed it as
 undecided and its own 2026-09-04 cross-link claims #40 answered it; #40's document does not — none of
@@ -488,7 +494,7 @@ policy, and this document proposes a starting set rather than a complete one.
 
 - **§4.2**, if rondo D-0009 is superseded, or if continuo grows a seam that can tell a claimed
   answerer from a proven one. D-0009 names the second as its own falsifier
-  (`rondo DECISIONS.md:820-825`); if it fires, the rule moves to where the write happens and the
+  (rondo D-0009's falsifiers); if it fires, the rule moves to where the write happens and the
   issuer check in 4.3 becomes a belt over a stronger mechanism rather than the mechanism.
 - **§2 and §3**, the moment continuo grows read verbs for runs, events and the outbox. Row three of
   the ownership table and `S-10` both expire; nothing else in the document depends on their absence.
@@ -519,13 +525,13 @@ recommend into existence: they are about verbs cadenza has no say in.
 
 | id | Decision | Gate | Recommendation | Reason |
 |---|---|---|---|---|
-| **S-1** | Does cadenza expose anything at all for the operating surface — a port and an application function (4.3), or nothing, leaving D-0009 part 2 to hold by rondo's omission? | cadenza | **Yes, the minimum in 4.3**: one port and one application function, scoped to the widening successor and to nothing else | Half of rondo D-0009's own falsifier fired at rondo D-0018 (`rondo DECISIONS.md:826-831`, `:2127`), so the remaining half is cadenza's; and rondo cannot satisfy D-0009 part 2 by calling cadenza from the surface, because its layer table refuses `src/access -> src/cadenza` (`rondo test/.../import-boundaries.test.ts:143-148`) |
-| **S-2** | What does the human-decision value carry, and under which validators? | cadenza | **Five fields**: `decisionId`, `recordedBy`, `outcome` (`approved`/`refused`), `predecessor` and `approved`, the last two being `contract_digest`s. **Three validators, not one** — `DIGEST_PATTERN` for the two digests, the identity rules of `requireIdentity` for the two strings, a closed union for `outcome`. The gate also decides whether `requireIdentity` is shared out of `src/domain/contract.ts:190-220` or restated | `approved` is what stops a decision about a two-key widening from authorising a ten-key one; `outcome` is what stops a denial being spent as an approval. The validator split is not a nicety: `parseIdentifier` refuses every digest it is given, for the colon and for the length (`src/domain/identifiers.ts:19`), so one rule for all five fields cannot work |
+| **S-1** | Does cadenza expose anything at all for the operating surface — a port and an application function (4.3), or nothing, leaving D-0009 part 2 to hold by rondo's omission? | cadenza | **Yes, the minimum in 4.3**: one port and one application function, scoped to the widening successor and to nothing else | Half of rondo D-0009's own falsifier fired at rondo D-0018 (rondo D-0009's falsifiers; rondo D-0018), so the remaining half is cadenza's; and rondo cannot satisfy D-0009 part 2 by calling cadenza from the surface, because its layer table refuses `src/access -> src/cadenza` (`rondo test/.../import-boundaries.test.ts:143-148`) |
+| **S-2** | What does the human-decision value carry, and under which validators? | cadenza | **Five fields**: `decisionId`, `recordedBy`, `outcome` (`approved`/`refused`), `predecessor` and `approved`, the last two being `contract_digest`s. **Three validators, not one** — `DIGEST_PATTERN` for the two digests, `requireIdentity` **reused, not restated**, for the two strings (it applies six checks including the lone-surrogate one a copy would drop), a closed union for `outcome`. Reuse means making it non-private, which is the part the gate decides | `approved` is what stops a decision about a two-key widening from authorising a ten-key one; `outcome` is what stops a denial being spent as an approval. The validator split is not a nicety: `parseIdentifier` refuses every digest it is given, for the colon and for the length (`src/domain/identifiers.ts:19`), so one rule for all five fields cannot work |
 | **S-3** | Where do the four decision checks live — a new `application/` function, or inside `adopt()`? | cadenza | **A new application function**, leaving `adopt()` byte-identical | `adopt` is also the initial-adoption path and is on the exported surface (`src/domain/supersession.ts:62-71`, `src/index.ts:149-154`); a check added there changes every existing caller. The alternative is listed because rondo D-0009's falsifier names `adopt()` literally, and a gate may prefer the literal reading |
 | **S-4** | Is the first cut chat-primary (A, as #22 settled) or the decision list (B's centre column)? | rondo | **Keep B as the endpoint and build the gate panes first**: list, detail, `answer`, `close --outcome withdrawn` | B's rows ship today as `continuo.gate.list/1` (`continuo src/gate/cli.ts:355-366`); A's conversation has no store in any repository, and D-0009 puts this surface on the critical path of every gate. #22's reason for A-then-B ("both read the same data model") is unaffected — only which half has one has changed |
 | **S-5** | Is the OIDC subject what is passed as continuo's `--actor-id`, and what bounds the set of approvers? | rondo | **Yes, verbatim**, with the *surface's* identity as the contract `issuer` (two fields, two questions); and an **allowlist of OIDC subjects, size one for lap 1**, checked in rondo's application layer. **Precondition to verify first**: whether the chosen provider permits the redirect URI a LAN-reached console needs (5.2) | continuo records the actor id on the caller's word (`src/gate/cli.ts:126-129`), so an identity the surface did not choose is the only thing that makes the field worth reading. #22 fixes that access points never multiply the approver set; an allowlist is the smallest thing that makes that checkable |
 | **S-6** | LAN-first: does the host bind the LAN interface, or bind loopback with the LAN reached another way? | rondo | **Keep LAN-first**; decide the binding explicitly, together with `S-5` | Every rendered source is a local file or a child process (5.3), so LAN-first is where the data is rather than a posture — but the binding choice is what determines whether `S-5`'s redirect constraint bites |
-| **S-7** | Where is the delegation record persisted? | rondo | **rondo's store**, carrying the five things in §7 | continuo declines to design `task` by implication (`docs/production-schema.md:1741-1744`) and does not consume cadenza; rondo already owns one SQLite module (`D-0005`) and already has an outstanding store-schema item to join (`DECISIONS.md:1236-1237`, `:2072`) |
+| **S-7** | Where is the delegation record persisted? | rondo | **rondo's store**, carrying **all six** things in §7 — the five that exist today, plus, if `S-1` is taken, the human-decision records and their **single-use consumption**, which cadenza structurally cannot enforce because it persists nothing | continuo declines to design `task` by implication (`docs/production-schema.md:1741-1744`) and does not consume cadenza; rondo already owns one SQLite module (`D-0005`) and already has an outstanding store-schema item to join (rondo D-0015 rule 6, and D-0017's outstanding list) |
 | **S-8** | Where does the operator conversation live? | rondo | **rondo's store**, and **not** the slot that holds a gate answer | #22 recorded it as undecided and its cross-link says #40 answered it; #40's document does not (none of `conductor.md`'s seventeen rows is the conversation). `gate_transition.body` is the verbatim human answer, and prose in that slot records as approval (`continuo docs/production-schema.md:1378-1383`) |
 | **S-9** | Once a console exists, who acks the `presented` relay, and does the dropbox stay a second presentation channel? | continuo | **Not cadenza's to recommend.** Stated because the surface cannot answer a gate without it: `answerGate` admits only stage `presented`, that stage is reached only on the relay's ack, and `gate present` / `deliver` / `ack` carry no `--json` | `continuo src/gate/operator.ts:99,645`, `src/gate/cli.ts:800-836`; D-0076 assigns the dropbox to the operator, and a console makes that channel a duplicate of itself. Acking a relay nobody delivered records a delivery that did not happen |
 | **S-10** | How does the console read run and belt state, `awaiting_user` and the outbox? | continuo | **A read verb**, not a second reader of continuo's database | `run` has exactly `admit` and `close` (`continuo src/control_plane/run_cli.ts:469,517`), and rondo D-0015 rule 1 keeps continuo behind a CLI process boundary. The pane with no read path is exactly where somebody opens the SQLite file instead |
