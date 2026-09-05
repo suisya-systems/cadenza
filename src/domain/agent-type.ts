@@ -44,7 +44,7 @@ import {
 import { digestOf } from "./digest.js";
 import { ForgedAgentTypeError, InvalidIdentifierError, InvalidPolicyError } from "./errors.js";
 import { parseIdentifier } from "./identifiers.js";
-import { escapeNonAscii } from "./python-text.js";
+import { escapeNonAscii, pythonTypeName } from "./python-text.js";
 
 /**
  * The ceiling on every `loopPolicy` count.
@@ -171,15 +171,22 @@ const EXECUTOR_POLICY_KEYS = new Set(["roleName", "modelTier", "reportingDuties"
 /**
  * Build a record, or refuse and name what was refused.
  *
- * The order of the checks is D-0034's table, and it is observable: an input
- * wrong in two ways reports the earlier rule. It is fixed there rather than
- * left to whichever check this implementation happened to write first.
+ * The order of the checks is D-0034 section 8's table, and it is observable:
+ * an input wrong in two ways reports the earlier rule. It is fixed there
+ * rather than left to whichever check this implementation happened to write
+ * first, and a case in `test/domain/agent-type.test.ts` pins it.
  *
- * Rules 1 to 3 are `capability.ts`'s, shared with `delegationContract()` --
+ * The numbering below is that table's, and it is deliberately **not** the
+ * numbering of `docs/design/g2-delegation-contract.md` section 5: these are
+ * different rules over a different value, and a reader who assumed rule 4 meant
+ * the same thing in both places would be reading the wrong document.
+ *
+ * Rules 2 to 4 are `capability.ts`'s, shared with `delegationContract()` --
  * the same three rules over the same vocabulary, so a second implementation
  * would be a second thing that can drift apart while both look right.
  */
 export function agentType(input: AgentTypeInput): AgentType {
+  // Rule 1.
   refuseUnknownMembers(input, INPUT_KEYS, "the agent-type record");
 
   const version = requireKnownVocabularyVersion(input.vocabularyVersion);
@@ -307,7 +314,7 @@ function payloadOf(value: {
 }
 
 /**
- * Rule 4, in ASCII.
+ * Rule 5, in ASCII.
  *
  * The rule is G1's and is reused unchanged; what is added is the escaping, for
  * the reason `contract.ts`'s `requireProjectId` records. `parseIdentifier`
@@ -326,7 +333,7 @@ function requireAgentTypeId(value: unknown): string {
   }
 }
 
-/** Rule 5. Three counts, each in range, and a window that its repeat fits inside. */
+/** Rule 6. Three counts, each in range, and a window that its repeat fits inside. */
 function requireLoopPolicy(value: unknown): LoopPolicy {
   const table = requireTable(value, "loop_policy");
   refuseUnknownMembers(table, LOOP_POLICY_KEYS, "loop_policy");
@@ -348,7 +355,7 @@ function requireLoopPolicy(value: unknown): LoopPolicy {
 }
 
 /**
- * Rule 6. Structural, and structural only.
+ * Rule 7. Structural, and structural only.
  *
  * Read what this does **not** do: it never asks whether `roleName` is a role
  * that exists, whether `modelTier` denotes a model, or whether a duty is one
@@ -363,34 +370,41 @@ function requireExecutorPolicy(value: unknown): ExecutorPolicy {
   const roleName = requireNeutralName(table.roleName, "executor_policy.role_name");
   const modelTier = requireNeutralName(table.modelTier, "executor_policy.model_tier");
 
-  const duties = table.reportingDuties;
-  if (!Array.isArray(duties)) {
+  const supplied = table.reportingDuties;
+  if (!Array.isArray(supplied)) {
     throw new InvalidPolicyError(
-      `executor_policy.reporting_duties must be a list, got ${describe(duties)}`,
+      `executor_policy.reporting_duties must be a list, got ${pythonTypeName(supplied)}`,
     );
   }
-  if (duties.length > MAX_REPORTING_DUTIES) {
+  // Read once, then work only from what was read, and keep the *validated*
+  // return rather than revisiting the input. An array index may be an accessor
+  // -- `Array.isArray` stays true for such an array and for a Proxy over one --
+  // so a validate-then-re-read would let the second read put a name
+  // `parseIdentifier` refuses into a frozen record, or put a lone surrogate
+  // into the payload and make `digestOf` throw where a named refusal was
+  // promised. This module exists to make an invalid record unreachable, and
+  // "unreachable" has to hold against the exotic caller too.
+  const entries = [...supplied];
+  if (entries.length > MAX_REPORTING_DUTIES) {
     throw new InvalidPolicyError(
-      `executor_policy.reporting_duties holds ${duties.length} entries, which is more than ` +
+      `executor_policy.reporting_duties holds ${entries.length} entries, which is more than ` +
         `the ${MAX_REPORTING_DUTIES} allowed`,
     );
   }
-  for (const duty of duties) {
-    requireNeutralName(duty, "executor_policy.reporting_duties");
-  }
+  const validated = entries.map((duty) =>
+    requireNeutralName(duty, "executor_policy.reporting_duties"),
+  );
   // Sorted and de-duplicated for the reason the capability sets are: two
   // callers who mean the same duties produce the same value and therefore the
   // same digest.
-  const reportingDuties = Object.freeze(
-    [...new Set(duties as readonly string[])].sort(compareByCodePoint),
-  );
+  const reportingDuties = Object.freeze([...new Set(validated)].sort(compareByCodePoint));
   return Object.freeze({ roleName, modelTier, reportingDuties });
 }
 
 /** A non-null, non-array object -- the shape a policy bag has. */
 function requireTable(value: unknown, field: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new InvalidPolicyError(`${field} must be a table, got ${describe(value)}`);
+    throw new InvalidPolicyError(`${field} must be a table, got ${pythonTypeName(value)}`);
   }
   return value as Record<string, unknown>;
 }
@@ -429,7 +443,7 @@ function requireCount(value: unknown, field: string): number {
     // A record that exists and cannot be digested would be a record that
     // cannot be persisted, and the refusal belongs where the caller is
     // expecting one.
-    throw new InvalidPolicyError(`${field} must be an integer, got ${describe(value)}`);
+    throw new InvalidPolicyError(`${field} must be an integer, got ${pythonTypeName(value)}`);
   }
   if (value < 1 || value > MAX_POLICY_THRESHOLD) {
     throw new InvalidPolicyError(

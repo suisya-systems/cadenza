@@ -326,6 +326,136 @@ describe("agentType", () => {
     }
   });
 
+  // --- the exotic caller: an element that changes between reads -----------
+
+  /**
+   * An array whose element reads are not stable.
+   *
+   * `Array.isArray` is true of it, `length` is 1, and the first read of index
+   * 0 gives `first` while every later read gives `second`. This is what a
+   * validate-then-re-read lets past: the check sees one value and the record
+   * keeps another.
+   */
+  function shiftingArray(first: string, second: string): string[] {
+    const array: string[] = [];
+    let reads = 0;
+    Object.defineProperty(array, 0, {
+      enumerable: true,
+      configurable: true,
+      get() {
+        reads += 1;
+        return reads === 1 ? first : second;
+      },
+    });
+    Object.defineProperty(array, "length", { value: 1, writable: false });
+    return array;
+  }
+
+  test("reads a reporting duty once, so a shifting element cannot land in the record", () => {
+    const record = agentType(
+      valid({
+        executorPolicy: executorPolicy({
+          reportingDuties: shiftingArray("post_summary", "Not A Duty!"),
+        }),
+      }),
+    );
+    // Whichever value construction saw is the value it kept: what must not
+    // happen is that a name `parseIdentifier` refuses ends up frozen inside a
+    // digested record.
+    expect(record.executorPolicy.reportingDuties).toEqual(["post_summary"]);
+  });
+
+  test("reads a capability key once, so a shifting element cannot widen the record", () => {
+    const record = agentType(
+      valid({ granted: shiftingArray("command.run", "network.fetch"), askable: [] }),
+    );
+    expect(record.granted).toEqual(["command.run"]);
+    // The property the classifier and the renderer are both written on.
+    for (const key of record.granted) {
+      expect(VOCABULARY_VERSION_1.has(key)).toBe(true);
+    }
+  });
+
+  test("never lets the encoder be the thing that refuses", () => {
+    // A lone surrogate on the second read would reach `canonicalJsonBytes` and
+    // throw `SurrogateInStringError` out of the digest -- a record that
+    // validated and then could not be digested, which is the failure the shape
+    // rules exist to prevent. Whatever happens here, it is a named refusal or
+    // a valid record, and never that.
+    let caught: unknown;
+    try {
+      agentType(
+        valid({
+          executorPolicy: executorPolicy({
+            reportingDuties: shiftingArray("post_summary", "\ud800"),
+          }),
+        }),
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught === undefined || caught instanceof InvalidPolicyError).toBe(true);
+  });
+
+  // --- the order of the refusals ------------------------------------------
+
+  test("reports the earlier rule when an input is wrong in more than one way", () => {
+    // D-0034 section 8. The order is observable, so it is pinned: a refactor
+    // that reordered the checks would change what a host is told without
+    // anything recording that it had.
+    const wrongEverywhere = {
+      ...valid({
+        vocabularyVersion: 2,
+        granted: ["network.fetch"],
+        agentTypeId: "Reviewer",
+        loopPolicy: { maxReviewRounds: 0, noProgressWindow: 4, noProgressRepeat: 2 },
+        executorPolicy: executorPolicy({ roleName: "Worker" }),
+      }),
+      unknownMember: 1,
+    } as unknown as AgentTypeInput;
+
+    // Rule 1 beats every value rule.
+    refusal(InvalidPolicyError, () => agentType(wrongEverywhere));
+
+    const { unknownMember: _dropped, ...noUnknown } = wrongEverywhere as unknown as Record<
+      string,
+      unknown
+    >;
+    // Rule 2 beats rules 3 onwards.
+    refusal(UnknownVocabularyVersionError, () => agentType(noUnknown as unknown as AgentTypeInput));
+    // Rule 3 beats rule 6.
+    refusal(UnknownCapabilityError, () =>
+      agentType(valid({ granted: ["network.fetch"], agentTypeId: "Reviewer" })),
+    );
+    // Rule 5 beats rule 6.
+    refusal(OverlappingCapabilityError, () =>
+      agentType(
+        valid({ granted: ["command.run"], askable: ["command.run"], agentTypeId: "Reviewer" }),
+      ),
+    );
+    // Rule 6 beats rule 7.
+    refusal(InvalidIdentifierError, () =>
+      agentType(
+        valid({
+          agentTypeId: "Reviewer",
+          loopPolicy: loopPolicy({ maxReviewRounds: 0 }),
+        }),
+      ),
+    );
+    // Rule 7 beats rule 8. Both raise the same class, so the message is what
+    // says which rule answered.
+    expect(
+      refusal(InvalidPolicyError, () =>
+        agentType(
+          valid({
+            loopPolicy: loopPolicy({ maxReviewRounds: 0 }),
+            executorPolicy: executorPolicy({ roleName: "Worker" }),
+          }),
+        ),
+      ).message,
+    ).toContain("max_review_rounds");
+  });
+
   // --- immutability, at runtime --------------------------------------------
 
   test("freezes the record, both policy bags, and every array in them", () => {

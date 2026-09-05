@@ -2663,6 +2663,43 @@ already left retention to the store's owner for the same reason. Building a sche
 a checklist would put a store inside a pure layer and would fix a format before its only consumer
 exists.
 
+### 8. The order of the refusals, because it is observable
+
+**Decision.** An input wrong in more than one way reports the **earlier** rule, and the order is
+this:
+
+| # | rule | error |
+|---|---|---|
+| 1 | the input table is closed: no member this build does not know | `InvalidPolicyError` |
+| 2 | `vocabularyVersion` is a version this build knows | `UnknownVocabularyVersionError` |
+| 3 | every `granted` key is in that version | `UnknownCapabilityError` |
+| 4 | every `askable` key is in that version | `UnknownCapabilityError` |
+| 5 | the two sets are disjoint | `OverlappingCapabilityError` |
+| 6 | `agentTypeId` is a G1 identifier | `InvalidIdentifierError` |
+| 7 | `loopPolicy` is a closed table of three counts, repeat within window | `InvalidPolicyError` |
+| 8 | `executorPolicy` is a closed table of two names and a bounded list | `InvalidPolicyError` |
+
+**Why fix it at all.** Which refusal a doubly-wrong input gets is observable to every caller, so
+leaving it to "whichever check the implementation happened to write first" would make a
+refactor able to change what a host sees without anything recording that it had. G2 fixes its own
+order for the same reason (`docs/design/g2-delegation-contract.md` §5), and a test pins this one.
+
+**These numbers are not that document's numbers.** Rules 2 to 5 here are that table's rules 1 to 3
+over a different value; the rest have no counterpart. The two are deliberately not aligned, because
+aligning them would suggest a correspondence between two rule sets that only partly overlap.
+
+**Why the closed-table check is first.** It is the only rule that is about the *shape of the
+request* rather than about a field's value: a caller who misspelled a member is told that, rather
+than being told something about the default the misspelling left in place.
+
+**And every element of a caller's array is read exactly once.** An array index may be an accessor,
+and `Array.isArray` is true of such an array and of a `Proxy` over one, so a validate-then-re-read
+would let the second read place a value into the frozen record that the first read never showed --
+a capability key outside the pinned vocabulary, or a lone surrogate that would make `digestOf`
+throw where a named refusal was promised. The input is snapshotted before it is checked, and the
+canonical form is built from what was validated. This applies to `capability.ts`'s shared helper as
+well, so it closes the same hole on the contract's path.
+
 **What would falsify it.**
 
 - **Against §2.** The conductor's loop turning out to need a fourth `loopPolicy` member — most

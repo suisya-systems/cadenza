@@ -105,7 +105,7 @@ export function vocabularyFor(version: number): ReadonlySet<string> | null {
 }
 
 /**
- * Rule 1 of the design document's section 5 table, and rule 1 of D-0034's.
+ * Rule 1 of the design document's section 5 table, and rule 2 of D-0034 section 8's.
  *
  * A version this build does not know refuses the whole value, contract or
  * agent-type record alike: a key list read against a vocabulary this process
@@ -126,7 +126,8 @@ export function requireKnownVocabularyVersion(value: unknown): number {
 }
 
 /**
- * Rule 2, plus the canonical form.
+ * Rule 2 of the design document's section 5 table (rules 3 and 4 of D-0034
+ * section 8's, one per set), plus the canonical form.
  *
  * A key is checked against the vocabulary the caller **pinned**, never the
  * newest this build knows: a value that gained meaning it did not have when it
@@ -145,7 +146,17 @@ export function canonicalCapabilityKeys(
       `${field} must be a list of capability keys, got ${pythonTypeName(values)}`,
     );
   }
-  for (const value of values) {
+  // Read the caller's array **once**, before anything is checked. An array
+  // index may be an accessor -- `Array.isArray` is true of such an array, and
+  // of a Proxy over one -- so validating `values` and then canonicalising
+  // `values` reads each element twice and lets the second read return
+  // something the first never showed. That is not a hypothetical caller: this
+  // whole module validates at runtime precisely because "a JavaScript caller,
+  // or a cast, reaches past the types" (`contract.ts`), and what the second
+  // read would reach is a key outside the pinned vocabulary, inside a value
+  // whose digest is persisted.
+  const keys = [...values];
+  for (const value of keys) {
     if (!isCapabilityKey(value) || !vocabulary.has(value)) {
       throw new UnknownCapabilityError(
         `${field} names ${describe(value)}, which is not a capability in vocabulary ` +
@@ -158,11 +169,12 @@ export function canonicalCapabilityKeys(
   }
   // Sorted and de-duplicated, so two generators that mean the same grant produce
   // the same value and therefore the same digest (design document section 4).
-  return Object.freeze([...new Set(values)].sort(compareByCodePoint));
+  return Object.freeze([...new Set(keys)].sort(compareByCodePoint));
 }
 
 /**
- * Rule 3. An overlap is the one shape that would leave an action classifiable
+ * Rule 3 of the design document's section 5 table, and rule 5 of D-0034
+ * section 8's. An overlap is the one shape that would leave an action classifiable
  * two ways, and refusing beats inventing a precedence at classification time --
  * the move G1 section 5.4 makes for a colliding namespace.
  */
