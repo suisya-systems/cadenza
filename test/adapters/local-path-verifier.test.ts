@@ -50,7 +50,7 @@ import {
   LocalPathNotADirectoryError,
   LocalPathUnreadableError,
 } from "../../src/domain/errors.js";
-import { nativePath } from "../../src/domain/python-path.js";
+import { nativePath, posix, windows } from "../../src/domain/python-path.js";
 import { refusal } from "../support.js";
 
 const verifier = new FilesystemLocalPathVerifier();
@@ -270,10 +270,44 @@ describe("containment, which is the rule this exists for", () => {
     const declared = path(root, "hop", "..");
     expect(declared).toContain("..");
 
+    if (nativePath.name === "windows") {
+      // Win32 canonicalises `..` in the path itself, before any traversal, so
+      // the operating system's OWN answer here is `<root>` and accepting it is
+      // the correct answer rather than a weaker one: the verifier agrees with
+      // what an open of that path would do, which is the whole property. The
+      // branch is the platform's, not the adapter's, and asserting the POSIX
+      // outcome unconditionally would turn both windows-latest cells red.
+      // Raised by review.
+      expect(verifier.verify(localPathSource(declared), [root]).real).toBe(root);
+      return;
+    }
     const caught = refusal(LocalPathEscapesRootError, () =>
       verifier.verify(localPathSource(declared), [root]),
     );
     expect(caught.message).toContain(`resolves to ${base}`);
+  });
+
+  test("a sibling that differs from the root only in case is outside it", () => {
+    // Raised by review, and only observable where the filesystem can hold both
+    // names: every case-sensitive POSIX filesystem, and a Windows directory with
+    // per-directory case sensitivity enabled, which is the configuration the
+    // case exists for -- `nativePath.isRelativeTo` case-folds on Windows because
+    // `PureWindowsPath` does, so the resolved comparison needs the case to agree
+    // as well. Where the filesystem folds case instead (macOS by default), the
+    // two names ARE one directory, and the case asserts that reading -- which is
+    // also correct, and is why this is a branch rather than a skip.
+    const root = makeDirectory("Repo");
+    mkdirSync(under("repo"), { recursive: true });
+    const sibling = under("repo");
+    const folded = realpathSync.native(sibling) === realpathSync.native(root);
+
+    if (folded) {
+      expect(verifier.verify(localPathSource(sibling), [root]).root).toBe(
+        realpathSync.native(root),
+      );
+      return;
+    }
+    refusal(LocalPathEscapesRootError, () => verifier.verify(localPathSource(sibling), [root]));
   });
 
   test("a link pointing at the root's own parent is refused", () => {
@@ -482,6 +516,30 @@ describe("the caller's own arguments are a RangeError, never a refusal", () => {
         root,
       ]),
     ).toThrow(RangeError);
+  });
+});
+
+describe("the premise the resolved comparison rests on", () => {
+  test("`isRelativeTo` case-folds on Windows, which is why the case is checked separately", () => {
+    // Not a test of the adapter, and it says so: it pins the FACT the extra half
+    // of `containsExactly` exists for. `PureWindowsPath` compares
+    // case-insensitively, so on a Windows directory with per-directory case
+    // sensitivity enabled -- where `Repo` and `repo` are two directories -- the
+    // structural check alone reports a resolved path inside the wrong one.
+    //
+    // Stated plainly, because it is the honest limit of this file: on a
+    // case-sensitive POSIX filesystem the two halves of `containsExactly` agree
+    // on every input, so neither is observably load-bearing here, and mutation
+    // confirms it -- deleting either one leaves this suite green. The half added
+    // for this case is covered by no case on any cell of the matrix, because no
+    // cell enables per-directory case sensitivity. This case is what a later
+    // reader has instead: the premise, asserted, so that a change in it is a
+    // failure rather than a silent one.
+    expect(windows.isRelativeTo("C:\\parent\\repo\\x", "C:\\parent\\Repo")).toBe(true);
+    expect("C:\\parent\\repo\\x".startsWith("C:\\parent\\Repo\\")).toBe(false);
+    // And the same two operands on the POSIX flavour, where the structural check
+    // needs no help.
+    expect(posix.isRelativeTo("/parent/repo/x", "/parent/Repo")).toBe(false);
   });
 });
 

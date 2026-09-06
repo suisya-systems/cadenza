@@ -3361,6 +3361,22 @@ under one, compared **component by component** through `nativePath.isRelativeTo`
   calls. Both this and the root access check were found by adversarial review of the first
   implementation, and each has a regression case that the fix turns green and the pre-fix code turns
   red.
+- **Resolved containment additionally requires the case to agree**, and only because Windows makes it
+  necessary: `nativePath.isRelativeTo` case-folds every component there, as `PureWindowsPath` does,
+  so a directory with per-directory case sensitivity enabled -- where `Repo` and `repo` are two
+  directories -- would report a link inside `Repo` that resolved into `repo` as contained. Safe
+  because both operands come from `realpathSync.native`, which returns the canonical on-disk name, so
+  the operator's own spelling has been replaced on both sides before the comparison. **Its coverage
+  is stated rather than claimed**: on a case-sensitive filesystem the structural check and the
+  case-exact one agree on every input, mutation confirms that deleting either leaves the suite green,
+  and no cell of the matrix enables per-directory case sensitivity. What the suite pins instead is the
+  premise -- that `windows.isRelativeTo` folds case and a case-exact prefix does not -- so a change in
+  it fails rather than passing quietly. Also raised by review.
+- **`..` is a platform difference, not a defect.** Win32 canonicalises `..` in the path before any
+  traversal, so `<root>/link/..` resolves to `<root>` on Windows and to the parent of the link's
+  target on POSIX. Both answers agree with what an open of that path does on that platform, which is
+  the property this check has; the regression case therefore branches on the flavour rather than
+  asserting one platform's answer everywhere.
 
 ### 3. Five refusals, and what this does not close
 

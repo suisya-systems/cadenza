@@ -146,6 +146,47 @@ function requireReadableDirectory(real: string, declared: string, what: string):
  * would be compared component by component with `..` still in it, and a prefix
  * test would call it contained.
  */
+/**
+ * The separator the platform's own resolver spells a path with.
+ *
+ * Only ever applied to a string that came back from `realpathSync.native`, which
+ * is why one character is enough: the operator's spelling never reaches
+ * {@link containsExactly}.
+ */
+const NATIVE_SEPARATOR = nativePath.name === "windows" ? "\\" : "/";
+
+/**
+ * Containment between two paths the platform itself resolved.
+ *
+ * `isRelativeTo` on its own is the structural half and is not sufficient on
+ * Windows, where it case-folds every component because `PureWindowsPath` does.
+ * That is right for `PureWindowsPath` and wrong here: a directory with
+ * per-directory case sensitivity enabled can hold `Repo` and `repo` as two
+ * different directories, and a link inside allowed root `Repo` targeting sibling
+ * `repo` would then be reported as contained while the operating system had
+ * resolved it somewhere else. Raised by review.
+ *
+ * So the case is required to agree exactly, and that is safe precisely because
+ * **both operands come from `realpathSync.native`**: it returns the canonical
+ * on-disk name, so the operator's own spelling -- `c:/repos` for `C:\Repos` --
+ * has already been replaced on both sides before this is reached. Comparing raw
+ * operator input this way would refuse correct configurations, which is why the
+ * lexical pre-check above still uses `isRelativeTo` alone.
+ *
+ * A root that ends in the separator is its own prefix (`/`, `C:\`), so the
+ * separator is not appended twice; anything else needs the boundary, which is
+ * what stops `<root>-evil` on the plain string comparison as well.
+ */
+function containsExactly(real: string, root: string): boolean {
+  if (!nativePath.isRelativeTo(real, root)) {
+    return false;
+  }
+  if (real === root) {
+    return true;
+  }
+  return real.startsWith(root.endsWith(NATIVE_SEPARATOR) ? root : root + NATIVE_SEPARATOR);
+}
+
 function lexicallyContained(path: string, roots: readonly string[]): boolean {
   const normalised = nativePath.normpath(path);
   return roots.some((root) => nativePath.isRelativeTo(normalised, nativePath.normpath(root)));
@@ -197,7 +238,7 @@ export class FilesystemLocalPathVerifier implements LocalPathVerifier {
     const real = resolveOrRefuse(declared, "path", false);
     requireReadableDirectory(real, declared, "path");
 
-    const root = realRoots.find((candidate) => nativePath.isRelativeTo(real, candidate));
+    const root = realRoots.find((candidate) => containsExactly(real, candidate));
     if (root === undefined) {
       throw new LocalPathEscapesRootError(
         `path ${declared} resolves to ${real}, which is outside every allowed local root: ` +
