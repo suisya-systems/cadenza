@@ -187,8 +187,15 @@ const ALLOWED_EXTERNALS_BY_LAYER: Readonly<
   // Ports are protocols. They depend on the domain and on nothing else.
   "src/ports": {},
   // The one layer that is allowed I/O, and only this much of it.
+  //
+  // `realpathSync`, `accessSync` and `constants` were added by D-0038 for the
+  // local-path verifier, and adding them is the point of the allowlist rather
+  // than an exception to it: the widening is one line in a diff a reviewer can
+  // argue with. All three read and none writes -- there is still no
+  // `writeFileSync`, no `symlinkSync`, no `rmSync` anywhere under `src/`, so
+  // cadenza reads the operator's disk and never changes it.
   "src/adapters": {
-    "node:fs": ["readFileSync", "statSync"],
+    "node:fs": ["accessSync", "constants", "readFileSync", "realpathSync", "statSync"],
     "smol-toml": ["parse", "TomlError"],
   },
 };
