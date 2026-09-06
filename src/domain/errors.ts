@@ -176,3 +176,73 @@ export class UnapprovedDecisionError extends CadenzaError {}
  * surface on the decision.
  */
 export class DecisionMismatchError extends CadenzaError {}
+
+/**
+ * The local-path verifier's refusals (D-0038, design doc section 3.1).
+ *
+ * `CadenzaError` directly rather than `CatalogError`, and the reason is the one
+ * D-0036's family gives, arriving from the other side. A `CatalogError` carries
+ * a `location` because an operator fixes it by editing a named key in a named
+ * file. The verifier is handed a `LocalPathSource` -- a value that has already
+ * left the file it came from, with no key and no origin attached -- so a
+ * `location` here would be `null` on every instance: a field pretending to be
+ * evidence. What each refusal carries instead is the path, the roots, and the
+ * reason, in ASCII (D-0007).
+ *
+ * **Five types rather than one**, which is the opposite of what D-0036 chose for
+ * the decision record, and the difference is what a caller does next. There, a
+ * malformed digest and a malformed identity are both "the value you built is not
+ * a record" and lead to the same place. Here each type is a different action by
+ * a different person: a missing path is a stale catalog entry, a non-directory
+ * is the wrong path, an unreadable one is a permissions problem on the
+ * operator's machine, an escape is a refusal that must be reported as such and
+ * never retried, and an unusable root is a misconfigured *layer* rather than a
+ * misconfigured project. Collapsing them would make a caller parse a message to
+ * tell a refusal from an accident -- and treating an escape as an accident, or
+ * an accident as an escape, is exactly the confusion this belt exists to
+ * prevent.
+ */
+
+/** Base of the verifier's family, so a caller may catch all five at once. */
+export class LocalPathVerificationError extends CadenzaError {}
+
+/** Nothing exists at the path, or a symlink on the way to it dangles. */
+export class LocalPathMissingError extends LocalPathVerificationError {}
+
+/** Something exists at the path, and it is not a directory to clone from. */
+export class LocalPathNotADirectoryError extends LocalPathVerificationError {}
+
+/**
+ * The path could not be examined: permissions, or a symlink loop.
+ *
+ * Deliberately not folded into {@link LocalPathMissingError}. Reporting "does
+ * not exist" for a path that exists and cannot be read sends an operator
+ * looking for a stale catalog entry when what they have is a mode bit, and the
+ * two fixes have nothing in common.
+ */
+export class LocalPathUnreadableError extends LocalPathVerificationError {}
+
+/**
+ * The path is not inside any allowed root of the layer that declared it.
+ *
+ * The refusal design doc section 3.1 calls mandatory. Raised in two situations
+ * that the message distinguishes and the type does not: a path that climbs out
+ * lexically, and a path that is lexically contained but whose links resolve
+ * outside. Both are one answer -- this path is not in the roots you allowed --
+ * and a caller that treated the second as milder would be defeating the check.
+ */
+export class LocalPathEscapesRootError extends LocalPathVerificationError {}
+
+/**
+ * An allowed root itself could not be established.
+ *
+ * Fails closed, and that is the decision rather than an accident of ordering: a
+ * root that is absent, not a directory, or impossible to descend into cannot
+ * contain anything, and skipping it would silently narrow the roots a layer
+ * declared. "Descend into" and not "read": a root exists to be traversed, so
+ * execute is required and read is not, and a mode-711 root is usable. Narrowing
+ * them silently is how a verifier starts refusing paths that are configured
+ * correctly, with the real fault -- an unmounted disk, a typo in
+ * `allowed_local_roots` -- never named.
+ */
+export class AllowedRootUnusableError extends LocalPathVerificationError {}

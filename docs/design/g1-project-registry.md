@@ -91,10 +91,23 @@ machine, without the operator's disks:
 
 Filesystem-dependent checks — does it exist, is any component a symlink, is it
 readable — are **not** G1's. They are a run-side precondition, declared as the
-`LocalPathVerifier` port (`src/ports/path-verifier.ts`) and left unimplemented
-in this milestone. This is a real trust boundary and is stated as one: a lexically
-contained path can still be a symlink pointing anywhere, so the run-side
-verifier is mandatory before a clone, not optional hardening.
+`LocalPathVerifier` port (`src/ports/path-verifier.ts`). This is a real trust
+boundary and is stated as one: a lexically contained path can still be a symlink
+pointing anywhere, so the run-side verifier is mandatory before a clone, not
+optional hardening.
+
+The port was left unimplemented in the milestone that declared it, and **that is
+over**: `FilesystemLocalPathVerifier` (`src/adapters/local-path/verifier.ts`)
+implements it, and DECISIONS.md D-0038 is where the owner was decided and the two
+rejected owners — rondo, and "nobody, so delete the port" — are argued. It resolves
+the path and every allowed root and requires the resolved path to be a root or lie
+under one, compared component by component; symlinks are resolved rather than
+refused, and the escape is what is refused. "Run-side" names when the check runs
+and which layer owns it, not which repository ships it: `adapters/` is the one
+layer this document marks as doing I/O (§8), and the check needs the layer's
+`allowed_local_roots`, which do not survive `parseCloneSource`. What the verifier
+does **not** do is hold the path open: it is a point-in-time answer, and
+containment between the check and the clone belongs to the control plane.
 
 **`new`.** Carries no fields. Cadenza does not create repositories; recording
 `kind = "new"` is how the catalog says "the run-side adapter is responsible for

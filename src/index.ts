@@ -47,6 +47,7 @@
  * answerer from a proven one, and D-0036 states the price.
  */
 
+export { FilesystemLocalPathVerifier } from "./adapters/local-path/verifier.js";
 export {
   LOCAL_FILENAME,
   TomlCatalogSource,
@@ -122,6 +123,7 @@ export {
 export { contractDigest, contractPayload } from "./domain/contract-digest.js";
 export { canonicalPayload, configDigest, DIGEST_PATTERN, digestOf } from "./domain/digest.js";
 export {
+  AllowedRootUnusableError,
   AmplifiedGrantError,
   CadenzaError,
   CatalogError,
@@ -135,6 +137,11 @@ export {
   InvalidIdentityError,
   InvalidOutcomeError,
   InvalidPolicyError,
+  LocalPathEscapesRootError,
+  LocalPathMissingError,
+  LocalPathNotADirectoryError,
+  LocalPathUnreadableError,
+  LocalPathVerificationError,
   MissingFieldError,
   NameCollisionError,
   OverlappingCapabilityError,
@@ -177,4 +184,4 @@ export {
   type HumanDecisionRecord,
   humanDecisionRecord,
 } from "./ports/human-decision.js";
-export type { LocalPathVerifier } from "./ports/path-verifier.js";
+export type { LocalPathVerifier, VerifiedLocalPath } from "./ports/path-verifier.js";

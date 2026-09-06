@@ -68,6 +68,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0035 | The artifact-delivery bridge: a consumer builds cadenza from a pinned checkout and installs what it packed; publication remains the destination and remains untaken | accepted |
 | D-0036 | What cadenza exposes for the operating surface: a human-decision port, four value checks in a new application function, and a transport-word rule over `src/ports/**` | accepted |
 | D-0037 | Vocabulary version 2: the five acts daily operation performs, `pull_request.merge` named so that withholding it is written, and what the vocabulary still deliberately cannot say | accepted |
+| D-0038 | The local-path verifier is cadenza's, as an adapter: resolve both sides and compare components, five refusals rather than one, and the window a reader must not think this closes | accepted |
 
 ---
 
@@ -3251,3 +3252,200 @@ precisely because a contract **does** have to withhold it, and §1 is that argum
   separate, deliberate edit in that repository, and this entry takes no position on whether it should.
 - `docs/design/g2-delegation-contract.md` §3 cites this entry beside D-0027. The section states rules
   and not members, so it gains a citation and no rewrite.
+
+## D-0038 — the local-path verifier is cadenza's, as an adapter: resolve both sides and compare components, five refusals rather than one, and the window a reader must not think this closes
+
+**Status:** accepted (2026-09-06, taken at cadenza's human gate)
+
+**The state this entry ends.** `src/ports/path-verifier.ts` said "No implementation ships in this
+milestone; the port names the obligation", and G1 §3.1 called the same verifier "mandatory before a
+clone, not optional hardening". Both were true at once, and a grep across cadenza, rondo and continuo
+found no implementation in any of the three. So a `local_path` project was checked lexically and
+cloned unchecked: a path inside `allowed_local_roots` whose last component was a symlink to anywhere
+at all was accepted by every rule that existed. D-0037 sharpened it by adding `repo.clone` and
+`network.fetch` to the vocabulary, which made a clone something a contract can now authorise in
+words while the precondition was still a comment.
+
+### 1. cadenza owns it, in `src/adapters/`
+
+**Decision.** Cadenza implements `LocalPathVerifier` as `FilesystemLocalPathVerifier` in
+`src/adapters/local-path/verifier.ts`, and ships it on the barrel (D-0033). The port stays a port: a
+caller may supply its own.
+
+**Why here.** Three reasons, in the order they settle the question.
+
+- **The layer table already answers it.** `src/adapters` is "the one layer that is allowed I/O", and
+  cadenza already reads the operator's disk in it: `adapters/toml-catalog/loader.ts` opens the
+  catalog files with `readFileSync` and `statSync`. The purity rule this repository actually holds
+  covers `domain/`, `application/` and `ports/` (design §8, `(no I/O)`), and nothing this entry adds
+  is in them.
+- **"cadenza has no identity, no clock, no network" does not reach the filesystem, and could not.**
+  D-0026 §2 enumerates what is an input rather than a capability: run identity, session identity,
+  wall-clock time, randomness, durability, retry. Every member of that list is something whose value
+  cadenza would have to *mint*, and minting is what makes a contract irreproducible from its inputs.
+  Reading a directory mints nothing. Reading files is also how a catalog gets here in the first
+  place, so a rule that excluded the filesystem would have excluded the TOML adapter.
+- **The other half of this rule is already here.** `parseLocalPath` performs the lexical half of
+  containment, against the same `allowed_local_roots`, in `src/domain/clone-source.ts`. The two
+  halves are one rule with one root list and one meaning of "inside". Split across repositories they
+  drift, and the drift is silent in the worst way available: each side stays green while the gap
+  between them widens, and the gap is an escape.
+
+**Why not rondo** (the caller, and the host application under D-0029). It is the reading G1 §3.1's
+"run-side" invites, and it fails on a fact: **rondo cannot see the roots.** `parseCloneSource`
+consumes `allowed_local_roots` and discards them; a `LocalPathSource` carries only `path`. A rondo
+verifier would therefore have to re-read the catalog layers to recover a layer-local list cadenza
+had already computed, or invent its own roots -- and a check against invented roots is not the check
+G1 describes. "Run-side" in §3.1 says *when* the check runs and *which layer* it belongs to, not
+which repository ships it: cadenza is a library (D-0033) that rondo consumes (D-0029), so an adapter
+shipped here and called there runs run-side by construction. Beyond that, the security-critical half
+would have moved to the repository with the weaker boundary tests, and rondo's own layer table would
+have had to grow a filesystem allowance it does not have today.
+
+**Why not "leave it empty and say so".** The honest version of the status quo: delete the port, write
+in G1 §3.1 that containment at run time is the control plane's, and stop claiming a precondition
+cadenza does not provide. Rejected because it gives up something cadenza is uniquely placed to do.
+The check needs the roots, the lexical rule and the path-flavour semantics `src/domain/python-path.ts`
+already ports; a control plane rebuilding those would be rebuilding this repository's
+`is_relative_to` against its own idea of what a component is. Sandbox and egress enforcement remain
+the control plane's (D-0026 §2), and this entry does not touch them. What is refused is the argument
+that because *enforcement* is theirs, the *check* must be too.
+
+### 2. The check: resolve both sides, then compare components
+
+**Decision.** A path is contained when its fully resolved form is a resolved allowed root or lies
+under one, compared **component by component** through `nativePath.isRelativeTo`.
+
+- **Both sides are resolved.** Resolving only the path and comparing it against an unresolved root
+  refuses an operator whose checkouts sit behind a link -- on macOS, where `/var` is `/private/var`,
+  that is everybody -- and the operator has no fault to fix. Resolving only the root and not the path
+  is the escape itself.
+- **Symlinks are resolved, not refused.** G1 §3.1 lists "is any component a symlink" among the
+  filesystem-dependent checks, and the lazy reading of that line is a rule that refuses every link.
+  It would be satisfied by every escape case anyone can write and would still be unusable, which
+  pushes an operator to widen `allowed_local_roots` until the rule says nothing. What the section
+  names is the **escape**: a link that leaves the roots is refused wherever in the path it sits, and
+  a link that stays inside changes nothing about containment.
+- **Components, never string prefixes.** `<root>-evil` begins with `<root>` and is not under it.
+  This is stated because it is the mistake that is invisible in a green suite, and it appears twice
+  -- once in the lexical pre-check and once in the comparison after resolution. Both spellings have
+  their own case, the second of them found by mutation: a `startsWith` in the resolved comparison
+  left every other case in the file green.
+- **The order of the checks is fixed and observable**: the caller's arguments, then lexical
+  containment, then the roots, then the path, then real containment. Lexical containment runs
+  **before any filesystem call**, so a path outside the roots is refused without being probed -- a
+  catalog is not entitled to learn whether a path outside its own roots exists. The roots run before
+  the path so that a misconfigured layer is named rather than the first project that happened to be
+  checked against it.
+- **`verify` returns what it verified** rather than `void`: `{ declared, real, root }`. A check whose
+  only output is "it did not throw" leaves the caller holding the declared path and walking the links
+  a second time, and the second walk is a second answer.
+- **`verify` takes the roots**, because the one-argument port could not do the job it named: a
+  `LocalPathSource` carries only `path`, so a verifier handed one alone has nothing to be contained
+  in. They are passed per call, not configured per process: roots are layer-local (§3.3), and a
+  verifier that remembered one layer's would authorise another layer's path against them.
+- **An empty root list is refused, never read as a wildcard.** The one catastrophic default available
+  here, and the same rule `parseLocalPath` already applies.
+- **An unusable root fails the whole call**, rather than being skipped. Skipping narrows what the
+  layer declared without saying so, and the next path -- the one that needed exactly that root -- is
+  then refused with the real fault never named. "Usable" means a directory that can be **entered**:
+  execute, not read, because a root exists to be descended through and a mode-711 root is a correct
+  configuration. `realpathSync` and `statSync` both succeed on a mode-000 directory, so without an
+  explicit access check the rule above was untrue in the one arrangement where it matters -- a second
+  root nothing can enter, with a first root that grants the path anyway.
+- **Resolution is the platform's, not Node's.** `fs.realpathSync` collapses `..` **lexically** before
+  it resolves links, so for `<root>/link/..` it answers `<root>` while the operating system answers
+  the parent of the link's target. That is an escape and not a nicety: the check would accept a
+  declared path that every real caller of it resolves outside the roots. `realpathSync.native` is
+  `realpath(3)`, which walks the path the way an open of it walks the path, and is what this adapter
+  calls. Both this and the root access check were found by adversarial review of the first
+  implementation, and each has a regression case that the fix turns green and the pre-fix code turns
+  red.
+- **Resolved containment additionally requires the case to agree**, and only because Windows makes it
+  necessary: `nativePath.isRelativeTo` case-folds every component there, as `PureWindowsPath` does,
+  so a directory with per-directory case sensitivity enabled -- where `Repo` and `repo` are two
+  directories -- would report a link inside `Repo` that resolved into `repo` as contained. Safe
+  because both operands come from `realpathSync.native`, which returns the canonical on-disk name, so
+  the operator's own spelling has been replaced on both sides before the comparison. **Its coverage
+  is stated rather than claimed**: on a case-sensitive filesystem the structural check and the
+  case-exact one agree on every input, mutation confirms that deleting either leaves the suite green,
+  and no cell of the matrix enables per-directory case sensitivity. What the suite pins instead is the
+  premise -- that `windows.isRelativeTo` folds case and a case-exact prefix does not -- so a change in
+  it fails rather than passing quietly. Also raised by review.
+- **`..` is a platform difference, not a defect.** Win32 canonicalises `..` in the path before any
+  traversal, so `<root>/link/..` resolves to `<root>` on Windows and to the parent of the link's
+  target on POSIX. Both answers agree with what an open of that path does on that platform, which is
+  the property this check has; the regression case therefore branches on the flavour rather than
+  asserting one platform's answer everywhere.
+- **`ENOENT` and `ENOTDIR` are one question, and the platforms answer it with different codes.** POSIX
+  reports `ENOTDIR` for a regular file in the middle of a path; Windows reports `ENOENT`, because
+  `CreateFileW` returns `ERROR_PATH_NOT_FOUND` and libuv maps that to `ENOENT`. Reading the codes
+  literally would tell an operator on Windows that a path is missing when what they have is a file
+  where a directory should be -- the wrong fix, on both required cells. So neither code is trusted:
+  the path's own prefixes are descended, inside the roots, and the first one that exists and is not a
+  directory is the answer -- which makes one code path serve both platforms and is exercised on this
+  one. Raised by review.
+
+  **Prefixes are cut from the string the caller wrote, and nothing about a component is reasoned
+  over.** A first draft climbed with `normpath`, and `normpath` erases exactly the component that
+  failed: `<root>/file/`, `<root>/file/.` and `<root>/file/../dir` all collapse to something whose
+  parent is an ordinary directory, so each was reported as a missing path when what was there was a
+  file being traversed. A second draft added a guard that stopped the descent at the first `..`, on
+  the theory that lexical prefixes stop meaning anything past one -- and measurement turned that
+  around: since every prefix is handed to `statSync` rather than reasoned about, the guard only made
+  `<root>/dir/../web/` answer "missing" where the operating system answers `ENOTDIR`. Both drafts
+  were caught by review, and both are in the suite as cases. The pattern is the one this belt keeps
+  finding: **a lexical shortcut answers a different question from the one the filesystem was
+  asked**, and it is the same mistake as `fs.realpathSync`'s `..`.
+
+### 3. Five refusals, and what this does not close
+
+**Decision.** The refusals are a family under `LocalPathVerificationError`: `LocalPathMissingError`,
+`LocalPathNotADirectoryError`, `LocalPathUnreadableError`, `LocalPathEscapesRootError`,
+`AllowedRootUnusableError`. A broken *argument* is a `RangeError` and not a refusal at all, as
+`layerDocument` already draws that line.
+
+**Why five and not one**, which is the opposite of what D-0036 chose for the decision record. There,
+every refusal meant "the value you built is not a record" and led one place. Here each is a different
+action by a different person: a stale catalog entry, a wrong path, a mode bit on the operator's
+machine, a refusal that must never be retried, and a misconfigured *layer* rather than a misconfigured
+project. Telling an operator "does not exist" about a directory that exists and cannot be read sends
+them to fix the wrong thing.
+
+**The window this does not close, stated rather than implied.** A verification is a point-in-time
+answer. Between the check and the clone a component can be replaced by a link pointing anywhere --
+time-of-check to time-of-use -- and nothing that only reads the filesystem can prevent it. Closing it
+needs the clone performed against something the check pinned: an open directory handle, or a sandbox
+that cannot see outside the root. That is the control plane's (D-0026 §2). Returning the resolved
+path narrows the window and does not close it, and a reader who takes this adapter for containment at
+run time has read it wrong.
+
+**What would falsify it.**
+
+- **Against §1.** A caller that can supply the layer's roots and has a reason to check them
+  differently from cadenza -- a network filesystem, a container mount table -- and for which the
+  right answer is its own adapter behind this port. That is the port working, not a fault in this
+  entry; what would falsify the entry is finding that *every* real caller needs its own, which would
+  mean the shipped one was a guess about a caller nobody had.
+- **Against §2.** A path that is genuinely inside a root and is refused, which would mean resolving
+  both sides is the wrong comparison rather than the strict one. The known candidate is a bind mount
+  or a Windows substituted drive, where two real paths name one directory and `realpath` disagrees
+  with the operator about which is the real one.
+- **Against §3.** A caller that treats a green verification as containment at run time. The wording
+  above exists because that is the misreading with the worst consequence, and finding it in a real
+  caller would mean the port must hand back something a clone can be performed against rather than a
+  string.
+
+**Consequences.**
+
+- `src/ports/path-verifier.ts` gains `VerifiedLocalPath` and the two-argument `verify`;
+  `src/adapters/local-path/verifier.ts` is new; `src/domain/errors.ts` gains the six error classes.
+  All join the barrel, which under D-0033 makes them a commitment.
+- The adapter layer's `node:fs` allowance widens from `readFileSync, statSync` to add `accessSync`,
+  `constants` and `realpathSync` in `test/architecture/import-boundaries.test.ts`. Every one reads;
+  there is still no write call anywhere under `src/`.
+- **rondo is not wired to it here**, deliberately. Calling the verifier is a change in that
+  repository against its own pin (rondo D-0018, cadenza D-0035), and this entry does not make it.
+  Until that happens the hole is closed in the library and still open in the host, which is a state
+  worth naming rather than leaving to be discovered.
+- `docs/design/g1-project-registry.md` §3.1 and `README.md` stop saying no implementation ships.

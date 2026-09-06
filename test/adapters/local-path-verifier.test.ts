@@ -1,0 +1,690 @@
+/**
+ * `FilesystemLocalPathVerifier`: the run-side precondition design doc section
+ * 3.1 calls mandatory (D-0038).
+ *
+ * Target-only, and the reason is in `parity/target-only.json`. In short: the
+ * Python G1 never had a verifier either -- the port was empty on both sides --
+ * so there is no source case to translate, and the whole surface is new.
+ *
+ * **How these cases are written.** The rule under test is "the resolved path is
+ * inside a resolved allowed root", and it has two failure directions that a
+ * naive suite covers neither of:
+ *
+ * - **Green where it should be red.** A verifier that compared strings with
+ *   `startsWith`, or that never resolved a link, passes every "it accepts a
+ *   directory under the root" case ever written. So the accepting cases are
+ *   outnumbered here by cases built specifically against those two mistakes:
+ *   the prefix sibling (`<root>-evil`), the link out of the root, the link in
+ *   a middle component, and the root that is itself a link.
+ * - **Red where it should be green.** A verifier that refused every symlink
+ *   would also pass every escape case, and would be unusable on macOS, where
+ *   `/var` is a link. So the link that stays inside the root is asserted to be
+ *   ACCEPTED, and to report the target as `real`.
+ *
+ * Symlinks are created as junctions on Windows, where an unprivileged process
+ * cannot make a directory symlink but can make a junction, and `realpathSync`
+ * resolves both. That is what keeps the whole file running on every matrix cell
+ * instead of carrying a skip (D-0009).
+ */
+import {
+  accessSync,
+  chmodSync,
+  constants,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
+
+import { FilesystemLocalPathVerifier } from "../../src/adapters/local-path/verifier.js";
+import { localPathSource } from "../../src/domain/clone-source.js";
+import {
+  AllowedRootUnusableError,
+  LocalPathEscapesRootError,
+  LocalPathMissingError,
+  LocalPathNotADirectoryError,
+  LocalPathUnreadableError,
+} from "../../src/domain/errors.js";
+import { nativePath, posix, windows } from "../../src/domain/python-path.js";
+import { refusal } from "../support.js";
+
+const verifier = new FilesystemLocalPathVerifier();
+
+/**
+ * A directory link that an unprivileged process can create on every supported
+ * platform.
+ *
+ * `"dir"` needs the symlink privilege on Windows and `"junction"` does not, and
+ * `realpathSync` resolves a junction exactly as it resolves a symlink -- which
+ * is the property under test. A junction's target must be absolute, so every
+ * caller here passes one.
+ */
+function linkDirectory(target: string, link: string): void {
+  symlinkSync(target, link, nativePath.name === "windows" ? "junction" : "dir");
+}
+
+/**
+ * The fixture root, resolved with the function the adapter itself uses.
+ *
+ * Resolved deliberately: on macOS `mkdtempSync` hands back a path under `/var`,
+ * which is a link to `/private/var`, so an unresolved fixture would make every
+ * `real` in this file differ from every `declared` for a reason that has nothing
+ * to do with the case being written. The link that matters is created by the
+ * case that is about links.
+ *
+ * `.native`, and this is where the CI matrix earned its keep: on Windows
+ * `os.tmpdir()` answers with the 8.3 short name
+ * (`C:\Users\RUNNER~1\AppData\Local\Temp`), and the two resolvers disagree
+ * about it -- `fs.realpathSync` keeps the short name and `realpathSync.native`
+ * expands it to `runneradmin`. A fixture built with the other one differs from
+ * every path the adapter reports, in the short name and nowhere else, and turned
+ * both windows-latest cells red on paths that were entirely correct. The rule
+ * this file follows is therefore simple: **the fixture resolves the way the code
+ * under test resolves**, or the assertions are comparing two different questions.
+ */
+let base: string;
+
+beforeEach(() => {
+  base = realpathSync.native(mkdtempSync(join(tmpdir(), "cadenza-verify-")));
+});
+
+afterEach(() => {
+  rmSync(base, { recursive: true, force: true });
+});
+
+/** `<base>/<parts>`, absolute and spelled the way this platform spells paths. */
+function under(...parts: readonly string[]): string {
+  // `PathFlavour.join` is `os.path.join` with exactly two operands, so the parts
+  // are folded rather than spread: spreading them drops everything after the
+  // first and silently builds the parent of the path the case meant.
+  return nativePath.normpath(parts.reduce((left, right) => nativePath.join(left, right), base));
+}
+
+/** The same fold as {@link under}, from an arbitrary absolute anchor. */
+function path(anchor: string, ...parts: readonly string[]): string {
+  return parts.reduce((left, right) => nativePath.join(left, right), anchor);
+}
+
+function makeDirectory(...parts: readonly string[]): string {
+  const path = under(...parts);
+  mkdirSync(path, { recursive: true });
+  return path;
+}
+
+function makeFile(...parts: readonly string[]): string {
+  const path = under(...parts);
+  writeFileSync(path, "", "utf8");
+  return path;
+}
+
+describe("what it accepts", () => {
+  test("a directory under the root, reporting the root that granted it", () => {
+    const root = makeDirectory("roots");
+    const project = makeDirectory("roots", "web");
+
+    expect(verifier.verify(localPathSource(project), [root])).toEqual({
+      declared: project,
+      real: project,
+      root,
+    });
+  });
+
+  test("the root itself, which is a project directory as much as any other", () => {
+    const root = makeDirectory("roots");
+
+    expect(verifier.verify(localPathSource(root), [root])).toEqual({
+      declared: root,
+      real: root,
+      root,
+    });
+  });
+
+  test("a link that stays inside the root, reporting the target as `real`", () => {
+    // The green case that stops the rule being satisfied by refusing links.
+    // `declared` and `real` differ here and nowhere else in this block, which is
+    // the whole reason the result carries both.
+    const root = makeDirectory("roots");
+    const target = makeDirectory("roots", "actual", "web");
+    const link = under("roots", "web");
+    linkDirectory(target, link);
+
+    expect(verifier.verify(localPathSource(link), [root])).toEqual({
+      declared: link,
+      real: target,
+      root,
+    });
+  });
+
+  test("a root that is itself a link, because the roots are resolved too", () => {
+    // A verifier that resolved the path and compared it against an UNRESOLVED
+    // root refuses this, and the operator has no fault to fix: their checkouts
+    // simply live behind a link. It is the mirror of the escape cases.
+    const target = makeDirectory("real-roots");
+    const root = under("roots");
+    linkDirectory(target, root);
+    const project = makeDirectory("real-roots", "web");
+
+    expect(verifier.verify(localPathSource(path(root, "web")), [root])).toEqual({
+      declared: path(root, "web"),
+      real: project,
+      root: target,
+    });
+  });
+
+  test("a `..` that stays inside the root", () => {
+    const root = makeDirectory("roots");
+    makeDirectory("roots", "web");
+    makeDirectory("roots", "api");
+    const declared = path(root, "web", "..", "api");
+
+    const verified = verifier.verify(localPathSource(declared), [root]);
+    expect(verified.real).toBe(under("roots", "api"));
+    expect(verified.root).toBe(root);
+  });
+
+  test("the second root, when it is the one that contains the path", () => {
+    const first = makeDirectory("roots-a");
+    const second = makeDirectory("roots-b");
+    const project = makeDirectory("roots-b", "web");
+
+    expect(verifier.verify(localPathSource(project), [first, second]).root).toBe(second);
+  });
+
+  test("the result is frozen, so a caller cannot edit what it was told", () => {
+    const root = makeDirectory("roots");
+    const verified = verifier.verify(localPathSource(root), [root]);
+
+    expect(Object.isFrozen(verified)).toBe(true);
+    expect(() => {
+      (verified as { real: string }).real = under("elsewhere");
+    }).toThrow(TypeError);
+  });
+});
+
+describe("containment, which is the rule this exists for", () => {
+  test("a sibling that merely shares a prefix with the root is outside it", () => {
+    // The `startsWith` bug, planted deliberately: "/roots-evil" begins with
+    // "/roots" and is not under it. `isRelativeTo` compares components, and this
+    // case is what says so.
+    const root = makeDirectory("roots");
+    const sibling = makeDirectory("roots-evil");
+
+    const caught = refusal(LocalPathEscapesRootError, () =>
+      verifier.verify(localPathSource(sibling), [root]),
+    );
+    expect(caught.message).toMatch(/lexically outside/);
+  });
+
+  test("a link that lands on a prefix sibling of the root is outside it too", () => {
+    // The prefix bug again, one layer down, and it is a DIFFERENT comparison:
+    // the case above catches `startsWith` in the lexical pre-check, and this one
+    // catches it in the real one. The declared path is properly inside the root
+    // and only its resolution lands on `<root>-evil`, so the lexical check
+    // passes it through and the containment test after resolution is the only
+    // thing standing between the catalog and a directory it never allowed.
+    // Found by mutation: replacing the resolved comparison with `startsWith`
+    // left every other case in this file green.
+    const root = makeDirectory("roots");
+    const outside = makeDirectory("roots-evil", "web");
+    const link = under("roots", "web");
+    linkDirectory(outside, link);
+
+    const caught = refusal(LocalPathEscapesRootError, () =>
+      verifier.verify(localPathSource(link), [root]),
+    );
+    expect(caught.message).toContain(`resolves to ${outside}`);
+  });
+
+  test("a link inside the root that points out of it is refused, naming where it went", () => {
+    const root = makeDirectory("roots");
+    const outside = makeDirectory("elsewhere", "secrets");
+    const link = under("roots", "web");
+    linkDirectory(outside, link);
+
+    const caught = refusal(LocalPathEscapesRootError, () =>
+      verifier.verify(localPathSource(link), [root]),
+    );
+    expect(caught.message).toContain(`resolves to ${outside}`);
+  });
+
+  test("a link in a middle component is refused just as one at the end is", () => {
+    // Resolution is of the whole path, not of its last component. A verifier
+    // that called `lstat` on the final name only accepts this.
+    const root = makeDirectory("roots");
+    const outside = makeDirectory("elsewhere");
+    makeDirectory("elsewhere", "web");
+    linkDirectory(outside, under("roots", "hop"));
+
+    const caught = refusal(LocalPathEscapesRootError, () =>
+      verifier.verify(localPathSource(path(root, "hop", "web")), [root]),
+    );
+    expect(caught.message).toContain(`resolves to ${path(outside, "web")}`);
+  });
+
+  test("a `..` after a link out of the root is refused, not collapsed away", () => {
+    // The escape Node's own `realpathSync` opens, found by review. Its
+    // JavaScript implementation collapses `..` LEXICALLY before resolving links,
+    // so `<root>/hop/..` answers `<root>` -- contained -- while the operating
+    // system answers the parent of what `hop` points AT, which is outside. The
+    // adapter calls `realpathSync.native` for exactly this, and the case is
+    // written with the `..` still in the string, because `path.join` would
+    // collapse it before the verifier ever saw it.
+    const root = makeDirectory("roots");
+    makeDirectory("elsewhere");
+    linkDirectory(under("elsewhere"), under("roots", "hop"));
+    const declared = path(root, "hop", "..");
+    expect(declared).toContain("..");
+
+    if (nativePath.name === "windows") {
+      // Win32 canonicalises `..` in the path itself, before any traversal, so
+      // the operating system's OWN answer here is `<root>` and accepting it is
+      // the correct answer rather than a weaker one: the verifier agrees with
+      // what an open of that path would do, which is the whole property. The
+      // branch is the platform's, not the adapter's, and asserting the POSIX
+      // outcome unconditionally would turn both windows-latest cells red.
+      // Raised by review.
+      expect(verifier.verify(localPathSource(declared), [root]).real).toBe(root);
+      return;
+    }
+    const caught = refusal(LocalPathEscapesRootError, () =>
+      verifier.verify(localPathSource(declared), [root]),
+    );
+    expect(caught.message).toContain(`resolves to ${base}`);
+  });
+
+  test("a sibling that differs from the root only in case is decided by the path flavour", () => {
+    // Raised by review, and the first version of this case branched on the wrong
+    // thing: it asked whether the FILESYSTEM folds case, and macOS folds while
+    // the POSIX flavour does not, so the case expected an acceptance and got the
+    // lexical refusal. What decides the answer is the FLAVOUR, because the
+    // lexical pre-check runs first and settles it before any resolver is called.
+    //
+    // On the POSIX flavour `isRelativeTo` compares components exactly, so
+    // `<base>/repo` is outside `<base>/Repo` and is refused there -- on Linux,
+    // where the two names really are two directories, and on macOS, where they
+    // are one. That is the same answer `parseLocalPath` already gives a catalog
+    // whose path and root disagree in case, so the verifier is consistent with
+    // the rule the catalog is composed under (D-0001) rather than inventing a
+    // second one.
+    //
+    // On the Windows flavour the lexical check folds and lets it through, and
+    // the resolved comparison is what answers: on default NTFS the two names are
+    // one directory and `realpathSync.native` returns the canonical `Repo` for
+    // both, so it is contained. The configuration the case-exact half of
+    // `containsExactly` exists for -- per-directory case sensitivity, where they
+    // are two directories -- is not enabled on any cell, which is the coverage
+    // gap the premise case below records rather than hides.
+    const root = makeDirectory("Repo");
+    mkdirSync(under("repo"), { recursive: true });
+    const sibling = under("repo");
+
+    if (nativePath.name === "windows") {
+      expect(verifier.verify(localPathSource(sibling), [root]).root).toBe(
+        realpathSync.native(root),
+      );
+      return;
+    }
+    const caught = refusal(LocalPathEscapesRootError, () =>
+      verifier.verify(localPathSource(sibling), [root]),
+    );
+    expect(caught.message).toMatch(/lexically outside/);
+  });
+
+  test("a link pointing at the root's own parent is refused", () => {
+    const root = makeDirectory("roots");
+    linkDirectory(base, under("roots", "up"));
+
+    refusal(LocalPathEscapesRootError, () =>
+      verifier.verify(localPathSource(under("roots", "up")), [root]),
+    );
+  });
+
+  test("a `..` that climbs out of the root is refused before anything is opened", () => {
+    // Two claims in one case. The `..` is refused, and it is refused with the
+    // roots pointing at a directory that does not exist -- so the refusal cannot
+    // have come from a filesystem call. That is what pins the ordering the
+    // adapter documents: a path outside the roots is never probed.
+    const root = under("roots-that-are-not-there");
+    const declared = path(root, "..", "etc");
+
+    const caught = refusal(LocalPathEscapesRootError, () =>
+      verifier.verify(localPathSource(declared), [root]),
+    );
+    expect(caught.message).toMatch(/lexically outside/);
+  });
+});
+
+describe("existing, missing, and not a directory are three different answers", () => {
+  test("a path inside the root that is not there is missing, not an escape", () => {
+    // The distinction the brief for this belt asks for: an operator whose
+    // catalog has gone stale must not be told their path escaped a root.
+    const root = makeDirectory("roots");
+
+    const caught = refusal(LocalPathMissingError, () =>
+      verifier.verify(localPathSource(under("roots", "web")), [root]),
+    );
+    expect(caught.message).toMatch(/does not exist/);
+  });
+
+  test("a dangling link is missing, for the same reason and with the same fix", () => {
+    const root = makeDirectory("roots");
+    const target = makeDirectory("gone");
+    const link = under("roots", "web");
+    linkDirectory(target, link);
+    rmSync(target, { recursive: true, force: true });
+
+    refusal(LocalPathMissingError, () => verifier.verify(localPathSource(link), [root]));
+  });
+
+  test("a file inside the root is not a directory to clone from", () => {
+    const root = makeDirectory("roots");
+    const file = makeFile("roots", "web");
+
+    const caught = refusal(LocalPathNotADirectoryError, () =>
+      verifier.verify(localPathSource(file), [root]),
+    );
+    expect(caught.message).toContain(file);
+  });
+
+  test("a file in a middle component is not a directory either", () => {
+    const root = makeDirectory("roots");
+    makeFile("roots", "web");
+
+    refusal(LocalPathNotADirectoryError, () =>
+      verifier.verify(localPathSource(path(root, "web", "inner")), [root]),
+    );
+  });
+
+  test("a file traversed by a trailing separator, a `.`, or a `..` is not a directory", () => {
+    // Found by review. The first version of the classifier took the parent with
+    // `normpath`, which erases precisely the component that failed: all three of
+    // these collapse to something whose parent is an ordinary directory, so each
+    // was reported as a missing path when what was there was a file being walked
+    // through. The separator is written into the string rather than joined,
+    // because every join in this file normalises it away before the verifier
+    // could see it -- which is the same reason the case exists at all.
+    const root = makeDirectory("roots");
+    const file = makeFile("roots", "web");
+    makeDirectory("roots", "api");
+
+    // Each row asks the operating system what it does with the path, and then
+    // requires the verifier to agree. That is the property, stated directly:
+    // **the check answers what an open of this path would answer**, and it is
+    // the only form of this case that is not a bet on one platform's
+    // canonicalisation. Two CI rounds were spent learning that. `<file>/` is
+    // `ENOTDIR` on Linux, resolves to the file on macOS and Windows; and Win32
+    // erases `web\..` from the string before traversing, so `<file>/../api` is
+    // a refusal on POSIX -- where the file is walked through -- and a perfectly
+    // good directory there.
+    //
+    // What is asserted either way is the part that is cadenza's: a refusal is
+    // `LocalPathNotADirectoryError` and NOT `LocalPathMissingError`, which is the
+    // defect this case was written for, and it names the path it refused. Where
+    // the platform resolves the path instead, the acceptance must report what the
+    // platform resolved it to.
+    for (const declared of [
+      `${file}/`,
+      `${file}/.`,
+      `${file}/../api`,
+      // A `..` BEFORE the file, over a directory that exists. An earlier draft
+      // stopped the descent at the first `..` and reported a missing path here;
+      // nothing in the descent reasons about a component, so there was nothing
+      // for that guard to protect.
+      `${root}/api/../web/`,
+    ]) {
+      const resolvedToDirectory = ((): string | null => {
+        try {
+          const real = realpathSync.native(declared);
+          return statSync(real).isDirectory() ? real : null;
+        } catch {
+          return null;
+        }
+      })();
+
+      if (resolvedToDirectory !== null) {
+        expect(verifier.verify(localPathSource(declared), [root]).real, `for ${declared}`).toBe(
+          resolvedToDirectory,
+        );
+        continue;
+      }
+      const caught = refusal(LocalPathNotADirectoryError, () =>
+        verifier.verify(localPathSource(declared), [root]),
+      );
+      expect(caught.message, `for ${declared}`).toContain(declared);
+    }
+  });
+
+  test("a missing path several components deep is still missing", () => {
+    // The other arm of the same descent, so that the case above cannot be
+    // satisfied by a classifier that answers "not a directory" to everything.
+    const root = makeDirectory("roots");
+
+    refusal(LocalPathMissingError, () =>
+      verifier.verify(localPathSource(path(root, "gone", "deeper")), [root]),
+    );
+  });
+
+  test("an absent component before a `..` is answered the way the platform answers it", () => {
+    // `<root>/gone/../web/` names a directory that is not there AND traverses a
+    // file, and the two platforms genuinely disagree about which one you hit,
+    // because they disagree about when `..` is applied.
+    //
+    // POSIX walks the path: `gone` is not there, so the path is not there, and
+    // `web` is never reached. Win32 canonicalises `..` in the string first, so
+    // the path IS `<root>/web/` and `gone` never has to exist -- the file is
+    // what you meet. Each answer is what an open of that path does on that
+    // platform, which is the only property this check promises. Asserting the
+    // POSIX answer everywhere is what turned both windows-latest cells red.
+    const root = makeDirectory("roots");
+    makeFile("roots", "web");
+    const declared = `${root}/gone/../web/`;
+
+    if (nativePath.name === "windows") {
+      refusal(LocalPathNotADirectoryError, () =>
+        verifier.verify(localPathSource(declared), [root]),
+      );
+      return;
+    }
+    refusal(LocalPathMissingError, () => verifier.verify(localPathSource(declared), [root]));
+  });
+
+  test("a directory this process cannot enter is unreadable, not missing", () => {
+    // Total on every platform rather than skipped on some (D-0009). Windows
+    // ignores the mode bits and a process running as root ignores them too, so
+    // the case asks the operating system what it actually did and asserts the
+    // branch that follows. Either way something is asserted, and the assertion
+    // is the one that distinguishes "cannot be read" from "is not there".
+    const root = makeDirectory("roots");
+    const project = makeDirectory("roots", "web");
+    chmodSync(project, 0o000);
+    let denied: boolean;
+    try {
+      accessSync(project, constants.R_OK | constants.X_OK);
+      denied = false;
+    } catch {
+      denied = true;
+    }
+
+    if (denied) {
+      const caught = refusal(LocalPathUnreadableError, () =>
+        verifier.verify(localPathSource(project), [root]),
+      );
+      expect(caught.message).toMatch(/not readable/);
+    } else {
+      expect(verifier.verify(localPathSource(project), [root]).real).toBe(project);
+    }
+    chmodSync(project, 0o700);
+  });
+});
+
+describe("a root that cannot be used is the layer's fault, and is named as one", () => {
+  test("a root that does not exist", () => {
+    const root = under("roots");
+
+    const caught = refusal(AllowedRootUnusableError, () =>
+      verifier.verify(localPathSource(path(root, "web")), [root]),
+    );
+    expect(caught.message).toContain(root);
+  });
+
+  test("a root that is a file", () => {
+    const root = makeFile("roots");
+
+    refusal(AllowedRootUnusableError, () =>
+      verifier.verify(localPathSource(path(root, "web")), [root]),
+    );
+  });
+
+  test("a root that cannot be entered, even when another root grants the path", () => {
+    // Found by review: `realpathSync` and `statSync` both succeed on a mode-000
+    // directory, because neither needs access to its contents, so an
+    // unenterable root used to pass while a second root granted the path -- the
+    // documented fail-closed policy quietly untrue in the one arrangement where
+    // it matters. Total on every platform for the reason the unreadable-path
+    // case gives: Windows and a process running as root ignore the mode bits,
+    // so the case asks what the operating system actually did.
+    const good = makeDirectory("roots-a");
+    const project = makeDirectory("roots-a", "web");
+    const closed = makeDirectory("roots-b");
+    chmodSync(closed, 0o000);
+    let denied: boolean;
+    try {
+      accessSync(closed, constants.X_OK);
+      denied = false;
+    } catch {
+      denied = true;
+    }
+
+    if (denied) {
+      const caught = refusal(AllowedRootUnusableError, () =>
+        verifier.verify(localPathSource(project), [good, closed]),
+      );
+      expect(caught.message).toContain(closed);
+    } else {
+      expect(verifier.verify(localPathSource(project), [good, closed]).root).toBe(good);
+    }
+    chmodSync(closed, 0o700);
+  });
+
+  test("a root that is traversable but not listable is usable, because that is what a root is for", () => {
+    // The other side of the case above, so that the fix is a rule and not a
+    // tightening: mode 111 cannot be listed and can be descended through, which
+    // is all a root has to do. Requiring read here would refuse a correctly
+    // configured machine, and the mode is 111 rather than 711 for a reason
+    // mutation found -- the owner bits of 711 include read, so the case passed
+    // against a verifier that demanded it.
+    const root = makeDirectory("roots");
+    const project = makeDirectory("roots", "web");
+    chmodSync(root, 0o111);
+
+    expect(verifier.verify(localPathSource(project), [root]).root).toBe(root);
+    chmodSync(root, 0o700);
+  });
+
+  test("a broken root is reported even when another root would have granted the path", () => {
+    // Fails closed. Skipping the unusable root would accept this call and leave
+    // the real fault -- an unmounted disk, a typo in `allowed_local_roots` --
+    // to be discovered by whichever project needed exactly that root.
+    const good = makeDirectory("roots-a");
+    const project = makeDirectory("roots-a", "web");
+    const broken = under("roots-b");
+
+    refusal(AllowedRootUnusableError, () =>
+      verifier.verify(localPathSource(project), [good, broken]),
+    );
+  });
+});
+
+describe("the caller's own arguments are a RangeError, never a refusal", () => {
+  test("no roots at all is refused rather than read as a wildcard", () => {
+    // The one catastrophic default available here: an empty list must never mean
+    // "anything goes". `parseLocalPath` applies the same rule at the catalog.
+    const project = makeDirectory("roots", "web");
+
+    expect(() => verifier.verify(localPathSource(project), [])).toThrow(RangeError);
+  });
+
+  test("a relative root", () => {
+    expect(() => verifier.verify(localPathSource(under("roots", "web")), ["roots"])).toThrow(
+      RangeError,
+    );
+  });
+
+  test("a relative path", () => {
+    expect(() => verifier.verify(localPathSource("web"), [makeDirectory("roots")])).toThrow(
+      RangeError,
+    );
+  });
+
+  test("an empty path", () => {
+    expect(() => verifier.verify(localPathSource(""), [makeDirectory("roots")])).toThrow(
+      RangeError,
+    );
+  });
+
+  test("a source that is not a local_path", () => {
+    const root = makeDirectory("roots");
+    expect(() =>
+      verifier.verify({ kind: "git_url", url: "https://example.invalid/org/repo.git" } as never, [
+        root,
+      ]),
+    ).toThrow(RangeError);
+  });
+});
+
+describe("the premise the resolved comparison rests on", () => {
+  test("`isRelativeTo` case-folds on Windows, which is why the case is checked separately", () => {
+    // Not a test of the adapter, and it says so: it pins the FACT the extra half
+    // of `containsExactly` exists for. `PureWindowsPath` compares
+    // case-insensitively, so on a Windows directory with per-directory case
+    // sensitivity enabled -- where `Repo` and `repo` are two directories -- the
+    // structural check alone reports a resolved path inside the wrong one.
+    //
+    // Stated plainly, because it is the honest limit of this file: on a
+    // case-sensitive POSIX filesystem the two halves of `containsExactly` agree
+    // on every input, so neither is observably load-bearing here, and mutation
+    // confirms it -- deleting either one leaves this suite green. The half added
+    // for this case is covered by no case on any cell of the matrix, because no
+    // cell enables per-directory case sensitivity. This case is what a later
+    // reader has instead: the premise, asserted, so that a change in it is a
+    // failure rather than a silent one.
+    expect(windows.isRelativeTo("C:\\parent\\repo\\x", "C:\\parent\\Repo")).toBe(true);
+    expect("C:\\parent\\repo\\x".startsWith("C:\\parent\\Repo\\")).toBe(false);
+    // And the same two operands on the POSIX flavour, where the structural check
+    // needs no help.
+    expect(posix.isRelativeTo("/parent/repo/x", "/parent/Repo")).toBe(false);
+  });
+});
+
+describe("the order of the checks, which is fixed and observable", () => {
+  test("lexical containment is answered before existence", () => {
+    // Both faults are present: the path escapes AND nothing is there. The
+    // escape is what is reported, because the filesystem is never asked about a
+    // path outside the roots.
+    const root = makeDirectory("roots");
+
+    refusal(LocalPathEscapesRootError, () =>
+      verifier.verify(localPathSource(under("elsewhere", "web")), [root]),
+    );
+  });
+
+  test("the roots are answered before the path", () => {
+    // The root is a file, so the path under it cannot exist either, and the two
+    // faults have different answers: asking about the root first gives
+    // `AllowedRootUnusableError`, asking about the path first would give the
+    // `ENOTDIR` reading, `LocalPathNotADirectoryError`. Which one arrives is the
+    // ordering, and a project must not be blamed for a root that is not one.
+    const root = makeFile("roots");
+
+    const caught = refusal(AllowedRootUnusableError, () =>
+      verifier.verify(localPathSource(path(root, "web")), [root]),
+    );
+    expect(caught.message).toContain(root);
+  });
+});

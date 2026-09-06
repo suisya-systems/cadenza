@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The local-path verifier (D-0038), which had a port and no implementation in any
+  of the three repositories while G1 called it mandatory before a clone.
+  `FilesystemLocalPathVerifier` (`src/adapters/local-path/`) resolves the
+  declared path and every allowed root and requires the resolved path to be a
+  root or to lie under one, compared component by component - `<root>-evil`
+  begins with `<root>` and is not under it. Symlinks are resolved rather than
+  refused, because a rule that refused them all would be satisfied by every
+  escape case and unusable on macOS, where `/var` is a link; what is refused is
+  the escape, wherever in the path it sits. Refusals are five typed errors rather
+  than one, because a stale catalog entry, a path that is not a directory, a mode
+  bit, an escape and a misconfigured allowed root are five different fixes by
+  different people. An empty root list is refused and never read as a wildcard,
+  and a root that cannot be resolved fails the call rather than being skipped.
+  The check is a point-in-time answer and says so: the window between it and the
+  clone is closed by a sandbox, which is the control plane's (D-0026).
+  Resolution goes through `realpathSync.native` rather than `fs.realpathSync`,
+  because the latter collapses `..` lexically before resolving links and so
+  answers `<root>` for `<root>/link/..` where the operating system answers the
+  parent of the link's target - an escape, with its own regression case. A root
+  must additionally be enterable (execute, not read: a mode-711 root is correct
+  and a mode-000 one passes both `realpathSync` and `statSync`). The resolved
+  comparison also requires the case to agree, because `isRelativeTo` case-folds
+  on Windows and a directory with per-directory case sensitivity enabled can hold
+  `Repo` and `repo` as two directories; both operands come from
+  `realpathSync.native`, so the canonical on-disk name is what is compared. That
+  last half is covered by no case on any matrix cell - no cell enables case
+  sensitivity - and the suite pins the premise instead. A path that is not there is
+  classified by descending its own prefixes rather than from the `errno`, because
+  POSIX reports `ENOTDIR` for a file in a middle component and Windows reports
+  `ENOENT` for the same arrangement. The prefixes are cut from the string the
+  caller wrote and each is handed to `statSync`, so a trailing separator, a `.`
+  or a `..` cannot erase the component that actually failed.
 - Capability vocabulary version 2 (D-0037): version 1's seven keys, unchanged,
   plus `issue.create`, `issue.comment`, `review.submit`, `pull_request.merge` and
   `network.fetch`. `network.fetch` is the one that made version 1 unusable in
@@ -237,6 +269,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `LocalPathVerifier.verify` now takes the layer's `allowed_local_roots` and
+  returns a `VerifiedLocalPath` (`declared`, `real`, `root`) instead of `void`
+  (D-0038). The one-argument spelling could not do the job it named: a
+  `LocalPathSource` carries only `path`, and `parseCloneSource` consumes the
+  roots and discards them, so a verifier handed a source alone had nothing to be
+  contained in. Returning the resolved path is what lets a caller act on what was
+  actually checked rather than walking the links a second time. No implementation
+  of the old signature existed anywhere, so nothing is broken by the change.
+- The adapter layer's `node:fs` allowance in
+  `test/architecture/import-boundaries.test.ts` widens to add `accessSync`,
+  `constants` and `realpathSync`. All three read; there is still no write call
+  anywhere under `src/`.
 - `docs/design/conductor.md` section 9.1's `prepare`/`--ignore-scripts`
   rationale is corrected where it appears (D-0035): npm 10.9.2 runs a git
   dependency's `prepare` *despite* `--ignore-scripts`, so option B is declined

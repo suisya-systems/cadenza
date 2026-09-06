@@ -237,7 +237,13 @@ Resolution is pure: it never clones, never opens a network connection and never
 reads a working tree. `local_path` is validated lexically only. Whether a path
 exists, is readable, or is a symlink pointing somewhere else entirely is a
 run-side precondition, declared as the `LocalPathVerifier` port and mandatory
-before any clone.
+before any clone -- and now implemented, by `FilesystemLocalPathVerifier` in
+`src/adapters/local-path/`, which is the one layer allowed to read a disk
+(D-0038). It resolves the path and every allowed root and requires the resolved
+path to be a root or lie under one, compared component by component. It is a
+point-in-time answer, not containment at run time: a component can be replaced
+between the check and the clone, and closing that window needs a sandbox, which
+is the control plane's (D-0026).
 
 Every refusal is a typed error under `src/domain/errors.ts`, carrying the file
 and the key at fault. An unknown key, a colliding name, an unsupported
