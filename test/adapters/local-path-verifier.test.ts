@@ -69,18 +69,28 @@ function linkDirectory(target: string, link: string): void {
 }
 
 /**
- * The fixture root, with links resolved.
+ * The fixture root, resolved with the function the adapter itself uses.
  *
  * Resolved deliberately: on macOS `mkdtempSync` hands back a path under `/var`,
  * which is a link to `/private/var`, so an unresolved fixture would make every
  * `real` in this file differ from every `declared` for a reason that has nothing
  * to do with the case being written. The link that matters is created by the
  * case that is about links.
+ *
+ * `.native`, and this is where the CI matrix earned its keep: on Windows
+ * `os.tmpdir()` answers with the 8.3 short name
+ * (`C:\Users\RUNNER~1\AppData\Local\Temp`), and the two resolvers disagree
+ * about it -- `fs.realpathSync` keeps the short name and `realpathSync.native`
+ * expands it to `runneradmin`. A fixture built with the other one differs from
+ * every path the adapter reports, in the short name and nowhere else, and turned
+ * both windows-latest cells red on paths that were entirely correct. The rule
+ * this file follows is therefore simple: **the fixture resolves the way the code
+ * under test resolves**, or the assertions are comparing two different questions.
  */
 let base: string;
 
 beforeEach(() => {
-  base = realpathSync(mkdtempSync(join(tmpdir(), "cadenza-verify-")));
+  base = realpathSync.native(mkdtempSync(join(tmpdir(), "cadenza-verify-")));
 });
 
 afterEach(() => {
@@ -287,27 +297,42 @@ describe("containment, which is the rule this exists for", () => {
     expect(caught.message).toContain(`resolves to ${base}`);
   });
 
-  test("a sibling that differs from the root only in case is outside it", () => {
-    // Raised by review, and only observable where the filesystem can hold both
-    // names: every case-sensitive POSIX filesystem, and a Windows directory with
-    // per-directory case sensitivity enabled, which is the configuration the
-    // case exists for -- `nativePath.isRelativeTo` case-folds on Windows because
-    // `PureWindowsPath` does, so the resolved comparison needs the case to agree
-    // as well. Where the filesystem folds case instead (macOS by default), the
-    // two names ARE one directory, and the case asserts that reading -- which is
-    // also correct, and is why this is a branch rather than a skip.
+  test("a sibling that differs from the root only in case is decided by the path flavour", () => {
+    // Raised by review, and the first version of this case branched on the wrong
+    // thing: it asked whether the FILESYSTEM folds case, and macOS folds while
+    // the POSIX flavour does not, so the case expected an acceptance and got the
+    // lexical refusal. What decides the answer is the FLAVOUR, because the
+    // lexical pre-check runs first and settles it before any resolver is called.
+    //
+    // On the POSIX flavour `isRelativeTo` compares components exactly, so
+    // `<base>/repo` is outside `<base>/Repo` and is refused there -- on Linux,
+    // where the two names really are two directories, and on macOS, where they
+    // are one. That is the same answer `parseLocalPath` already gives a catalog
+    // whose path and root disagree in case, so the verifier is consistent with
+    // the rule the catalog is composed under (D-0001) rather than inventing a
+    // second one.
+    //
+    // On the Windows flavour the lexical check folds and lets it through, and
+    // the resolved comparison is what answers: on default NTFS the two names are
+    // one directory and `realpathSync.native` returns the canonical `Repo` for
+    // both, so it is contained. The configuration the case-exact half of
+    // `containsExactly` exists for -- per-directory case sensitivity, where they
+    // are two directories -- is not enabled on any cell, which is the coverage
+    // gap the premise case below records rather than hides.
     const root = makeDirectory("Repo");
     mkdirSync(under("repo"), { recursive: true });
     const sibling = under("repo");
-    const folded = realpathSync.native(sibling) === realpathSync.native(root);
 
-    if (folded) {
+    if (nativePath.name === "windows") {
       expect(verifier.verify(localPathSource(sibling), [root]).root).toBe(
         realpathSync.native(root),
       );
       return;
     }
-    refusal(LocalPathEscapesRootError, () => verifier.verify(localPathSource(sibling), [root]));
+    const caught = refusal(LocalPathEscapesRootError, () =>
+      verifier.verify(localPathSource(sibling), [root]),
+    );
+    expect(caught.message).toMatch(/lexically outside/);
   });
 
   test("a link pointing at the root's own parent is refused", () => {
