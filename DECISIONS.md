@@ -3377,6 +3377,13 @@ under one, compared **component by component** through `nativePath.isRelativeTo`
   target on POSIX. Both answers agree with what an open of that path does on that platform, which is
   the property this check has; the regression case therefore branches on the flavour rather than
   asserting one platform's answer everywhere.
+- **`ENOENT` and `ENOTDIR` are one question, and the platforms answer it with different codes.** POSIX
+  reports `ENOTDIR` for a regular file in the middle of a path; Windows reports `ENOENT`, because
+  `CreateFileW` returns `ERROR_PATH_NOT_FOUND` and libuv maps that to `ENOENT`. Reading the codes
+  literally would tell an operator on Windows that a path is missing when what they have is a file
+  where a directory should be -- the wrong fix, on both required cells. So neither code is trusted:
+  the deepest existing ancestor inside the roots is what decides, which makes one code path serve
+  both platforms and is exercised on this one. Raised by review.
 
 ### 3. Five refusals, and what this does not close
 

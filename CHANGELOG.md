@@ -35,7 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Repo` and `repo` as two directories; both operands come from
   `realpathSync.native`, so the canonical on-disk name is what is compared. That
   last half is covered by no case on any matrix cell - no cell enables case
-  sensitivity - and the suite pins the premise instead.
+  sensitivity - and the suite pins the premise instead. A path that is not there is
+  classified from its deepest existing ancestor rather than from the `errno`,
+  because POSIX reports `ENOTDIR` for a file in a middle component and Windows
+  reports `ENOENT` for the same arrangement.
 - Capability vocabulary version 2 (D-0037): version 1's seven keys, unchanged,
   plus `issue.create`, `issue.comment`, `review.submit`, `pull_request.merge` and
   `network.fetch`. `network.fetch` is the one that made version 1 unusable in

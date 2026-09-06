@@ -44,6 +44,7 @@ import {
   LocalPathMissingError,
   LocalPathNotADirectoryError,
   LocalPathUnreadableError,
+  type LocalPathVerificationError,
 } from "../../domain/errors.js";
 import { nativePath } from "../../domain/python-path.js";
 import type { LocalPathVerifier, VerifiedLocalPath } from "../../ports/path-verifier.js";
@@ -55,6 +56,53 @@ function errorCode(error: unknown): string | null {
     return typeof code === "string" ? code : null;
   }
   return null;
+}
+
+/**
+ * Why a path is not there, decided by what its deepest existing ancestor is.
+ *
+ * Climbs lexically -- `<path>/..` normalised -- and stops as soon as an ancestor
+ * leaves the allowed roots, so this walk never probes a directory the caller was
+ * not already entitled to ask about. That bound is unreachable given the order
+ * of the checks -- the roots were established to exist a few lines earlier, so
+ * the climb always meets a directory at or below one of them -- and it is
+ * written anyway, because the alternative is a walk whose safety depends on a
+ * caller's ordering staying what it is today. Mutation says as much: removing
+ * the bound leaves the suite green, and no case is added to pretend otherwise. Lexical is the right climb here even though
+ * links make it approximate: the answer decides which *message* an operator
+ * gets, not whether the path is contained, and containment has already been
+ * settled by the caller before a refusal can be reached.
+ *
+ * `statSync` and not `lstatSync`: a link to a file is a file for this purpose.
+ */
+function absenceOf(
+  path: string,
+  what: string,
+  contained: (candidate: string) => boolean,
+): LocalPathVerificationError {
+  let ancestor = nativePath.normpath(nativePath.join(path, ".."));
+  while (contained(ancestor)) {
+    let found: boolean;
+    try {
+      found = statSync(ancestor).isDirectory();
+    } catch {
+      // Not there either, or not examinable: keep climbing. A refusal from this
+      // level would be about the wrong path.
+      const next = nativePath.normpath(nativePath.join(ancestor, ".."));
+      if (next === ancestor) {
+        break;
+      }
+      ancestor = next;
+      continue;
+    }
+    if (!found) {
+      return new LocalPathNotADirectoryError(
+        `${what} ${path} runs through ${ancestor}, which is not a directory`,
+      );
+    }
+    break;
+  }
+  return new LocalPathMissingError(`${what} ${path} does not exist, or a link to it dangles`);
 }
 
 /**
@@ -71,7 +119,12 @@ function errorCode(error: unknown): string | null {
  * and a verifier that let an unrecognised failure through would be answering
  * "contained" on the strength of not having looked.
  */
-function resolveOrRefuse(path: string, what: string, asRoot: boolean): string {
+function resolveOrRefuse(
+  path: string,
+  what: string,
+  asRoot: boolean,
+  contained: (candidate: string) => boolean,
+): string {
   try {
     // `.native`, and never the plain `realpathSync`. Node's JavaScript
     // implementation collapses `..` LEXICALLY before it resolves links, so for
@@ -93,13 +146,17 @@ function resolveOrRefuse(path: string, what: string, asRoot: boolean): string {
       // fault in the project whose path happened to be checked first.
       throw new AllowedRootUnusableError(`${what} ${path} could not be resolved: ${detail}`);
     }
-    if (code === "ENOENT") {
-      throw new LocalPathMissingError(`${what} ${path} does not exist, or a link to it dangles`);
-    }
-    if (code === "ENOTDIR") {
-      throw new LocalPathNotADirectoryError(
-        `${what} ${path} runs through a component that is not a directory`,
-      );
+    if (code === "ENOENT" || code === "ENOTDIR") {
+      // The two codes are ONE question -- something on the way is not there, or
+      // is there and is not a directory -- and the platforms disagree about
+      // which code they answer it with. POSIX says `ENOTDIR` for a regular file
+      // in the middle of a path; Windows says `ENOENT`, because `CreateFileW`
+      // returns `ERROR_PATH_NOT_FOUND` and libuv maps that to `ENOENT`. Reading
+      // the codes literally would report a file in a middle component as a
+      // missing path on both required Windows cells, which is the wrong fix sent
+      // to the operator. Raised by review. So neither code is trusted: the
+      // ancestors are walked, and the answer comes from what is actually there.
+      throw absenceOf(path, what, contained);
     }
     throw new LocalPathUnreadableError(`${what} ${path} could not be examined: ${detail}`);
   }
@@ -230,12 +287,14 @@ export class FilesystemLocalPathVerifier implements LocalPathVerifier {
     // -- the one that needed exactly that root -- would be refused with the real
     // fault never named. See `AllowedRootUnusableError`.
     const realRoots = roots.map((root) => {
-      const real = resolveOrRefuse(root, "allowed local root", true);
+      const real = resolveOrRefuse(root, "allowed local root", true, () => false);
       requireRootDirectory(real, root);
       return real;
     });
 
-    const real = resolveOrRefuse(declared, "path", false);
+    const real = resolveOrRefuse(declared, "path", false, (candidate) =>
+      lexicallyContained(candidate, roots),
+    );
     requireReadableDirectory(real, declared, "path");
 
     const root = realRoots.find((candidate) => containsExactly(real, candidate));
