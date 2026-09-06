@@ -3382,8 +3382,21 @@ under one, compared **component by component** through `nativePath.isRelativeTo`
   `CreateFileW` returns `ERROR_PATH_NOT_FOUND` and libuv maps that to `ENOENT`. Reading the codes
   literally would tell an operator on Windows that a path is missing when what they have is a file
   where a directory should be -- the wrong fix, on both required cells. So neither code is trusted:
-  the deepest existing ancestor inside the roots is what decides, which makes one code path serve
-  both platforms and is exercised on this one. Raised by review.
+  the path's own prefixes are descended, inside the roots, and the first one that exists and is not a
+  directory is the answer -- which makes one code path serve both platforms and is exercised on this
+  one. Raised by review.
+
+  **Prefixes are cut from the string the caller wrote, and nothing about a component is reasoned
+  over.** A first draft climbed with `normpath`, and `normpath` erases exactly the component that
+  failed: `<root>/file/`, `<root>/file/.` and `<root>/file/../dir` all collapse to something whose
+  parent is an ordinary directory, so each was reported as a missing path when what was there was a
+  file being traversed. A second draft added a guard that stopped the descent at the first `..`, on
+  the theory that lexical prefixes stop meaning anything past one -- and measurement turned that
+  around: since every prefix is handed to `statSync` rather than reasoned about, the guard only made
+  `<root>/dir/../web/` answer "missing" where the operating system answers `ENOTDIR`. Both drafts
+  were caught by review, and both are in the suite as cases. The pattern is the one this belt keeps
+  finding: **a lexical shortcut answers a different question from the one the filesystem was
+  asked**, and it is the same mistake as `fs.realpathSync`'s `..`.
 
 ### 3. Five refusals, and what this does not close
 

@@ -36,9 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `realpathSync.native`, so the canonical on-disk name is what is compared. That
   last half is covered by no case on any matrix cell - no cell enables case
   sensitivity - and the suite pins the premise instead. A path that is not there is
-  classified from its deepest existing ancestor rather than from the `errno`,
-  because POSIX reports `ENOTDIR` for a file in a middle component and Windows
-  reports `ENOENT` for the same arrangement.
+  classified by descending its own prefixes rather than from the `errno`, because
+  POSIX reports `ENOTDIR` for a file in a middle component and Windows reports
+  `ENOENT` for the same arrangement. The prefixes are cut from the string the
+  caller wrote and each is handed to `statSync`, so a trailing separator, a `.`
+  or a `..` cannot erase the component that actually failed.
 - Capability vocabulary version 2 (D-0037): version 1's seven keys, unchanged,
   plus `issue.create`, `issue.comment`, `review.submit`, `pull_request.merge` and
   `network.fetch`. `network.fetch` is the one that made version 1 unusable in

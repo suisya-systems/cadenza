@@ -400,6 +400,65 @@ describe("existing, missing, and not a directory are three different answers", (
     );
   });
 
+  test("a file traversed by a trailing separator, a `.`, or a `..` is not a directory", () => {
+    // Found by review. The first version of the classifier took the parent with
+    // `normpath`, which erases precisely the component that failed: all three of
+    // these collapse to something whose parent is an ordinary directory, so each
+    // was reported as a missing path when what was there was a file being walked
+    // through. The separator is written into the string rather than joined,
+    // because every join in this file normalises it away before the verifier
+    // could see it -- which is the same reason the case exists at all.
+    const root = makeDirectory("roots");
+    const file = makeFile("roots", "web");
+    makeDirectory("roots", "api");
+
+    // Each row is the path as written and the prefix the refusal must name.
+    // The last row names the prefix AS WRITTEN rather than its resolved form,
+    // which is the honest thing for a message to do: it points at the piece of
+    // the operator's own string that is at fault.
+    for (const [declared, offender] of [
+      [`${file}/`, file],
+      [`${file}/.`, file],
+      [`${file}/../api`, file],
+      // A `..` BEFORE the file, over a directory that exists. Measured against
+      // the operating system, which answers `ENOTDIR` here: an earlier draft
+      // stopped the descent at the first `..` and reported a missing path for
+      // this one. Nothing in the descent reasons about a component -- every
+      // prefix is handed to `statSync` -- so there is nothing to guard against.
+      [`${root}/api/../web/`, `${root}/api/../web`],
+    ] as const) {
+      const caught = refusal(LocalPathNotADirectoryError, () =>
+        verifier.verify(localPathSource(declared), [root]),
+      );
+      expect(caught.message).toContain(`runs through ${offender}`);
+    }
+  });
+
+  test("a missing path several components deep is still missing", () => {
+    // The other arm of the same descent, so that the case above cannot be
+    // satisfied by a classifier that answers "not a directory" to everything.
+    const root = makeDirectory("roots");
+
+    refusal(LocalPathMissingError, () =>
+      verifier.verify(localPathSource(path(root, "gone", "deeper")), [root]),
+    );
+  });
+
+  test("an absent component before a `..` ends the descent, and the answer stays missing", () => {
+    // What the two stopping rules are for, in one input. `<root>/gone/../web/`
+    // traverses a file at the end AND names a directory that is not there before
+    // it, and the operating system answers the second: `gone` does not exist, so
+    // the path does not exist. A descent that kept going past an absent prefix,
+    // or that reasoned past the `..`, would arrive at `<root>/web` -- a file --
+    // and report "not a directory" about a path whose real fault is elsewhere.
+    const root = makeDirectory("roots");
+    makeFile("roots", "web");
+
+    refusal(LocalPathMissingError, () =>
+      verifier.verify(localPathSource(`${root}/gone/../web/`), [root]),
+    );
+  });
+
   test("a directory this process cannot enter is unreadable, not missing", () => {
     // Total on every platform rather than skipped on some (D-0009). Windows
     // ignores the mode bits and a process running as root ignores them too, so

@@ -59,19 +59,53 @@ function errorCode(error: unknown): string | null {
 }
 
 /**
- * Why a path is not there, decided by what its deepest existing ancestor is.
+ * Every separator this platform accepts inside a path.
  *
- * Climbs lexically -- `<path>/..` normalised -- and stops as soon as an ancestor
- * leaves the allowed roots, so this walk never probes a directory the caller was
- * not already entitled to ask about. That bound is unreachable given the order
- * of the checks -- the roots were established to exist a few lines earlier, so
- * the climb always meets a directory at or below one of them -- and it is
- * written anyway, because the alternative is a walk whose safety depends on a
- * caller's ordering staying what it is today. Mutation says as much: removing
- * the bound leaves the suite green, and no case is added to pretend otherwise. Lexical is the right climb here even though
- * links make it approximate: the answer decides which *message* an operator
- * gets, not whether the path is contained, and containment has already been
- * settled by the caller before a refusal can be reached.
+ * Windows takes both, and the operator's own spelling is what reaches
+ * {@link absenceOf} -- unlike {@link containsExactly}, which only ever sees a
+ * string the platform's resolver produced.
+ */
+const PATH_SEPARATORS = nativePath.name === "windows" ? "\\/" : "/";
+
+/**
+ * Why a path is not there: decided by descending its own prefixes, in the
+ * spelling the caller wrote them.
+ *
+ * **Descends rather than climbs, and never normalises.** The climbing version
+ * this replaces called `normpath` to take a parent, and `normpath` erases
+ * exactly the component that failed: `<root>/file/` and `<root>/file/.` and
+ * `<root>/file/../dir` all collapse to something whose parent is an ordinary
+ * directory, so each was reported as a missing path when what was there was a
+ * file being traversed. Found by review, and it is the same lesson as
+ * `realpathSync` twice over -- a lexical shortcut answers a different question
+ * from the one the filesystem was asked.
+ *
+ * Prefixes are cut at each separator of the ORIGINAL string, so the anchor comes
+ * along verbatim and no join arithmetic can reshape it, and every prefix
+ * produced is strictly shorter than the path. That last property is what makes
+ * the rule below sound: a prefix that exists and is not a directory is one the
+ * path **traverses**, whatever follows it -- another component, a trailing
+ * separator, or a `.`.
+ *
+ * **Nothing here reasons about a component; every prefix is handed to the
+ * filesystem.** That is what makes a `..` in the middle safe to walk straight
+ * past: `statSync` resolves the prefix the way an open of it would, links and
+ * all, so `<root>/dir/../web/` finds the file at `web` and reports it. An
+ * earlier draft guarded against `..` by stopping at one, on the theory that
+ * lexical prefixes stop meaning anything past it -- and that guard was measured
+ * to make the answer WRONG on exactly that input, reporting a missing path where
+ * the operating system reports `ENOTDIR`. It is gone, and its case is in the
+ * suite.
+ *
+ * Two stopping rules remain:
+ *
+ * - a prefix outside the allowed roots is not examined, so this never probes a
+ *   directory the caller was not already entitled to ask about;
+ * - a prefix that is not there ends the descent. That one is an early exit and
+ *   nothing more: every deeper prefix contains the absent component and fails
+ *   the same way, which mutation confirms -- removing the `break` changes no
+ *   answer in the suite, and the comment says so rather than a case being
+ *   invented to claim it.
  *
  * `statSync` and not `lstatSync`: a link to a file is a file for this purpose.
  */
@@ -80,27 +114,29 @@ function absenceOf(
   what: string,
   contained: (candidate: string) => boolean,
 ): LocalPathVerificationError {
-  let ancestor = nativePath.normpath(nativePath.join(path, ".."));
-  while (contained(ancestor)) {
-    let found: boolean;
-    try {
-      found = statSync(ancestor).isDirectory();
-    } catch {
-      // Not there either, or not examinable: keep climbing. A refusal from this
-      // level would be about the wrong path.
-      const next = nativePath.normpath(nativePath.join(ancestor, ".."));
-      if (next === ancestor) {
-        break;
-      }
-      ancestor = next;
+  for (let index = 1; index < path.length; index += 1) {
+    if (!PATH_SEPARATORS.includes(path[index] as string)) {
       continue;
     }
-    if (!found) {
+    const prefix = path.slice(0, index);
+    // A run of separators, or the anchor on its own: nothing to ask about.
+    if (prefix === "" || PATH_SEPARATORS.includes(prefix[prefix.length - 1] as string)) {
+      continue;
+    }
+    if (!contained(prefix)) {
+      continue;
+    }
+    let isDirectory: boolean;
+    try {
+      isDirectory = statSync(prefix).isDirectory();
+    } catch {
+      break;
+    }
+    if (!isDirectory) {
       return new LocalPathNotADirectoryError(
-        `${what} ${path} runs through ${ancestor}, which is not a directory`,
+        `${what} ${path} runs through ${prefix}, which is not a directory`,
       );
     }
-    break;
   }
   return new LocalPathMissingError(`${what} ${path} does not exist, or a link to it dangles`);
 }
