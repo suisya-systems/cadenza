@@ -237,8 +237,10 @@ export class LocalPathEscapesRootError extends LocalPathVerificationError {}
  * An allowed root itself could not be established.
  *
  * Fails closed, and that is the decision rather than an accident of ordering: a
- * root that is absent, unreadable or not a directory cannot contain anything,
- * and skipping it would silently narrow the roots a layer declared. Narrowing
+ * root that is absent, not a directory, or impossible to descend into cannot
+ * contain anything, and skipping it would silently narrow the roots a layer
+ * declared. "Descend into" and not "read": a root exists to be traversed, so
+ * execute is required and read is not, and a mode-711 root is usable. Narrowing
  * them silently is how a verifier starts refusing paths that are configured
  * correctly, with the real fault -- an unmounted disk, a typo in
  * `allowed_local_roots` -- never named.

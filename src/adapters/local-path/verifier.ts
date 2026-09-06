@@ -73,7 +73,16 @@ function errorCode(error: unknown): string | null {
  */
 function resolveOrRefuse(path: string, what: string, asRoot: boolean): string {
   try {
-    return realpathSync(path);
+    // `.native`, and never the plain `realpathSync`. Node's JavaScript
+    // implementation collapses `..` LEXICALLY before it resolves links, so for
+    // `<root>/link/..` -- where `link` points out of the root -- it answers
+    // `<root>` while the operating system answers the parent of the link's
+    // TARGET. That is an escape: the check would accept a declared path that
+    // every real caller of it resolves outside the roots. `.native` is
+    // `realpath(3)`, which walks the path the way an open of it walks the path.
+    // Found by review; the regression case is
+    // "a `..` after a link out of the root is refused".
+    return realpathSync.native(path);
   } catch (error) {
     const code = errorCode(error);
     const detail = code === null ? "the filesystem refused to resolve it" : `errno ${code}`;
@@ -206,13 +215,23 @@ function requireRootDirectory(real: string, declared: string): void {
     if (!statSync(real).isDirectory()) {
       throw new AllowedRootUnusableError(`allowed local root ${declared} is not a directory`);
     }
+    // Execute only, where the path itself is asked for read AND execute, and
+    // the difference is not an oversight. What a root is for is being descended
+    // through, so a mode-711 directory -- traversable, not listable -- is a
+    // perfectly good root and refusing it would be this check inventing a rule.
+    // What must not pass is a root nothing can enter: `realpathSync` and
+    // `statSync` both succeed on a mode-000 directory, because neither needs
+    // access to its contents, so without this the documented "an unusable root
+    // fails the whole call" was untrue exactly when a second root would have
+    // granted the path anyway. Found by review.
+    accessSync(real, constants.X_OK);
   } catch (error) {
     if (error instanceof AllowedRootUnusableError) {
       throw error;
     }
     const code = errorCode(error);
     throw new AllowedRootUnusableError(
-      `allowed local root ${declared} could not be examined: errno ${code ?? "unknown"}`,
+      `allowed local root ${declared} could not be entered: errno ${code ?? "unknown"}`,
     );
   }
 }

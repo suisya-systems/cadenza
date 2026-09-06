@@ -256,6 +256,26 @@ describe("containment, which is the rule this exists for", () => {
     expect(caught.message).toContain(`resolves to ${path(outside, "web")}`);
   });
 
+  test("a `..` after a link out of the root is refused, not collapsed away", () => {
+    // The escape Node's own `realpathSync` opens, found by review. Its
+    // JavaScript implementation collapses `..` LEXICALLY before resolving links,
+    // so `<root>/hop/..` answers `<root>` -- contained -- while the operating
+    // system answers the parent of what `hop` points AT, which is outside. The
+    // adapter calls `realpathSync.native` for exactly this, and the case is
+    // written with the `..` still in the string, because `path.join` would
+    // collapse it before the verifier ever saw it.
+    const root = makeDirectory("roots");
+    makeDirectory("elsewhere");
+    linkDirectory(under("elsewhere"), under("roots", "hop"));
+    const declared = path(root, "hop", "..");
+    expect(declared).toContain("..");
+
+    const caught = refusal(LocalPathEscapesRootError, () =>
+      verifier.verify(localPathSource(declared), [root]),
+    );
+    expect(caught.message).toContain(`resolves to ${base}`);
+  });
+
   test("a link pointing at the root's own parent is refused", () => {
     const root = makeDirectory("roots");
     linkDirectory(base, under("roots", "up"));
@@ -366,6 +386,52 @@ describe("a root that cannot be used is the layer's fault, and is named as one",
     refusal(AllowedRootUnusableError, () =>
       verifier.verify(localPathSource(path(root, "web")), [root]),
     );
+  });
+
+  test("a root that cannot be entered, even when another root grants the path", () => {
+    // Found by review: `realpathSync` and `statSync` both succeed on a mode-000
+    // directory, because neither needs access to its contents, so an
+    // unenterable root used to pass while a second root granted the path -- the
+    // documented fail-closed policy quietly untrue in the one arrangement where
+    // it matters. Total on every platform for the reason the unreadable-path
+    // case gives: Windows and a process running as root ignore the mode bits,
+    // so the case asks what the operating system actually did.
+    const good = makeDirectory("roots-a");
+    const project = makeDirectory("roots-a", "web");
+    const closed = makeDirectory("roots-b");
+    chmodSync(closed, 0o000);
+    let denied: boolean;
+    try {
+      accessSync(closed, constants.X_OK);
+      denied = false;
+    } catch {
+      denied = true;
+    }
+
+    if (denied) {
+      const caught = refusal(AllowedRootUnusableError, () =>
+        verifier.verify(localPathSource(project), [good, closed]),
+      );
+      expect(caught.message).toContain(closed);
+    } else {
+      expect(verifier.verify(localPathSource(project), [good, closed]).root).toBe(good);
+    }
+    chmodSync(closed, 0o700);
+  });
+
+  test("a root that is traversable but not listable is usable, because that is what a root is for", () => {
+    // The other side of the case above, so that the fix is a rule and not a
+    // tightening: mode 111 cannot be listed and can be descended through, which
+    // is all a root has to do. Requiring read here would refuse a correctly
+    // configured machine, and the mode is 111 rather than 711 for a reason
+    // mutation found -- the owner bits of 711 include read, so the case passed
+    // against a verifier that demanded it.
+    const root = makeDirectory("roots");
+    const project = makeDirectory("roots", "web");
+    chmodSync(root, 0o111);
+
+    expect(verifier.verify(localPathSource(project), [root]).root).toBe(root);
+    chmodSync(root, 0o700);
   });
 
   test("a broken root is reported even when another root would have granted the path", () => {

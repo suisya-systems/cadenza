@@ -3348,7 +3348,19 @@ under one, compared **component by component** through `nativePath.isRelativeTo`
   here, and the same rule `parseLocalPath` already applies.
 - **An unusable root fails the whole call**, rather than being skipped. Skipping narrows what the
   layer declared without saying so, and the next path -- the one that needed exactly that root -- is
-  then refused with the real fault never named.
+  then refused with the real fault never named. "Usable" means a directory that can be **entered**:
+  execute, not read, because a root exists to be descended through and a mode-711 root is a correct
+  configuration. `realpathSync` and `statSync` both succeed on a mode-000 directory, so without an
+  explicit access check the rule above was untrue in the one arrangement where it matters -- a second
+  root nothing can enter, with a first root that grants the path anyway.
+- **Resolution is the platform's, not Node's.** `fs.realpathSync` collapses `..` **lexically** before
+  it resolves links, so for `<root>/link/..` it answers `<root>` while the operating system answers
+  the parent of the link's target. That is an escape and not a nicety: the check would accept a
+  declared path that every real caller of it resolves outside the roots. `realpathSync.native` is
+  `realpath(3)`, which walks the path the way an open of it walks the path, and is what this adapter
+  calls. Both this and the root access check were found by adversarial review of the first
+  implementation, and each has a regression case that the fix turns green and the pre-fix code turns
+  red.
 
 ### 3. Five refusals, and what this does not close
 

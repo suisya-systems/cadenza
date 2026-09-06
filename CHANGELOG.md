@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a root that cannot be resolved fails the call rather than being skipped.
   The check is a point-in-time answer and says so: the window between it and the
   clone is closed by a sandbox, which is the control plane's (D-0026).
+  Resolution goes through `realpathSync.native` rather than `fs.realpathSync`,
+  because the latter collapses `..` lexically before resolving links and so
+  answers `<root>` for `<root>/link/..` where the operating system answers the
+  parent of the link's target - an escape, with its own regression case. A root
+  must additionally be enterable (execute, not read: a mode-711 root is correct
+  and a mode-000 one passes both `realpathSync` and `statSync`).
 - Capability vocabulary version 2 (D-0037): version 1's seven keys, unchanged,
   plus `issue.create`, `issue.comment`, `review.submit`, `pull_request.merge` and
   `network.fetch`. `network.fetch` is the one that made version 1 unusable in
