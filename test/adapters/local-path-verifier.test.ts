@@ -34,6 +34,7 @@ import {
   mkdtempSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -412,25 +413,50 @@ describe("existing, missing, and not a directory are three different answers", (
     const file = makeFile("roots", "web");
     makeDirectory("roots", "api");
 
-    // Each row is the path as written and the prefix the refusal must name.
-    // The last row names the prefix AS WRITTEN rather than its resolved form,
-    // which is the honest thing for a message to do: it points at the piece of
-    // the operator's own string that is at fault.
-    for (const [declared, offender] of [
-      [`${file}/`, file],
-      [`${file}/.`, file],
-      [`${file}/../api`, file],
-      // A `..` BEFORE the file, over a directory that exists. Measured against
-      // the operating system, which answers `ENOTDIR` here: an earlier draft
-      // stopped the descent at the first `..` and reported a missing path for
-      // this one. Nothing in the descent reasons about a component -- every
-      // prefix is handed to `statSync` -- so there is nothing to guard against.
-      [`${root}/api/../web/`, `${root}/api/../web`],
-    ] as const) {
+    // Each row asks the operating system what it does with the path, and then
+    // requires the verifier to agree. That is the property, stated directly:
+    // **the check answers what an open of this path would answer**, and it is
+    // the only form of this case that is not a bet on one platform's
+    // canonicalisation. Two CI rounds were spent learning that. `<file>/` is
+    // `ENOTDIR` on Linux, resolves to the file on macOS and Windows; and Win32
+    // erases `web\..` from the string before traversing, so `<file>/../api` is
+    // a refusal on POSIX -- where the file is walked through -- and a perfectly
+    // good directory there.
+    //
+    // What is asserted either way is the part that is cadenza's: a refusal is
+    // `LocalPathNotADirectoryError` and NOT `LocalPathMissingError`, which is the
+    // defect this case was written for, and it names the path it refused. Where
+    // the platform resolves the path instead, the acceptance must report what the
+    // platform resolved it to.
+    for (const declared of [
+      `${file}/`,
+      `${file}/.`,
+      `${file}/../api`,
+      // A `..` BEFORE the file, over a directory that exists. An earlier draft
+      // stopped the descent at the first `..` and reported a missing path here;
+      // nothing in the descent reasons about a component, so there was nothing
+      // for that guard to protect.
+      `${root}/api/../web/`,
+    ]) {
+      const resolvedToDirectory = ((): string | null => {
+        try {
+          const real = realpathSync.native(declared);
+          return statSync(real).isDirectory() ? real : null;
+        } catch {
+          return null;
+        }
+      })();
+
+      if (resolvedToDirectory !== null) {
+        expect(verifier.verify(localPathSource(declared), [root]).real, `for ${declared}`).toBe(
+          resolvedToDirectory,
+        );
+        continue;
+      }
       const caught = refusal(LocalPathNotADirectoryError, () =>
         verifier.verify(localPathSource(declared), [root]),
       );
-      expect(caught.message).toContain(`runs through ${offender}`);
+      expect(caught.message, `for ${declared}`).toContain(declared);
     }
   });
 
@@ -444,19 +470,28 @@ describe("existing, missing, and not a directory are three different answers", (
     );
   });
 
-  test("an absent component before a `..` ends the descent, and the answer stays missing", () => {
-    // What the two stopping rules are for, in one input. `<root>/gone/../web/`
-    // traverses a file at the end AND names a directory that is not there before
-    // it, and the operating system answers the second: `gone` does not exist, so
-    // the path does not exist. A descent that kept going past an absent prefix,
-    // or that reasoned past the `..`, would arrive at `<root>/web` -- a file --
-    // and report "not a directory" about a path whose real fault is elsewhere.
+  test("an absent component before a `..` is answered the way the platform answers it", () => {
+    // `<root>/gone/../web/` names a directory that is not there AND traverses a
+    // file, and the two platforms genuinely disagree about which one you hit,
+    // because they disagree about when `..` is applied.
+    //
+    // POSIX walks the path: `gone` is not there, so the path is not there, and
+    // `web` is never reached. Win32 canonicalises `..` in the string first, so
+    // the path IS `<root>/web/` and `gone` never has to exist -- the file is
+    // what you meet. Each answer is what an open of that path does on that
+    // platform, which is the only property this check promises. Asserting the
+    // POSIX answer everywhere is what turned both windows-latest cells red.
     const root = makeDirectory("roots");
     makeFile("roots", "web");
+    const declared = `${root}/gone/../web/`;
 
-    refusal(LocalPathMissingError, () =>
-      verifier.verify(localPathSource(`${root}/gone/../web/`), [root]),
-    );
+    if (nativePath.name === "windows") {
+      refusal(LocalPathNotADirectoryError, () =>
+        verifier.verify(localPathSource(declared), [root]),
+      );
+      return;
+    }
+    refusal(LocalPathMissingError, () => verifier.verify(localPathSource(declared), [root]));
   });
 
   test("a directory this process cannot enter is unreadable, not missing", () => {
