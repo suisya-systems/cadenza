@@ -138,12 +138,97 @@ describe("classify: one key at a time", () => {
   test("a key the pinned vocabulary does not contain is refused", () => {
     // Deny-by-default reaches acts the vocabulary has not learned yet
     // (D-0027 section 3): `network.fetch` is not in version 1, so an action
-    // needing it cannot be answered `allowed` by any contract pinned there.
+    // needing it cannot be answered `allowed` by any contract pinned there --
+    // and since D-0037 made it a key of version 2, this case now measures the
+    // per-contract pin rather than a key nobody has defined. A build that read
+    // keys against the newest vocabulary it knew would answer this one
+    // `not_in_contract`, and this is where that would be caught.
     expect(outcomeOf(["network.fetch"])).toMatchObject({
       outcome: "refused",
       reason: "unknown_capability",
     });
     expect(outcomeOf(["not a key at all"]).reason).toBe("unknown_capability");
+  });
+});
+
+describe("classify: vocabulary version 2 (D-0037)", () => {
+  const V2_CONTRACT = contractOf({
+    vocabularyVersion: 2,
+    granted: ["command.run", "network.fetch", "worktree.write"],
+    askable: ["issue.create", "issue.comment", "review.submit"],
+  });
+
+  function v2(capabilities: readonly string[]): Classification {
+    return classify(V2_CONTRACT, { capabilities }, { runId: GRANTEE, configDigest: CONFIG_DIGEST });
+  }
+
+  test("an added key classifies by the contract, not by being new", () => {
+    // The five keys D-0037 adds go through the same three rows as the seven
+    // before them. Nothing about a key's age is consulted anywhere.
+    expect(v2(["network.fetch"])).toMatchObject({ outcome: "allowed", reason: "granted" });
+    expect(v2(["issue.create"])).toMatchObject({
+      outcome: "needs_approval",
+      reason: "askable",
+    });
+  });
+
+  test("installing dependencies names two acts and is answered on both", () => {
+    // The action D-0037 was written for: an install executes a command *and*
+    // reaches the registry, so under D-0027 section 3's naming rule it names
+    // `command.run` and `network.fetch`. Version 1 has no spelling for the
+    // second half, so the same action is refused there -- which is the defect
+    // the entry records, reproduced as a test rather than asserted in prose.
+    const install = ["command.run", "network.fetch"];
+    expect(v2(install)).toMatchObject({ outcome: "allowed", reason: "granted" });
+    expect(outcomeOf(install)).toMatchObject({
+      outcome: "refused",
+      reason: "unknown_capability",
+    });
+  });
+
+  test("merge is refused as an act this run does not hold, not as an act nobody named", () => {
+    // This is what putting `pull_request.merge` in the vocabulary buys, and it
+    // is the whole of D-0037 section 1. The key is in version 2 and in neither
+    // set of any contract issued here, so the answer names the right fault:
+    // `not_in_contract` -- "this act exists and you do not hold it" -- where
+    // version 1 could only say `unknown_capability`, which is the answer a typo
+    // and a contract pinned one version too low get as well.
+    expect(v2(["pull_request.merge"])).toMatchObject({
+      outcome: "refused",
+      reason: "not_in_contract",
+    });
+    expect(outcomeOf(["pull_request.merge"])).toMatchObject({
+      outcome: "refused",
+      reason: "unknown_capability",
+    });
+    // Both are `refused`, so the outcome cannot tell the two apart. The reason
+    // is the entire difference, which is why it is asserted rather than the
+    // outcome alone.
+    expect(v2(["pull_request.merge"]).outcome).toBe(outcomeOf(["pull_request.merge"]).outcome);
+  });
+
+  test("a merge performed by running a command is still refused", () => {
+    // `command.run` names the execution and never an effect (D-0027 section 3),
+    // so an action that merges by invoking a client names both keys and the
+    // strictest wins. Without this, adding `pull_request.merge` to the
+    // vocabulary while granting `command.run` would have moved merging from
+    // refused to allowed by way of a shell.
+    expect(v2(["command.run", "pull_request.merge"])).toMatchObject({
+      outcome: "refused",
+      reason: "not_in_contract",
+    });
+  });
+
+  test("an unknown key is still refused, under version 2 as under version 1", () => {
+    // D-0037 changes nothing about the unknown-key row. `deploy.run` is one of
+    // the acts the entry deliberately does not name, so it is refused here for
+    // the same reason `network.fetch` was refused under version 1.
+    expect(v2(["deploy.run"])).toMatchObject({
+      outcome: "refused",
+      reason: "unknown_capability",
+    });
+    expect(v2(["secret.read"]).reason).toBe("unknown_capability");
+    expect(v2(["pull_request.*"]).reason).toBe("unknown_capability");
   });
 });
 

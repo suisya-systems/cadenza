@@ -114,11 +114,14 @@ describe("agentType", () => {
   // --- rules 1 to 3: the three capability.ts shares with the contract -------
 
   test("refuses a vocabulary version this build does not know", () => {
+    // 3, because D-0037 made 2 a version this build does know. The number here
+    // has to be one past the last known version and is the one thing in this
+    // case that a vocabulary entry moves.
     const caught = refusal(UnknownVocabularyVersionError, () =>
-      agentType(valid({ vocabularyVersion: 2 })),
+      agentType(valid({ vocabularyVersion: 3 })),
     );
-    expect(caught.message).toContain("2");
-    expect(caught.message).toContain("1");
+    expect(caught.message).toContain("3");
+    expect(caught.message).toContain("1, 2");
   });
 
   test("refuses a key that is not in the vocabulary the record pinned", () => {
@@ -459,7 +462,7 @@ describe("agentType", () => {
     // anything recording that it had.
     const wrongEverywhere = {
       ...valid({
-        vocabularyVersion: 2,
+        vocabularyVersion: 3,
         granted: ["network.fetch"],
         agentTypeId: "Reviewer",
         loopPolicy: { maxReviewRounds: 0, noProgressWindow: 4, noProgressRepeat: 2 },

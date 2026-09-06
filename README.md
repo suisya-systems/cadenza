@@ -64,11 +64,13 @@ Early. This repository currently contains:
   composition oracle's vector is kept and still checked, but frozen: it
   questioned cadenza's own Python, which can no longer change. See
   `DECISIONS.md` D-0032 and `docs/porting.md`.
-- **G2 delegation contract** - implemented as far as `DECISIONS.md` D-0026 and
-  D-0027 fix it, and TypeScript only (there is no Python G2). What is here: a
-  capability vocabulary of seven keys, versioned and closed, where a key is
-  matched by exact equality and read against the version its contract pinned
-  (D-0027); the contract as a frozen value carrying its project, that project's
+- **G2 delegation contract** - implemented as far as `DECISIONS.md` D-0026,
+  D-0027 and D-0037 fix it, and TypeScript only (there is no Python G2). What is
+  here: a capability vocabulary in two cumulative versions, closed, where a key is
+  matched by exact equality and read against the version its contract pinned - the
+  seven keys D-0027 cut, and the twelve of version 2, which adds the acts daily
+  operation performs and names `pull_request.merge` so that granting it to nobody
+  is a written refusal rather than an act the vocabulary never heard of (D-0037); the contract as a frozen value carrying its project, that project's
   `config_digest`, an issuer, the run it was issued for, a granted set, a
   disjoint askable set and the digest of the contract it replaces, with eight
   named refusals at issue time and a `contract_digest` over its semantics; a

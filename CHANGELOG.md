@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Capability vocabulary version 2 (D-0037): version 1's seven keys, unchanged,
+  plus `issue.create`, `issue.comment`, `review.submit`, `pull_request.merge` and
+  `network.fetch`. `network.fetch` is the one that made version 1 unusable in
+  practice - reaching a registry is not the execution of a command, so a
+  correctly named dependency install refused as an unknown capability under every
+  contract this build could issue. `pull_request.merge` is added and granted to
+  nobody, deliberately: merging stays an operator's act at the desk, and naming
+  the key is what turns that from `unknown_capability` - the answer a typo gets -
+  into `not_in_contract`, "this act exists and you do not hold it". Reading a
+  secret, deploying, publishing, desk housekeeping and anything scoped are still
+  not keys and are still refused. Version 1 is untouched, so every contract pinned
+  at it answers exactly as it did; the refusal for an unknown version now reads
+  `expected one of 1, 2`.
 - The operating surface's cadenza-owned rows (D-0036, cadenza#22): a
   `HumanDecisionRecord` port - `decisionId`, `recordedBy`, `outcome`
   (`approved`/`refused`), `predecessor` and `approved`, the last two

@@ -67,6 +67,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0034 | The agent-type record's value schema: a closed input, three shared vocabulary rules, three loop counts with named readers, an opaque executor bag, and a value-only belt | accepted |
 | D-0035 | The artifact-delivery bridge: a consumer builds cadenza from a pinned checkout and installs what it packed; publication remains the destination and remains untaken | accepted |
 | D-0036 | What cadenza exposes for the operating surface: a human-decision port, four value checks in a new application function, and a transport-word rule over `src/ports/**` | accepted |
+| D-0037 | Vocabulary version 2: the five acts daily operation performs, `pull_request.merge` named so that withholding it is written, and what the vocabulary still deliberately cannot say | accepted |
 
 ---
 
@@ -3079,3 +3080,174 @@ literal. On the tree itself, planting `sessionToken` in `src/ports/human-decisio
   classification. D-0026 §3's totality argument is untouched, and no `D-` entry's text is edited.
 - `docs/design/operating-surface.md` is marked taken **for its four cadenza rows only**. `S-4`..`S-10`
   stay open at their own gates, and this entry takes no position on them.
+
+---
+
+## D-0037 — vocabulary version 2: the five acts daily operation performs, `pull_request.merge` named so that withholding it is written, and what the vocabulary still deliberately cannot say
+
+**Status:** accepted (2026-09-06, taken at cadenza's human gate)
+
+**Context.** D-0027 §3 cut version 1 at seven keys, "where a real delegation this repository already
+writes is cut", and said in the same breath what it left out: writing an issue or a comment, merging,
+reaching a network endpoint of the run's own choosing. It also said what to do about it — "each
+missing act is a key someone adds in version 2 the day a contract needs it".
+
+That day has arrived, and the gap is wider than a missing key. Measured against what this
+organisation actually did on 2026-09-06 — cadenza `5d5d9f4`, `src/domain/capability.ts` — the run
+that produced the operating-surface belt cloned, wrote, **installed its dependencies from a
+registry**, ran a test suite, committed, and had its branch pushed and its pull request opened and
+merged by an operator. Of those, the install is the one version 1 cannot answer at all: reaching the
+registry is not the execution of a command (D-0027 §3 fixes `command.run` as the narrow half), and
+version 1 has no other key for it, so a correctly named `npm ci` is `{command.run, network.fetch}`
+and refuses `unknown_capability` under every contract this build can issue. The vocabulary is not
+merely thin; it cannot name the first thing a run does.
+
+The rest is a different problem wearing the same clothes, and this entry separates the two.
+
+### 1. Naming an act is not granting it, and `pull_request.merge` is where that has to be said out loud
+
+**Decision.** `pull_request.merge` is a key of version 2. **No contract this repository issues lists
+it in either set**, and merging stays what it is today: an act an operator performs at the desk, on
+their own account, presenting no contract and reaching no classifier.
+
+**Why a key at all, if nobody is to hold it.** Because the vocabulary names acts; **contracts
+distribute them**, and the two jobs were being confused. Leaving merge out of the vocabulary looks
+like the way to say "merging is the human's", and it is not — it says nothing about who may merge,
+because the vocabulary is not where that is said. What it actually does is degrade the answer. With
+the key absent, a run whose action merges gets `refused`/`unknown_capability`, which is
+character-for-character the answer a **typo** gets, and the answer a contract **pinned one version
+too low** gets. With the key present and granted to nobody, the same action gets
+`refused`/`not_in_contract`: *this act exists, is named, and you do not hold it*. Both refuse. The
+outcome cannot tell them apart and the `reason` is the entire difference, which is why
+`test/domain/classification.test.ts` asserts the two side by side.
+
+This is not a new principle, it is version 1's own. `branch.push` and `pull_request.create` are in
+version 1 precisely because a worker brief **withholds** them: D-0027 §3 says the boundary is "drawn
+by enumeration rather than by prose". `pull_request.merge` is the third member of that family and
+was missing from it.
+
+**What the key makes possible that prose could not.** Two shapes are now expressible, and the
+difference between them is exactly the question the operating surface is about:
+
+- merge in **neither** set — the human decides *and* the human acts. This is today, and it is what
+  every contract issued here does.
+- merge in **`askable`** — the human decides and the **run** acts, after `needs_approval`.
+
+Today's shape is the first. Moving to the second, if it is ever wanted, is then an edit to **one
+contract**, reviewable as a diff of a grant, rather than an edit to a vocabulary, a build and every
+contract pinned at the old version. That is the whole of what adding an ungranted key buys, and it
+is claimed at that size and no larger.
+
+**There is no key for the operator's act, and there must not be.** The vocabulary is the alphabet of
+what a **run** may be granted. An operator merging is not a delegated act, presents no contract and
+is classified by nothing, so a `human.*` key would be a grant nobody holds, held by nobody, checked
+by nothing. How daily operation stands with merge granted to no run is therefore not a gap to be
+filled here: the operator merges, as they did today, and cadenza is not in that path at all.
+
+### 2. Version 2 is version 1 plus five keys
+
+**Decision.** Version 2 contains every key of version 1, unchanged in meaning, plus:
+
+| key | what it covers |
+| --- | --- |
+| `issue.create` | open an issue |
+| `issue.comment` | add a comment to an issue or to a pull request's conversation thread |
+| `review.submit` | submit a review on a pull request, with its verdict and any comments carried with it |
+| `pull_request.merge` | integrate a pull request into its base branch (§1: named, granted to nobody) |
+| `network.fetch` | reach a network endpoint of the run's own choosing |
+
+Version 1 is **not edited**. Every contract pinned at 1 answers exactly as it did, byte for byte
+through its `contract_digest`, which is what D-0027 §2's cumulative rule is for.
+
+**Why `issue.comment` covers a pull request's thread.** A pull request is an issue with a diff, and
+adding a comment to one is the same act against the same object. A separate `pull_request.comment`
+would be a second key naming one act, which D-0027 §2's permanence rule is written against: two keys
+for one act means an action must name both or the naming rule stops being total, and the day someone
+grants one and withholds the other they have written a grant that means nothing.
+
+**Why `review.submit` is nevertheless separate from `issue.comment`.** A review carries a **verdict**
+— approve, request changes, or comment-only — and a verdict has standing in whether the pull request
+may merge. A comment does not. That is a difference in the act, not in its wrapper, so it is a
+different key; and `review.submit` covers the comment-only review too, because the act being
+performed is submitting a review. Running a reviewer **locally** submits nothing and reaches nothing:
+`codex exec review` is executing a command, names `command.run`, and names neither of these keys.
+
+**Why `network.fetch`, and what it does not cover.** It is the act D-0027 §3 named as missing and the
+one that makes version 1 unusable in practice. It does **not** cover the remote that `repo.clone`,
+`branch.push`, `pull_request.create`, `issue.create`, `issue.comment`, `review.submit` or
+`pull_request.merge` reaches: that access is part of each of those acts, under D-0027 §3's rule that
+"a key covers what its act necessarily requires". Folding it in would make every one of those keys
+imply this one and would mean withholding `network.fetch` withheld the clone — which is the reading
+that rule exists to prevent.
+
+**`network.fetch` is all-or-nothing, and this entry does not pretend otherwise.** Granting it grants
+reaching **any** endpoint the run can resolve, including one nobody intended, because a key is the
+unit of authority and "the registry only" is a value beside the key — the scoping D-0027 §1 names as
+its falsifier and refuses to promise. Where that bound actually lives today is **outside cadenza**: in
+the egress filter of the sandbox a run executes in, which is enforcement, and enforcement is the
+control plane's (D-0026 §2). A contract that grants `network.fetch` is saying the run may reach the
+network; it is not saying which network, and nothing in this vocabulary ever will.
+
+### 3. What version 2 deliberately still cannot name
+
+**Decision.** These are **not** keys, and an action performing one is refused
+`unknown_capability` — the behaviour D-0026 §3 and D-0027 §3 fix, unchanged by this entry:
+
+- **Reading a secret.** No delegation written here grants one; secrets reach a run through the
+  environment its control plane builds, and a key would suggest cadenza had a view on which.
+- **Deploying, releasing, publishing a package.** D-0035 left publication untaken and an operator
+  performs it. There is no delegation to write, so there is no key to cut.
+- **Closing or labelling an issue, closing a pull request, dismissing a review, deleting a branch,
+  administering a repository.** Desk housekeeping. No delegation here gives a run the surrounding
+  acts, so no delegation needs to withhold these.
+- **Anything scoped.** `test.run`, "may push, but only this branch", "may fetch, but only this host".
+  D-0027 §1 and §3 already settled this and the answer has not changed: a bound on *which* target is
+  a value beside the key, and recording it here rather than promising a narrower key later, because
+  the promise would be one this design cannot keep.
+
+**The rule the last three follow.** A key is cut where a **delegation this organisation actually
+writes** is cut (D-0027 §3), not where an API surface is. Adding a key for an act no contract has had
+to grant or withhold produces a vocabulary nobody reads and a set that grows by anticipation, which
+is the taxonomy Issue #32 refused. `pull_request.merge` is not a counter-example: it is added
+precisely because a contract **does** have to withhold it, and §1 is that argument.
+
+**What would falsify it.**
+
+- **Against §1.** A consumer that reads the outcome and never the reason, so that
+  `not_in_contract` and `unknown_capability` are the same answer in practice. Then naming an act
+  nobody may perform bought nothing, and the honest move is to say so rather than to keep a key whose
+  only value was a distinction no reader makes. rondo's facade is where this would be measured.
+- **Against §1, the other way.** A merge that has to happen unattended — auto-merge on green, say.
+  That is **not** a falsifier: it is the second shape §1 describes, reached by editing a contract.
+  The falsifier is a merge that has to happen unattended and *cannot* be written that way.
+- **Against §2's `issue.comment`.** A delegation that needs to grant commenting on issues while
+  withholding it on pull requests, or the reverse. That would mean the two are different acts and one
+  key was a mistake — repaired under D-0027 §2 by a narrower new key, never by narrowing this one.
+- **Against §2's `network.fetch`.** A delegation that genuinely needs "may reach this host and not
+  that one" and for which the sandbox's egress filter is not an answer. That is D-0027 §1's scoping
+  falsifier arriving through this key, and it would mean the vocabulary needs a value beside the key.
+- **Against §3.** An act daily operation performs that none of the twelve keys names, found the way
+  `network.fetch` was found: by naming a real action honestly and watching it refuse.
+- **Against the whole entry.** A version 1 contract that stops answering as it did. That would mean
+  the cumulative rule was broken by this change rather than followed by it, and
+  `test/domain/capability.test.ts` is where it would be caught.
+
+**Consequences.**
+
+- `src/domain/capability.ts` gains `VOCABULARY_VERSION_2`, written as a spread of
+  `VOCABULARY_VERSION_1` so a later version cannot drop a predecessor's key by being retyped;
+  `KNOWN_VOCABULARY_VERSIONS` becomes `{1, 2}` and `vocabularyFor(2)` returns the new set. Nothing
+  else in `src/` changes: no new refusal, no change to `classify()`, to `delegationContract()`, to
+  supersession or to any digest input.
+- `VOCABULARY_VERSION_2` joins the barrel, which under D-0033 makes it a commitment.
+- The refusal for an unknown version now reads `expected one of 1, 2`. That text is pinned by
+  `test/domain/contract.test.ts`, and the version those cases use as "unknown" moves from 2 to 3.
+- **An agent-type record (D-0034) may pin version 2** by the same route a contract does; the record's
+  rules are `capability.ts`'s and are unchanged.
+- **rondo is unaffected until it chooses to be.** It consumes cadenza as a pinned tarball
+  (rondo D-0018, cadenza D-0035) built from `5d5d9f4`, imports no vocabulary constant, and writes
+  `vocabularyVersion: 1` in every contract it constructs. Version 1 is unchanged, so re-pinning to a
+  build that knows version 2 changes no answer rondo gets; moving a contract to version 2 is a
+  separate, deliberate edit in that repository, and this entry takes no position on whether it should.
+- `docs/design/g2-delegation-contract.md` §3 cites this entry beside D-0027. The section states rules
+  and not members, so it gains a citation and no rewrite.

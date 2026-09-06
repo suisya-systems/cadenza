@@ -3,9 +3,10 @@
  * canonical form a key set takes before it is digested.
  *
  * `docs/design/g2-delegation-contract.md` section 3, implementing DECISIONS.md
- * D-0027. Nothing here decides anything: the key shape, the versioning rule and
- * version 1's members are that entry's, taken at the human gate, and this module
- * is where they become checkable.
+ * D-0027 and D-0037. Nothing here decides anything: the key shape, the versioning
+ * rule and version 1's members are D-0027's, version 2's five additions and the
+ * acts it deliberately still cannot name are D-0037's, both taken at the human
+ * gate, and this module is where they become checkable.
  *
  * Two properties are easy to lose by accident and are therefore spelled out in
  * code rather than left to the reader:
@@ -61,7 +62,11 @@ export const MAX_CAPABILITY_KEY_LENGTH = 64;
  * a `frozenSet` rather than a `ReadonlySet` -- a compile-time claim would leave
  * `VOCABULARY_VERSION_1.add("network.fetch")` reachable from the package's
  * public surface, which is the failure D-0015 records for the G1 constants and
- * would silently widen every contract pinned at version 1.
+ * would silently widen every contract pinned at version 1. That example stopped
+ * being hypothetical with D-0037: `network.fetch` is a real key of version 2, so
+ * the mutation is now a spelling somebody could reach for by accident, and what
+ * it would do is grant the whole network under a contract issued before the key
+ * existed.
  */
 export const VOCABULARY_VERSION_1: ReadonlySet<string> = frozenSet([
   "branch.push",
@@ -73,8 +78,32 @@ export const VOCABULARY_VERSION_1: ReadonlySet<string> = frozenSet([
   "worktree.write",
 ]);
 
+/**
+ * Version 2: version 1 unchanged, plus the five acts daily operation performs
+ * that version 1 could not name (D-0037 section 2).
+ *
+ * Written as a spread of {@link VOCABULARY_VERSION_1} rather than as twelve
+ * literals, because the cumulative rule (D-0027 section 2) is the thing a later
+ * edit breaks: a reader adding version 3 copies this shape and cannot drop a
+ * predecessor's key by retyping the list one key short.
+ *
+ * The presence of a key here is **not** a grant, and `pull_request.merge` is the
+ * case that makes the difference visible: no contract this repository issues
+ * lists it in either set, so an action naming it is refused `not_in_contract` --
+ * "this act exists and you do not hold it" -- where version 1 could only answer
+ * `unknown_capability`, which is the answer a typo gets (D-0037 section 1).
+ */
+export const VOCABULARY_VERSION_2: ReadonlySet<string> = frozenSet([
+  ...VOCABULARY_VERSION_1,
+  "issue.comment",
+  "issue.create",
+  "network.fetch",
+  "pull_request.merge",
+  "review.submit",
+]);
+
 /** The vocabulary versions this build knows, for a refusal to name (D-0027 section 2). */
-export const KNOWN_VOCABULARY_VERSIONS: ReadonlySet<number> = frozenSet([1]);
+export const KNOWN_VOCABULARY_VERSIONS: ReadonlySet<number> = frozenSet([1, 2]);
 
 /** True if `value` is a well-formed capability key, whatever any vocabulary holds. */
 export function isCapabilityKey(value: unknown): value is string {
@@ -100,6 +129,9 @@ export function isCapabilityKey(value: unknown): value is string {
 export function vocabularyFor(version: number): ReadonlySet<string> | null {
   if (version === 1) {
     return VOCABULARY_VERSION_1;
+  }
+  if (version === 2) {
+    return VOCABULARY_VERSION_2;
   }
   return null;
 }

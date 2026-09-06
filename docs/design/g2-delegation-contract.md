@@ -6,7 +6,10 @@ Applies to: `src/domain/` (TypeScript only — there is no Python G2, #25)
 This document is closed over the capability vocabulary D-0027 fixes, and it was
 accepted with it: D-0027 was taken at cadenza's human gate on 2026-09-04
 (cadenza#32), which is what Issue #32 required before the first `src/` change
-that depends on either.
+that depends on either. D-0037 later added a second version of that vocabulary at
+the same gate. It changed no rule in this document, because this document states
+rules and never members (§3), which is what a cumulative vocabulary is supposed to
+cost.
 
 This document is the contract for G2, taking for G2 the role
 `docs/design/g1-project-registry.md` takes for G1 (D-0001, and D-0026's
@@ -72,8 +75,11 @@ D-0022) keeps the direction honest either way.
 
 The shape of a key, how a contract pins the vocabulary version, and the initial
 key set are fixed by **D-0027**, which is the entry D-0026 §1 called for when it
-left "the capability vocabulary itself" unfixed. This section states only what
-the code does with it.
+left "the capability vocabulary itself" unfixed. Version 2 -- five further keys,
+and the acts the vocabulary still deliberately cannot name -- is fixed by
+**D-0037**. This section states only what the code does with them, and it states
+rules rather than members: which keys are in which version is those two entries'
+and is not restated here.
 
 - A vocabulary **version** is a positive integer. This build knows a frozen set
   of them (`frozenSet`, D-0015 — a `ReadonlySet` is a compile-time claim and this
@@ -86,7 +92,9 @@ the code does with it.
   introduced in version 2 is refused: the alternative is a contract that gains
   meaning it did not have when it was issued, which is the drift D-0026 §1
   refuses ("a later release could widen every contract already issued at an
-  unchanged digest").
+  unchanged digest"). Since D-0037 there is a second version, so this rule is
+  measured rather than illustrated — `network.fetch` is a key of version 2 and is
+  refused under a contract pinned at 1.
 - Recognition is **exact string equality**. The dot inside a key is a naming
   convention and nothing more: there is no prefix, no hierarchy and no wildcard.
   `repo.clone` does not imply `repo.anything`, and no code may match a key by
