@@ -104,13 +104,16 @@ describe("delegationContract", () => {
   // --- rule 1: the pinned vocabulary version -------------------------------
 
   test("refuses a vocabulary version this build does not know, naming it", () => {
+    // 3, because D-0037 made 2 a version this build does know.
     const caught = refusal(UnknownVocabularyVersionError, () =>
-      delegationContract(valid({ vocabularyVersion: 2 })),
+      delegationContract(valid({ vocabularyVersion: 3 })),
     );
-    expect(caught.message).toContain("2");
+    expect(caught.message).toContain("3");
     // The versions this build does know are in the message, because "unknown
-    // version" alone does not tell the reader what to pin instead.
-    expect(caught.message).toContain("1");
+    // version" alone does not tell the reader what to pin instead -- and with
+    // two of them the message has to list both, or a reader pinned at 1 is not
+    // told that 2 exists.
+    expect(caught.message).toContain("1, 2");
   });
 
   test("refuses a version that is not a positive integer", () => {
@@ -127,6 +130,10 @@ describe("delegationContract", () => {
   // --- rule 2: keys are read against the pinned version ---------------------
 
   test("refuses a capability the pinned version does not contain, naming key and version", () => {
+    // `network.fetch` is a real key of version 2 (D-0037), which makes this the
+    // exact case the rule is written for rather than a stand-in: a contract
+    // pinned at 1 listing a key introduced in 2 is refused, so a build learning
+    // a new version cannot widen a contract issued before it.
     const caught = refusal(UnknownCapabilityError, () =>
       delegationContract(valid({ granted: ["network.fetch"] })),
     );
@@ -134,6 +141,23 @@ describe("delegationContract", () => {
     // The version is named because the fault is as often a contract pinned one
     // version too low as it is a typo.
     expect(caught.message).toContain("version 1");
+  });
+
+  test("accepts a version 2 key under a contract pinned at version 2", () => {
+    // The other half of the case above, and the one that would go unasserted if
+    // only the refusal were written: a key D-0037 added is a key a contract can
+    // actually carry, so `vocabularyFor(2)` is reached rather than merely
+    // defined.
+    const contract = delegationContract(
+      valid({
+        vocabularyVersion: 2,
+        granted: ["issue.create", "network.fetch"],
+        askable: ["review.submit"],
+      }),
+    );
+    expect(contract.vocabularyVersion).toBe(2);
+    expect(contract.granted).toEqual(["issue.create", "network.fetch"]);
+    expect(contract.askable).toEqual(["review.submit"]);
   });
 
   test("refuses an unknown capability in askable as well as in granted", () => {
@@ -380,10 +404,10 @@ describe("delegationContract", () => {
 
     expect(
       refusal(UnknownVocabularyVersionError, () =>
-        delegationContract(valid({ vocabularyVersion: 2 })),
+        delegationContract(valid({ vocabularyVersion: 3 })),
       ).message,
     ).toBe(
-      "vocabulary_version 2 is not a capability vocabulary this build knows: expected one of 1",
+      "vocabulary_version 3 is not a capability vocabulary this build knows: expected one of 1, 2",
     );
     expect(
       refusal(UnknownCapabilityError, () =>

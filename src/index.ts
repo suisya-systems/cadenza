@@ -5,7 +5,10 @@
  * contract as a frozen value with its issue-time refusals, `contract_digest`
  * over the same canonical-JSON path `config_digest` takes, and the total
  * three-valued classifier, and supersession with onward delegation. G2's belt is
- * complete as far as D-0026 and D-0027 fix it.
+ * complete as far as D-0026 and D-0027 fix it, and the vocabulary now has a
+ * second version: D-0037 adds the five acts daily operation performs that version
+ * 1 could not name, and records the acts it deliberately still cannot. Version 1
+ * is untouched, so every contract pinned at it answers exactly as it did.
  *
  * Beside G2 rather than inside it: the **agent-type record** (D-0031, with its
  * schema fixed by D-0034) -- a frozen value carrying two capability key sets, a
@@ -83,6 +86,7 @@ export {
   KNOWN_VOCABULARY_VERSIONS,
   MAX_CAPABILITY_KEY_LENGTH,
   VOCABULARY_VERSION_1,
+  VOCABULARY_VERSION_2,
   vocabularyFor,
 } from "./domain/capability.js";
 export {

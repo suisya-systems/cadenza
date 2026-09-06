@@ -31,7 +31,7 @@
     },
     {
       "path": "test/domain/capability.test.ts",
-      "why": "G2's capability vocabulary (DECISIONS.md D-0027). There is no Python G2 and none is coming (#25), so this file translates no source case by construction. What it asserts is what an implementation drifts away from silently: that a key is matched by exact equality and never by prefix, that version 1 is exactly the seven keys the entry fixed rather than at least them, that every known version contains its predecessor, and that the frozen set cannot be added to at runtime -- the last because a ReadonlySet is a compile-time claim and Object.freeze does nothing to a Set's internal slots (D-0015), so VOCABULARY_VERSION_1.add(...) would widen every contract pinned at version 1 at an unchanged digest."
+      "why": "G2's capability vocabulary (DECISIONS.md D-0027). There is no Python G2 and none is coming (#25), so this file translates no source case by construction. What it asserts is what an implementation drifts away from silently: that a key is matched by exact equality and never by prefix, that version 1 is exactly the seven keys the entry fixed rather than at least them, that version 2 (D-0037) is exactly those seven plus five and adds them rather than moving one into version 1, that every known version contains its predecessor, and that the frozen set cannot be added to at runtime -- the last because a ReadonlySet is a compile-time claim and Object.freeze does nothing to a Set's internal slots (D-0015), so VOCABULARY_VERSION_1.add(...) would widen every contract pinned at version 1 at an unchanged digest."
     },
     {
       "path": "test/domain/contract.test.ts",
