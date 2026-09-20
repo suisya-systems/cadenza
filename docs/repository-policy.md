@@ -16,8 +16,13 @@ JSON carries no comments, so the choices are explained here:
   `main` before it merges). The required contexts are the *check-run* names,
   not workflow names, which is why they read as they do:
   - `ts-gate` — one aggregating job in `.github/workflows/typescript.yml`,
-    standing for the whole TypeScript gate: the six `double-green` matrix cells,
-    `checks`, and `oracle`. It is a single required context on purpose, so that
+    standing for the whole TypeScript gate: the `double-green` matrix cells,
+    `checks`, `package`, and `oracle`. On a pull request there are four matrix
+    cells, not six: the Windows pair runs nightly and on demand instead
+    (`DECISIONS.md` D-0039), so `ts-gate` aggregates a different number of
+    upstream jobs depending on the trigger — which is precisely the reason it
+    counts results rather than naming cells.
+    It is a single required context on purpose, so that
     adding or dropping a matrix cell never means editing this ruleset, and it
     fails on any upstream result other than `success` — `skipped` and
     `cancelled` included, which `needs` alone would let through.

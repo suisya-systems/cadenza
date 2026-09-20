@@ -69,6 +69,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0036 | What cadenza exposes for the operating surface: a human-decision port, four value checks in a new application function, and a transport-word rule over `src/ports/**` | accepted |
 | D-0037 | Vocabulary version 2: the five acts daily operation performs, `pull_request.merge` named so that withholding it is written, and what the vocabulary still deliberately cannot say | accepted |
 | D-0038 | The local-path verifier is cadenza's, as an adapter: resolve both sides and compare components, five refusals rather than one, and the window a reader must not think this closes | accepted |
+| D-0039 | The Windows cells run nightly and on demand, not on pull requests; continuo D-1109 is measured here and deliberately not ported | accepted |
 
 ---
 
@@ -710,6 +711,11 @@ needs both — a frozen dataclass's fields are already `Final` in the type check
 `parse_clone_source` or its port — none does today, which is exactly why the `tmp_path` substitution
 is sound here and would not be if a case ever asserted on `path.exists()` or a symlink.
 
+**Annotated 2026-09-21 (D-0039).** Nothing above this note is edited. "would assert nothing on the
+Windows cell" still holds and the case still needs both variables; what changed is *when* the cell
+answers. It is no longer on the pull-request path, so a regression that only `USERPROFILE` catches
+now surfaces on the nightly run, after a merge rather than before one.
+
 ---
 
 ## D-0020 — The identifier belt's two predicted traps, settled by measurement
@@ -1206,6 +1212,16 @@ was reviewed by the round after it.
 `approved_non_running` is, which would remove reason 1; or a Biome rule that could be addressed by a
 ledger entry, which would remove reason 3. Reason 2 would go if the other seven claims found a
 natural home elsewhere, which would mean section 8's boundary had stopped being one subject.
+
+**Annotated 2026-09-21 (D-0039).** Nothing above this note is edited. Two passages cast the
+windows-latest cells as the *first* line of defence with the guard second — item 7's "would have
+failed on the windows-latest cells instead", and item 10's open `const ROOT = "/srv"` hole, "a second
+line of defence behind `absolute()`; the windows-latest cells are the first". As of D-0039 the cells
+are no longer first, because they no longer run before a merge: on a pull request the guard is the
+*only* line of defence, and the cells confirm it that night. This raises the stakes on item 10's
+recorded hole rather than changing anything about the guard, and it is an argument for closing that
+hole if someone ever has reason to — not a reason to reopen it now, since the source has the
+identical hole for the identical reason.
 
 ---
 
@@ -3449,3 +3465,104 @@ run time has read it wrong.
   Until that happens the hole is closed in the library and still open in the host, which is a state
   worth naming rather than leaving to be discovered.
 - `docs/design/g1-project-registry.md` §3.1 and `README.md` stop saying no implementation ships.
+
+---
+
+## D-0039 — The Windows cells run nightly and on demand, not on pull requests; continuo D-1109 is measured here and deliberately not ported
+
+**Status:** accepted
+
+**Context.** cadenza #67 carries an operator decision taken on 2026-09-21 across three repositories
+at once: move the Windows cell off the pull-request path, "being faster does not make it fast enough
+to sit in front of a merge." The evidence the issue cites is in the siblings rather than here —
+continuo's Windows cell at 21–33 minutes (`continuo D-1109`, `continuo/docs/windows-ci-cost.md`), and
+two of rondo's six merges on 2026-09-20 judged red by Windows for reasons unrelated to the change
+(rondo #336). The decision is the operator's and this entry implements it; what this entry adds is
+the measurement of what it costs and buys *in this repository*, because cadenza's numbers turn out
+not to be the siblings' numbers.
+
+**Measured first.** Six `typescript` runs, 2026-09-06 to 2026-09-18, twelve observations per
+operating system (`double-green` job durations, both node versions):
+
+| cell | median | range |
+|---|---|---|
+| `ubuntu-latest` | 21.5 s | 15–26 s |
+| `macos-latest` | **24 s** | 15–27 s |
+| `windows-latest` | **48 s** | 42–90 s |
+
+The whole run, end to end, is 57–116 s. So cadenza's Windows cell is not continuo's: it costs about
+25 seconds more than the slowest non-Windows cell, not twenty minutes. The step breakdown of one
+Windows cell (run `35370364963`, node 24) says where even that goes:
+
+| step | `windows-latest` | `macos-latest` |
+|---|---|---|
+| `actions/checkout` | 11 s | 2 s |
+| `actions/setup-node` | 20 s | 1 s |
+| `npm ci --ignore-scripts` | 16 s | 3 s |
+| Green 1 of 2 | 5 s | 4 s |
+| Green 2 of 2 | 4 s | 4 s |
+
+**The suite itself is the same speed on Windows as on macOS.** The excess is checkout, toolchain
+setup and install — fixed job cost, not test work.
+
+**Decision.**
+
+1. **`double-green`'s Windows cells run on `schedule` (nightly, 02:27 JST) and on
+   `workflow_dispatch`, and on nothing else.** The matrix is selected by `fromJSON` of a conditional
+   on `github.event_name` rather than by `exclude:`, because `exclude` still creates the cells and
+   the point is not to schedule them. A pull request runs four cells; a nightly runs six.
+
+2. **The double-green rule (D-0006) is untouched.** When the Windows cell runs it runs both seeds,
+   derived the same way. `ts-gate` is untouched and remains the one required context: it counts
+   upstream results rather than naming cells, which is exactly why the matrix can change size per
+   trigger without touching `.github/branch-protection.json`.
+
+3. **A failed nightly opens one issue, or comments on the one already open.** `nightly-failure-issue`
+   is the last job in the workflow, runs only on `schedule` and only when `ts-gate` did not succeed,
+   and is the only job in the file with `issues: write` — scoped to the job so that every job that
+   runs the suite keeps `contents: read` and nothing else. One open issue accumulating comments, not
+   one issue per red night, because duplicates are what get a channel muted.
+
+   **This is a receipt, not a notification layer.** It exists because a red pull request is noticed
+   by whoever is waiting on it and a red nightly is noticed by nobody — without it, moving the cell
+   would have retired it in practice. The real question is the same one rondo #311 carries, and when
+   that is answered this job is the thing to delete rather than the thing to extend.
+
+4. **continuo D-1109 is not ported, and the measurement above is the reason.** D-1109 points the
+   Windows suite's temporary directory at `RUNNER_TEMP` on the runner's local `D:` instead of
+   `os.tmpdir()` on the network-attached `C:`, and bought continuo 22m25s → 7m27s. Its premise is
+   that the cell's wall clock is fsync: continuo commits to SQLite under a rollback journal with
+   `synchronous = FULL` in almost every test, and measured 15.60 ms per commit on `C:` against
+   1.14 ms on `D:`. cadenza has no database and no fsync. Two test files touch a real filesystem at
+   all — `test/adapters/local-path-verifier.test.ts` and `test/adapters/toml-loader.test.ts`, one
+   `mkdtempSync` each — and the suite steps they sit in take 4–5 s on Windows against 4 s on macOS.
+   There is no gap to close. Applying the step anyway would add a Windows-only environment mutation
+   to buy nothing measurable, and it would make those two files' `realpathSync.native` / `normpath`
+   handling answer about a different volume for no reason. **Re-measure rather than re-decide if
+   cadenza ever grows a test that fsyncs**; D-1109 is a good entry and this is a statement about
+   cadenza's workload, not about it.
+
+5. **`macos-latest` stays, and this entry does not decide about it.** #67 asked for its cost to be
+   measured and explicitly reserved the judgement. Measured: 24 s median, 2.5 s over ubuntu, and
+   the runs API reports **zero billable milliseconds for every cell** because the repository is
+   public. macOS is not what pull requests wait on and it is not costing money. The numbers are
+   reported on #67 and the decision is not taken here.
+
+**What this does not claim.** That the Windows cell was a problem *in cadenza*. It was 48 seconds.
+This entry implements an organisation-wide decision whose evidence is continuo's and rondo's, and
+records that cadenza's own numbers would not have produced it — so that a later reader asking "why
+did we do this here?" finds the answer rather than inferring a local 20-minute cell that never
+existed.
+
+**What would falsify it.**
+
+- **A Windows-only regression that a nightly finds and a pull request would have caught.** That is
+  the cost this entry accepts, and the ledger for it is the issues `nightly-failure-issue` opens.
+  D-0022's annotation names the sharpest case: the import-boundary guard's recorded hole (item 10)
+  had the windows-latest cells behind it, and on a pull request it no longer does.
+- **The two Windows cells becoming slow or flaky enough that the nightly stops being believed.** The
+  measurement above is the `windows-latest` image as it stood on 2026-09-18; the 90 s outlier in a
+  42–48 s field is already the runner variance continuo D-1109 attributes to `C:`.
+- **The failure job's CLI calls changing shape.** That job is unexercised by any pull request by
+  construction, so the first time it runs is a night when something else is already broken. A
+  dispatch run against a deliberately red branch is how to check it.
