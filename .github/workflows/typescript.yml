@@ -10,18 +10,31 @@ name: typescript
 #
 # The merge gate for this half is the `ts-gate` job at the bottom. Read that
 # first: everything above it exists to give it something to aggregate.
+#
+# The Windows cell is NOT on the pull-request path; it runs nightly and on
+# demand (D-0039). `double-green`'s matrix is therefore event-dependent, which
+# is the one thing in this file that is not the same on every trigger.
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # 02:27 JST. Off the hour, because the scheduler queues behind everyone
+    # else's `0 * * * *`.
+    - cron: "27 17 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: typescript-${{ github.workflow }}-${{ github.ref }}
+  # The event is part of the key because a nightly and a push to `main` share a
+  # ref, and `cancel-in-progress` would otherwise let one kill the other -- the
+  # nightly being the only run that carries Windows, that would silently drop
+  # the cell this file schedules it for.
+  group: typescript-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -40,11 +53,16 @@ jobs:
       # the diagnosis, and cancelling them destroys it.
       fail-fast: false
       matrix:
-        # The same three operating systems the Python suite ran on. Windows is
-        # a required cell from day one rather than a nightly extra: the cp932
-        # console is where the ASCII-only output policy is actually observed
-        # (D-0007), and path handling is where a port from `os.path` goes wrong.
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # The same three operating systems the Python suite ran on -- but
+        # Windows only on the scheduled and manual triggers (D-0039). A pull
+        # request runs two cells and waits on neither for long; the Windows
+        # cell still runs, still runs both seeds, and still reports path
+        # handling and the cp932 console (D-0007) -- after a merge rather than
+        # before one.
+        #
+        # `fromJSON` of a conditional rather than `exclude:`, because `exclude`
+        # would still create the cells and the point is to not schedule them.
+        os: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '["ubuntu-latest","macos-latest","windows-latest"]' || '["ubuntu-latest","macos-latest"]') }}
         # Node 22 (Maintenance LTS) and Node 24 (Active LTS), matching the
         # `engines` range in package.json.
         node: ["22", "24"]
@@ -260,3 +278,60 @@ jobs:
           if bad:
               sys.exit(1)
           print(f"ts-gate: all {len(results)} upstream job(s) succeeded")
+
+  nightly-failure-issue:
+    # A red pull request is noticed because somebody is waiting on it. A red
+    # nightly is noticed by nobody, so moving the Windows cell here (D-0039)
+    # would have retired it in practice without this job. It is a receipt, not
+    # a notification layer: one open issue that accumulates comments until
+    # somebody closes it, standing in until the notification question (the same
+    # one rondo #311 carries) is answered for real.
+    #
+    # `schedule` only. A `workflow_dispatch` run has a human watching it, and a
+    # push to `main` came from a pull request that ran the same gate.
+    name: report nightly failure
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always() && github.event_name == 'schedule' && needs.ts-gate.result != 'success'
+    needs: [ts-gate]
+    # The only job in this file that writes anything. Scoped here rather than at
+    # the top of the workflow so that the jobs running the suite keep
+    # `contents: read` and nothing else.
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open the issue, or comment on the one already open
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # This job does not check the repository out, so `gh` has no git
+          # remote to infer the repository from. Naming it is what replaces an
+          # `actions/checkout` step that would exist only to give `gh` a `.git`.
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          # Idempotent: `--force` updates the label if it exists and creates it
+          # if it does not, so the first nightly failure in a fresh fork does
+          # not fail on a missing label.
+          gh label create nightly-red --force \
+            --color b60205 --description "A scheduled run of a gate workflow was not green"
+
+          body=$(printf '%s\n' \
+            "\`${GITHUB_WORKFLOW}\` was not green on the nightly run of \`${GITHUB_REF_NAME}\`." \
+            "" \
+            "- commit: \`${GITHUB_SHA}\`" \
+            "- run: ${RUN_URL} (attempt ${GITHUB_RUN_ATTEMPT})" \
+            "" \
+            "The Windows cell runs here and not on pull requests (D-0039), so this is the first place a Windows-only failure appears.")
+
+          # One issue, however many red nights: a second one would be a
+          # duplicate of the first, and the duplicates are what make a channel
+          # like this one get muted.
+          open=$(gh issue list --state open --label nightly-red --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body "$body"
+          else
+            gh issue create --label nightly-red \
+              --title "Nightly ${GITHUB_WORKFLOW} is red" --body "$body"
+          fi
