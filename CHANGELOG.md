@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `allowed_bash` on the catalog project (D-0041): the commands a worker may run
+  in that repository, stored where D-0040 decided, so that `config_digest` - and
+  through it the contract - carries them. Optional; absent or `[]` means no
+  commands, and cadenza adds none of its own. A later layer replaces the list
+  whole. Entries are printable ASCII, 1-256 characters, not space-padded, at most
+  256 of them and none twice. It enters the digest payload only when non-empty,
+  so every existing project keeps its `config_digest` byte for byte.
+  `schema_version` stays 1: an older cadenza refuses the new key by name rather
+  than misreading it.
+
 - The worker's allowed commands (D-0040), moved from rondo's
   `src/access/repository-add.ts` with its behaviour unchanged (rondo D-0090 rule
   2.6): `toolchainsOf` reads a repository's top-level file names as npm, pnpm,

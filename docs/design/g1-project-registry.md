@@ -121,6 +121,15 @@ initialising this, and there is nothing to reproduce from".
 - `aliases` — ordered, unique, disjoint from every other name (§5.4)
 - `source: CloneSource`
 - `base_branch`
+- `allowed_bash` — optional; the commands a worker may run in this repository
+  (D-0040, D-0041)
+
+`allowed_bash` is a list of subjects in the executor's `allowed_bash` form (a
+command prefix, `:*` for "and anything after"), which cadenza stores and does not
+interpret. Each entry is printable ASCII, 1 to 256 characters, neither end a
+space; at most 256 entries; no entry twice. **Absent means no commands**, and so
+does `[]`: cadenza adds nothing a catalog did not state, not even the commands
+every worker has (`COMMON_BASH`) — whoever writes the list writes those too.
 
 `base_branch` is a git ref name and is validated as one: non-empty, no
 whitespace or control characters, no `..`, no `@{`, none of ``~^:?*[\``, no
@@ -142,7 +151,7 @@ resolves it would read it differently.
 `ResolvedProject` is the **snapshot handed to a run** — the whole point of §2:
 
 - `project_id` (immutable identity)
-- `source`, `base_branch` (the facts, as of resolution)
+- `source`, `base_branch`, `allowed_bash` (the facts, as of resolution)
 - `aliases` (informational)
 - `config_digest` (§4)
 - `provenance` — for each field, which layer and which file it came from
@@ -173,7 +182,10 @@ implicit "anything goes".
 
 `sha256:<hex>` over the canonical JSON encoding of the resolved project's
 **semantics** — `project_id`, `aliases` (sorted), `source` (normalised union),
-`base_branch`. Encoding is UTF-8, `sort_keys=True`,
+`base_branch`, and `allowed_bash` (sorted) **only when it is non-empty**. A
+project that states no list encodes to exactly the bytes it did before the field
+existed, so no digest recorded before D-0041 moves; `[]` means what absence
+means and digests as absence does. Encoding is UTF-8, `sort_keys=True`,
 `separators=(",", ":")`, `ensure_ascii=False`, `allow_nan=False`.
 
 Provenance and file paths are **excluded**: moving a catalog file must not
@@ -211,6 +223,12 @@ follow that rule, for reasons:
   table, `kind` included.
 - **`aliases` replaces whole.** Appending would leave no way to *remove* an
   alias, and a name is exactly the kind of thing that has to be removable.
+- **`allowed_bash` replaces whole**, for the same reason: a union across layers
+  would leave no way to take a command away. The local layer may state it, and a
+  local list can be wider than the tracked one; that is not a way around the
+  contract, because the list is in `config_digest` and a contract pins
+  `config_digest` — a changed list makes every contract issued under the old one
+  `stale_subject` (D-0041).
 
 The local layer may also introduce a `project_id` the tracked layer does not
 have. That is an operator-only project and is normal.

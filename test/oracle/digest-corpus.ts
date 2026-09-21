@@ -83,4 +83,15 @@ export const DIGEST_CORPUS: readonly (readonly [id: string, value: Project])[] =
   // A prefix sorts before the longer string it prefixes, and neither side may
   // shortcut on length.
   ["alias-sort-is-not-length-first", project("web", ["ab", "a", "aa", "b"], gitUrl(), "main")],
+  // -- allowed_bash (D-0041) -----------------------------------------------
+  // Declared out of order, so the vector pins the sort.
+  [
+    "allowed-bash",
+    project("web", [], gitUrl(), "main", [
+      "npm run:*",
+      "echo:*",
+      "git switch -",
+      "git switch --detach HEAD~1",
+    ]),
+  ],
 ];

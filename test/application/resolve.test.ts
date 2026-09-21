@@ -118,7 +118,9 @@ describe("resolve_project", () => {
 
     expect(resolved.aliases).toEqual([]);
     expect(new Set(Object.keys(resolved.provenance))).toEqual(
-      new Set(["project_id", "aliases", "source", "base_branch"]),
+      // `allowed_bash` joined the snapshot under D-0041 and defaults the way
+      // `aliases` does, so totality covers it too.
+      new Set(["project_id", "aliases", "source", "base_branch", "allowed_bash"]),
     );
     expect(resolved.provenance["aliases"]?.layer).toBe("tracked");
   });

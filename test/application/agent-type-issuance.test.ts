@@ -181,10 +181,13 @@ describe("the record stays outside the project's semantics", () => {
   test("ResolvedProject has no agent-type field", () => {
     // The shape, pinned. D-0031 section 2's whole argument is that a record on
     // this value would be a documentation-driven mass revocation, and a field
-    // added here would be silent from inside the agent-type belt.
+    // added here would be silent from inside the agent-type belt. `allowedBash`
+    // is catalog configuration (D-0041), not the record, and a project that
+    // states none keeps the digest pinned above.
     const target = resolved();
     expect(Object.keys(target).sort()).toEqual([
       "aliases",
+      "allowedBash",
       "baseBranch",
       "configDigest",
       "projectId",

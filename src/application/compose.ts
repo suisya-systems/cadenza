@@ -15,7 +15,7 @@ import {
 import { frozenSet } from "../domain/frozen.js";
 import { parseIdentifier } from "../domain/identifiers.js";
 import { type FieldOrigin, fieldOrigin, type Project, project } from "../domain/project.js";
-import { pythonRepr } from "../domain/python-text.js";
+import { pythonAscii, pythonRepr, pythonTypeName } from "../domain/python-text.js";
 import { parseBaseBranch } from "../domain/refs.js";
 import type { LayerDocument } from "../ports/catalog-source.js";
 
@@ -23,7 +23,17 @@ export const SUPPORTED_SCHEMA_VERSIONS: ReadonlySet<number> = frozenSet([1]);
 
 const TOP_LEVEL_KEYS = ["schema_version", "catalog", "project"];
 const CATALOG_KEYS = ["allowed_local_roots"];
-const PROJECT_KEYS = ["aliases", "source", "base_branch", "tombstone"];
+const PROJECT_KEYS = ["aliases", "source", "base_branch", "allowed_bash", "tombstone"];
+
+/**
+ * Bounds on `allowed_bash` (D-0041). Generous for a list the widest toolchain
+ * mix composes to about thirty of, and there so that a runaway generator is a
+ * refusal naming the file rather than a contract nobody can read.
+ */
+const MAX_ALLOWED_BASH = 256;
+const MAX_ALLOWED_BASH_LENGTH = 256;
+/** Printable ASCII, and neither end a space: what the executor's fence matches is exactly what was typed. */
+const ALLOWED_BASH_PATTERN = /^[\x21-\x7e](?:[\x20-\x7e]*[\x21-\x7e])?$/;
 
 /**
  * A composed catalog.
@@ -53,6 +63,7 @@ interface Accumulator {
   aliases: readonly string[];
   source: CloneSource | null;
   baseBranch: string | null;
+  allowedBash: readonly string[];
   readonly origins: Map<string, FieldOrigin>;
 }
 
@@ -150,6 +161,7 @@ function applyProject(
       aliases: [],
       source: null,
       baseBranch: null,
+      allowedBash: [],
       origins: new Map<string, FieldOrigin>(),
     };
     accumulated.set(projectId, entry);
@@ -160,6 +172,9 @@ function applyProject(
     // happened to state (design doc section 5.7). A later layer that states
     // aliases overwrites this.
     entry.origins.set("aliases", originOf(document));
+    // Defaults to empty -- no commands -- and records its origin for the same
+    // reason `aliases` does.
+    entry.origins.set("allowed_bash", originOf(document));
   }
 
   if (Object.hasOwn(table, "aliases")) {
@@ -189,6 +204,13 @@ function applyProject(
     entry.baseBranch = parseBaseBranch(table.base_branch, `${location}.base_branch`);
     entry.origins.set("base_branch", originOf(document));
   }
+
+  if (Object.hasOwn(table, "allowed_bash")) {
+    // Replaces whole, as `aliases` does: a union across layers would leave no way
+    // to take a command away (D-0041).
+    entry.allowedBash = parseAllowedBash(table.allowed_bash, `${location}.allowed_bash`);
+    entry.origins.set("allowed_bash", originOf(document));
+  }
 }
 
 function finish(accumulated: ReadonlyMap<string, Accumulator>): Catalog {
@@ -205,7 +227,13 @@ function finish(accumulated: ReadonlyMap<string, Accumulator>): Catalog {
     if (entry.baseBranch === null) {
       throw new MissingFieldError(`project '${projectId}' has no base_branch`, definedAt.file);
     }
-    projects[projectId] = project(projectId, entry.aliases, entry.source, entry.baseBranch);
+    projects[projectId] = project(
+      projectId,
+      entry.aliases,
+      entry.source,
+      entry.baseBranch,
+      entry.allowedBash,
+    );
     provenance[projectId] = Object.freeze(Object.fromEntries(entry.origins));
 
     for (const [name, origin] of claimedNames(entry, definedAt)) {
@@ -259,6 +287,38 @@ function parseAliases(value: unknown, location: string): readonly string[] {
     aliases.push(alias);
   }
   return aliases;
+}
+
+function parseAllowedBash(value: unknown, location: string): readonly string[] {
+  if (!Array.isArray(value)) {
+    throw new CatalogError("'allowed_bash' must be a list", location);
+  }
+  if (value.length > MAX_ALLOWED_BASH) {
+    throw new CatalogError(`'allowed_bash' lists more than ${MAX_ALLOWED_BASH} commands`, location);
+  }
+  const commands: string[] = [];
+  for (const item of value as readonly unknown[]) {
+    if (typeof item !== "string") {
+      throw new CatalogError(
+        `'allowed_bash' entries must be strings, got ${pythonTypeName(item)}`,
+        location,
+      );
+    }
+    // pythonAscii, not pythonRepr: the entry is refused precisely when it may not
+    // be ASCII, and printed text must be (D-0007).
+    if (item.length > MAX_ALLOWED_BASH_LENGTH || !ALLOWED_BASH_PATTERN.test(item)) {
+      throw new CatalogError(
+        `'allowed_bash' entry ${pythonAscii(item)} must be printable ASCII of at most ` +
+          `${MAX_ALLOWED_BASH_LENGTH} characters, not blank and not space-padded`,
+        location,
+      );
+    }
+    if (commands.includes(item)) {
+      throw new CatalogError(`'allowed_bash' lists ${pythonAscii(item)} twice`, location);
+    }
+    commands.push(item);
+  }
+  return commands;
 }
 
 function checkSchemaVersion(data: RawTable, location: string): void {

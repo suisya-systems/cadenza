@@ -2,7 +2,7 @@
   "generated_by": "scripts/oracle/dump_config_digest.py",
   "source_revision": "the working tree at generation time; see docs/porting.md section 4",
   "python_version": "3.12.3",
-  "case_count": 15,
+  "case_count": 16,
   "cases": [
     {
       "id": "ascii-git-url",
@@ -93,6 +93,12 @@
       "canonical_json": "{\"aliases\":[\"a\",\"aa\",\"ab\",\"b\"],\"base_branch\":\"main\",\"project_id\":\"web\",\"source\":{\"kind\":\"git_url\",\"url\":\"https://example.invalid/org/web.git\"}}",
       "canonical_bytes_hex": "7b22616c6961736573223a5b2261222c226161222c226162222c2262225d2c22626173655f6272616e6368223a226d61696e222c2270726f6a6563745f6964223a22776562222c22736f75726365223a7b226b696e64223a226769745f75726c222c2275726c223a2268747470733a2f2f6578616d706c652e696e76616c69642f6f72672f7765622e676974227d7d",
       "digest": "sha256:2bba6bbcd0d02a857d9cc82596d86c26979e5de5f8763fa9a4aeb947505a24cb"
+    },
+    {
+      "id": "allowed-bash",
+      "canonical_json": "{\"aliases\":[],\"allowed_bash\":[\"echo:*\",\"git switch -\",\"git switch --detach HEAD~1\",\"npm run:*\"],\"base_branch\":\"main\",\"project_id\":\"web\",\"source\":{\"kind\":\"git_url\",\"url\":\"https://example.invalid/org/web.git\"}}",
+      "canonical_bytes_hex": "7b22616c6961736573223a5b5d2c22616c6c6f7765645f62617368223a5b226563686f3a2a222c2267697420737769746368202d222c2267697420737769746368202d2d64657461636820484541447e31222c226e706d2072756e3a2a225d2c22626173655f6272616e6368223a226d61696e222c2270726f6a6563745f6964223a22776562222c22736f75726365223a7b226b696e64223a226769745f75726c222c2275726c223a2268747470733a2f2f6578616d706c652e696e76616c69642f6f72672f7765622e676974227d7d",
+      "digest": "sha256:4b73ac7f87546658431aafc35b0356b70187a4c201f0dd66b000b875017deef0"
     }
   ]
 }
