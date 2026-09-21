@@ -21,6 +21,7 @@ export function resolveProject(catalog: Catalog, name: string): ResolvedProject 
     aliases: found.aliases,
     source: found.source,
     baseBranch: found.baseBranch,
+    allowedBash: found.allowedBash,
     // The digest is what lets a later reader tell that the catalog moved under a
     // run that already happened (design doc section 3.2).
     configDigest: configDigest(found),

@@ -20,6 +20,12 @@ allowed_local_roots = ["~/work"]
 # [project.interlock]
 # base_branch = "develop"
 
+# allowed_bash replaces the tracked list whole rather than adding to it, so
+# restate every command the worker should keep. It is in config_digest: a
+# contract issued under the old list is stale until one is issued under this.
+# [project.interlock]
+# allowed_bash = ["echo:*", "git switch --detach HEAD~1", "git switch -", "npm run:*"]
+
 # Replacing a source means restating the whole [.source] table, kind included.
 # A partial override could leave a "path" sitting on top of a tracked
 # kind = "git_url" and produce a shape nobody wrote, so the whole table wins or

@@ -71,6 +71,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0038 | The local-path verifier is cadenza's, as an adapter: resolve both sides and compare components, five refusals rather than one, and the window a reader must not think this closes | accepted |
 | D-0039 | The Windows cells run nightly and on demand, not on pull requests; continuo D-1109 is measured here and deliberately not ported | accepted |
 | D-0040 | The worker's allowed commands are composed in cadenza, moved from rondo unchanged; the list is to be stored on the catalog project, where `config_digest` carries it into the contract | accepted |
+| D-0041 | `allowed_bash` on the catalog project: absent means no commands, a later layer replaces it whole, it enters `config_digest` only when non-empty, and `schema_version` stays 1 | accepted |
 
 ---
 
@@ -3644,3 +3645,113 @@ manifests sit in subdirectories reads as none of the four (`rondo D-0090`, "What
   project buys the audit nothing, and the question becomes where that check lives.
 - **The moved code disagreeing with rondo's.** `test/domain/allowed-commands.test.ts` carries rondo's
   own case verbatim; a divergence found later is a defect in the move, not a new decision.
+
+---
+
+## D-0041 — `allowed_bash` on the catalog project: absent means no commands, a later layer replaces it whole, it enters `config_digest` only when non-empty, and `schema_version` stays 1
+
+**Status:** accepted (2026-09-22, at the human gate through the window: the three questions in
+rules 2-4 -- the schema version, what an unstated list means, and how layers compose it -- were put
+with a recommendation each, and the answer was the recommendation on all three). Supersedes
+nothing. Carries out D-0040 rule 3. Refs D-0026, D-0031, D-0040, `rondo D-0090`.
+
+**Context.** D-0040 rule 2 decided that the worker's allowed commands are stored on the catalog
+project, because `config_digest` is taken over the project and a contract carries `config_digest`,
+so a changed list reaches `contract_digest`, supersession and the human decision without a new
+mechanism. Rule 3 made storing it a change of its own, on two conditions: every existing
+`config_digest` stays exactly as it is for a project that declares no list, and the change decides
+what a project that declares none *means*.
+
+**Decision.**
+
+1. **The field.** `[project.<id>]` takes an optional `allowed_bash`, a list of subjects in the
+   executor's `allowed_bash` form -- the form `allowedCommandsFor()` returns (D-0040 rule 1).
+   cadenza stores the entries and does not interpret them. `Project` and `ResolvedProject` carry it
+   as `allowedBash`, frozen, in declared order; its provenance is recorded like every other field's,
+   and an unstated list has the defining layer as its origin, as an unstated `aliases` does.
+   Entries are refused unless each is printable ASCII (U+0020-U+007E), 1 to 256 characters, with
+   neither end a space, no entry appears twice, and there are at most 256. The bounds are generous
+   -- the widest toolchain mix composes to about thirty -- and exist so that a runaway generator is
+   a refusal that names the file rather than a contract nobody can read. ASCII and no padding
+   because what the executor's fence matches is exactly what was typed, and a non-ASCII or
+   whitespace look-alike is a command that reads as one thing and matches as another.
+
+2. **Absent means no commands, and so does `[]`.** cadenza adds nothing a catalog did not state --
+   not even `COMMON_BASH`. The alternative, absent meaning the common commands, was rejected: it
+   would make the effective grant depend on a constant in cadenza's source rather than on the
+   catalog, so changing `COMMON_BASH` would widen or narrow every such project's grant with no
+   `config_digest` moving. That is the finding D-0040 was taken to answer -- authority outside
+   every digest -- come back through a default. Whoever writes the list writes the common commands
+   into it; `allowedCommandsFor()` already returns them first, including for a repository matching
+   no family (`rondo D-0090` rule 2.6). The consequence is stated plainly: every project in a
+   catalog today states no list, so every one of them grants no commands until its list is written.
+   Writing them is rondo's replacement task, not this change.
+
+3. **A later layer replaces the list whole; the local layer may state it.** Not a union, for the
+   reason `aliases` is not (design doc section 5.3): a union leaves no way to take a command away.
+   A local list may be wider than the tracked one. That is a widening of authority, and it is
+   allowed because it does not go around the contract: the list is in `config_digest`, a contract
+   pins `config_digest`, and `classify()` refuses a contract whose `config_digest` is not the
+   subject's current one as `stale_subject` before it reads the grant. A local widening therefore
+   takes effect only through a newly issued contract. The local layer's operator is also already
+   trusted with their own machine -- the same layer can point `source` at any path under its own
+   `allowed_local_roots`. Two alternatives were rejected: a local layer that may only narrow the
+   tracked list (more code, and it has nothing to narrow for an operator-only project, which
+   section 5.3 calls normal), and a list the local layer may not state at all (it would make the
+   operator's machine the one place the list cannot be fitted to).
+
+4. **`config_digest` carries the list only when it is non-empty; `schema_version` stays 1.**
+   `canonicalPayload` adds `allowed_bash`, sorted by code point as `aliases` is, only when the list
+   has an entry. A project that states none encodes to exactly the bytes it did before, which is
+   D-0040 rule 3's condition: no digest recorded before this entry moves, and no contract issued
+   before it goes stale. `[]` means what absence means, so it digests as absence does. The order
+   is not semantics -- the list is a set of prefixes -- so reordering it is not a change.
+   The schema version is not raised. An older cadenza reading a catalog that states `allowed_bash`
+   refuses it as an unknown key, naming the key and the file (section 5.6), which is the loud
+   refusal section 5.2 asks for rather than a plausible misreading, and a catalog that does not
+   state the field reads identically in both builds. Raising it to 2 would either force every
+   existing catalog to be rewritten or make the composer accept two versions that differ only in
+   one optional key; neither buys anything the unknown-key refusal does not already give, and the
+   only consumer takes cadenza through a pin.
+
+5. **The oracle.** `parity/oracle/config-digest-vector.json`, the live face, gains the case
+   `allowed-bash` (a list declared out of order, so CPython pins the sort and the key's position),
+   and `scripts/oracle/dump_config_digest.py` and `test/oracle/digest-corpus.ts` restate the
+   payload rule independently. The fifteen existing rows are unchanged, byte for byte. An
+   empty-list case is not in the vector, because its row would be `no-aliases` again and the
+   vector asserts its digests are distinct; `test/application/allowed-bash.test.ts` asserts
+   `[]` against absence instead. `compose-digest-vector.json` is frozen and gains nothing (AGENTS.md
+   section 5); it still passes unchanged, which is the same condition asserted from the composer's
+   side.
+
+**Where `config_digest` is checked against the current project (D-0040's second falsifier).** Not at
+issuance. `delegationContract()` validates `config_digest`'s shape only, and
+`contractInputForAgentType()` copies it from the `ResolvedProject` it is handed, which is current
+when the caller resolved it. The check is at classification: `classify()`'s first rule compares the
+contract's `config_digest` with the one the caller passes as the subject's current value and answers
+`refused` / `stale_subject` on a difference (`src/domain/classification.ts`). So a changed list does
+reach the contract's authority -- every contract issued under the old list stops classifying
+anything as allowed -- and D-0040's falsifier does not fire. What that rests on is stated too: the
+caller must pass the digest of the project as it is *now*, because cadenza reads no catalog at
+classification time (D-0026 section 2). A host that passed the digest stored beside the contract
+instead would switch the check off. `test/application/allowed-bash.test.ts` asserts the chain end
+to end: a contract issued under one list is `allowed` against that list's digest and
+`stale_subject` against the digest of the list with one command added.
+
+**What this does not do.** It does not change rondo, write any project's list, or remove rondo's
+`setup_plan.allowed_bash`; those are rondo's replacement task. It does not make cadenza enforce the
+list -- the fence is the executor's (D-0040 rule 1). It adds nothing to the contract's field list,
+so G2 is not reopened.
+
+**What would falsify it.**
+
+- **An existing `config_digest` moving for a project that states no list.** That is the one
+  condition D-0040 set. `test/application/allowed-bash.test.ts` and the pinned digest in
+  `test/application/agent-type-issuance.test.ts` hold it against written-down bytes, and the fifteen
+  unchanged rows of the live vector hold it against CPython.
+- **A host that needs the common commands without writing them** -- for instance, a catalog
+  maintained by hand where every project repeating `COMMON_BASH` has proven to drift. Then rule 2's
+  default is re-opened by a new entry, and the answer has to keep the default inside some digest.
+- **A local widening turning out to take effect without a new contract** -- a host that classifies
+  with a stored rather than a current `config_digest`. Then rule 3's reasoning fails and the local
+  layer must be restricted to narrowing.

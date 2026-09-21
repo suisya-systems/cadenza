@@ -29,14 +29,24 @@ import type { Project } from "./project.js";
  * Aliases are sorted, so that reordering a display-only list does not read as a
  * configuration change -- sorted by **code point**, which is what Python's
  * `sorted()` does and what the default `Array.prototype.sort` does not.
+ *
+ * `allowed_bash` is in the payload **only when the list is non-empty** (D-0041).
+ * A project that states none encodes to exactly the bytes it did before the
+ * field existed, so no `config_digest` already recorded moves; and `[]`, which
+ * means what absence means, digests as absence does. Sorted for the reason the
+ * aliases are: the list is a set of prefixes, and its order grants nothing.
  */
 export function canonicalPayload(value: Project): Readonly<Record<string, CanonicalValue>> {
-  return {
+  const payload: Record<string, CanonicalValue> = {
     project_id: value.projectId,
     aliases: [...value.aliases].sort(compareByCodePoint),
     source: toCanonical(value.source),
     base_branch: value.baseBranch,
   };
+  if (value.allowedBash.length > 0) {
+    payload.allowed_bash = [...value.allowedBash].sort(compareByCodePoint);
+  }
+  return payload;
 }
 
 /**

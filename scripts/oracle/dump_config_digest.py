@@ -79,6 +79,7 @@ def canonical_payload(
     aliases: tuple[str, ...],
     source: dict[str, str],
     base_branch: str,
+    allowed_bash: tuple[str, ...] = (),
 ) -> dict[str, object]:
     """The semantics the digest covers, as ``cadenza.domain.digest`` computed it.
 
@@ -90,13 +91,19 @@ def canonical_payload(
     below carries alias-ordering cases: Python sorts strings by code point, and
     JavaScript's default ``Array.prototype.sort`` sorts by UTF-16 code unit,
     which disagree above U+FFFF.
+
+    ``allowed_bash`` (D-0041) is added only when non-empty, so a project that
+    states none encodes to the bytes it did before the field existed.
     """
-    return {
+    payload: dict[str, object] = {
         "project_id": project_id,
         "aliases": sorted(aliases),
         "source": source,
         "base_branch": base_branch,
     }
+    if allowed_bash:
+        payload["allowed_bash"] = sorted(allowed_bash)
+    return payload
 
 
 def config_digest(payload: dict[str, object]) -> tuple[bytes, str]:
@@ -224,6 +231,19 @@ def corpus() -> list[tuple[str, dict[str, object]]]:
             # A prefix sorts before the longer string it prefixes, and neither
             # side may shortcut on length.
             canonical_payload("web", ("ab", "a", "aa", "b"), git_url(WEB_URL), "main"),
+        ),
+        # -- allowed_bash (D-0041) --------------------------------------------
+        (
+            "allowed-bash",
+            # Declared out of order, so the vector pins the sort; the key lands
+            # between "aliases" and "base_branch" in the object.
+            canonical_payload(
+                "web",
+                (),
+                git_url(WEB_URL),
+                "main",
+                ("npm run:*", "echo:*", "git switch -", "git switch --detach HEAD~1"),
+            ),
         ),
     ]
 

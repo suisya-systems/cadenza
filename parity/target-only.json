@@ -76,6 +76,10 @@
     {
       "path": "test/domain/allowed-commands.test.ts",
       "why": "The worker's allowed commands (D-0040), moved from rondo's `src/access/repository-add.ts`. Target-only by construction: nothing like it existed on the Python side, so there is no source case to translate. The first case is rondo's own, carried over verbatim so the move is shown to keep rondo D-0090 rule 2.6's behaviour; the rest pin the precedence between lockfiles, the Python family's one-of rule, the top-level-only reading, and the exact npm list setup grants."
+    },
+    {
+      "path": "test/application/allowed-bash.test.ts",
+      "why": "The worker's allowed commands stored on the catalog project as `allowed_bash` (D-0041). Target-only by construction: the field did not exist on the Python side. It pins that a project stating no list keeps its pre-field `config_digest` byte for byte, that `[]` digests as absence, the whole-replace layer rule, the validation bounds, and that a changed list makes an existing contract `stale_subject`."
     }
   ]
 }

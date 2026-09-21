@@ -15,6 +15,12 @@ export interface Project {
   readonly aliases: readonly string[];
   readonly source: CloneSource;
   readonly baseBranch: string;
+  /**
+   * The commands a worker may run in this repository, in `allowed_bash`'s form
+   * (D-0040, D-0041). Empty means none: cadenza adds nothing a catalog did not
+   * state, not even `COMMON_BASH`.
+   */
+  readonly allowedBash: readonly string[];
 }
 
 /**
@@ -39,12 +45,14 @@ export function project(
   aliases: readonly string[],
   source: CloneSource,
   baseBranch: string,
+  allowedBash: readonly string[] = [],
 ): Project {
   return Object.freeze({
     projectId,
     aliases: Object.freeze([...aliases]),
     source: snapshotSource(source),
     baseBranch,
+    allowedBash: Object.freeze([...allowedBash]),
   });
 }
 
@@ -70,6 +78,7 @@ export interface ResolvedProject {
   readonly aliases: readonly string[];
   readonly source: CloneSource;
   readonly baseBranch: string;
+  readonly allowedBash: readonly string[];
   readonly configDigest: string;
   readonly provenance: Readonly<Record<string, FieldOrigin>>;
 }
