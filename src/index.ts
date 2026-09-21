@@ -74,6 +74,13 @@ export {
   requireAgentType,
 } from "./domain/agent-type.js";
 export {
+  allowedBashFor,
+  allowedCommandsFor,
+  COMMON_BASH,
+  type Toolchain,
+  toolchainsOf,
+} from "./domain/allowed-commands.js";
+export {
   type CanonicalValue,
   canonicalJson,
   canonicalJsonBytes,

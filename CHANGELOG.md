@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The worker's allowed commands (D-0040), moved from rondo's
+  `src/access/repository-add.ts` with its behaviour unchanged (rondo D-0090 rule
+  2.6): `toolchainsOf` reads a repository's top-level file names as npm, pnpm,
+  yarn, bun, go, uv, poetry, pip or cargo; `allowedBashFor` composes the
+  commands every worker has (`COMMON_BASH`) with each toolchain's; and
+  `allowedCommandsFor(files)` is the two together. A repository matching no
+  family gets the common commands alone. Pure: the caller lists the files. The
+  list is to be stored on the catalog project, so that `config_digest` carries
+  it into the contract; that schema change is its own entry.
+
 - The local-path verifier (D-0038), which had a port and no implementation in any
   of the three repositories while G1 called it mandatory before a clone.
   `FilesystemLocalPathVerifier` (`src/adapters/local-path/`) resolves the
