@@ -70,6 +70,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0037 | Vocabulary version 2: the five acts daily operation performs, `pull_request.merge` named so that withholding it is written, and what the vocabulary still deliberately cannot say | accepted |
 | D-0038 | The local-path verifier is cadenza's, as an adapter: resolve both sides and compare components, five refusals rather than one, and the window a reader must not think this closes | accepted |
 | D-0039 | The Windows cells run nightly and on demand, not on pull requests; continuo D-1109 is measured here and deliberately not ported | accepted |
+| D-0040 | The worker's allowed commands are composed in cadenza, moved from rondo unchanged; the list is to be stored on the catalog project, where `config_digest` carries it into the contract | accepted |
 
 ---
 
@@ -3566,3 +3567,80 @@ existed.
 - **The failure job's CLI calls changing shape.** That job is unexercised by any pull request by
   construction, so the first time it runs is a night when something else is already broken. A
   dispatch run against a deliberately red branch is how to check it.
+
+## D-0040 — The worker's allowed commands are composed in cadenza, moved from rondo unchanged; the list is to be stored on the catalog project, where `config_digest` carries it into the contract
+
+**Status:** accepted (2026-09-22, at the human gate through the window: the storage question below was
+put with a recommendation, and the answer was the recommendation). Supersedes nothing. Refs D-0026,
+D-0027, D-0029, D-0031, `rondo D-0064`, `rondo D-0090`.
+
+**Context.** `rondo D-0090` rule 2.6 decided what a worker may run in a repository added from the
+page: the repository's top-level file names say which of four families it builds with (TypeScript
+and JavaScript by lockfile, Go, Python by lockfile, Rust), the worker gets each family's commands
+together with the commands every worker has (`echo`, and the two exact `git switch` moves), and a
+repository matching none is still added, with the common commands alone. rondo built that as
+`COMMON_BASH`, a per-toolchain table, `toolchainsOf` and `allowedBashFor` in
+`src/access/repository-add.ts` (rondo `87e62f0`, lines 28-150). A read-only placement audit of rondo
+on 2026-09-22 found it in the wrong repository: `rondo D-0064` section 5 gives "Authority and
+settings -- what a worker is allowed to do" to cadenza. The owner's direction was to fix the
+placement now rather than carry it.
+
+The audit's finding is sharper than "wrong directory". A command list composed and stored in rondo
+sits outside everything cadenza records authority with: it is under no `contract_digest`, so no
+supersession lineage (D-0026) moves when it changes and no human decision (D-0036) is ever asked to
+widen it. Moving the function fixes where the list is *composed*; where it is *stored* decides
+whether that finding is answered.
+
+**Decision.**
+
+1. **cadenza composes the list.** `src/domain/allowed-commands.ts` carries rondo's code with its
+   behaviour unchanged -- the detection rules and their precedence (pnpm, yarn, bun, npm, then npm
+   without a lockfile; uv, poetry, then pip, as one family), the tables, the common commands first,
+   each subject once, and the empty-match case -- and adds `allowedCommandsFor(files)`, the
+   composition rondo's caller writes by hand. It is pure: the caller lists the files, and nothing in
+   cadenza reads a clone. The subjects stay in `allowed_bash`'s form and cadenza interprets none of
+   them; the fence that enforces them is the executor's. All five names are exported from the entry
+   point (D-0033), because rondo reads `COMMON_BASH` on its own -- a plan whose list is only those
+   commands is how its page says it could not tell how a repository is built
+   (`src/access/model-draft/host.ts`) -- and calls the two steps separately today.
+
+2. **The list is to be stored on the catalog project, and this entry fixes that direction.** Four
+   places were weighed:
+   - **the catalog project (G1)** -- chosen. A project is per repository, which the list is.
+     `config_digest` is taken over the project, and a contract carries `config_digest` in its
+     payload, so a changed list is a changed `config_digest` and therefore a changed
+     `contract_digest`: supersession and the human decision cover it without a new mechanism. It is
+     the only one of the four that answers the audit's finding.
+   - **the agent-type record** -- rejected. `rondo D-0090` rule 2.5 copies the agent type unchanged
+     from setup for every repository, so it is per host, and the list is per repository. And a
+     contract does not carry `agent_type_digest` (D-0031: the record is inputs to a contract, not a
+     second authority), so the list would still sit outside the contract.
+   - **the contract** -- rejected. A contract grants capability keys from a closed, versioned
+     vocabulary matched by equality (D-0027, D-0037); a shell-command prefix is neither a key nor
+     closed, and admitting one would make the vocabulary open.
+   - **nowhere in cadenza (the caller stores it)** -- this is what this entry ships, as a step and
+     not as the destination: the list stays in rondo's `setup_plan.allowed_bash` until the catalog
+     project carries it.
+
+3. **Storing it is a separate change, taken next rather than deferred.** It changes the catalog
+   schema and the `config_digest` payload, and a digest change is its own reviewable decision, so it
+   is one issue and one pull request of its own (AGENTS.md section 7). That change must keep every
+   existing `config_digest` exactly as it is for a project that declares no list, and must decide
+   what a project that declares none *means* -- the common commands, or nothing.
+
+**What this does not do.** It does not change rondo: rondo still carries its own copy and setup's
+npm list (`scripts/dogfood-env.sh`) until rondo replaces both with a call through the package, which
+is rondo's task. It widens no family and changes no command; a table change is a behaviour change
+and belongs to an entry that says so. It still reads the top level only, so a monorepo whose
+manifests sit in subdirectories reads as none of the four (`rondo D-0090`, "What this gives up").
+
+**What would falsify it.**
+
+- **The list turning out not to be per repository** -- for instance, one repository needing
+  different commands for different agent types. Then the agent-type record, or a pair of the two,
+  is the better home, and rule 2 is re-opened by a new entry.
+- **`config_digest` turning out not to reach the contract's authority** -- a contract issued without
+  checking that its `config_digest` is the project's current one. Then storing the list on the
+  project buys the audit nothing, and the question becomes where that check lives.
+- **The moved code disagreeing with rondo's.** `test/domain/allowed-commands.test.ts` carries rondo's
+  own case verbatim; a divergence found later is a defect in the move, not a new decision.

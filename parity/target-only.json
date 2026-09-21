@@ -72,6 +72,10 @@
     {
       "path": "test/application/agent-type-issuance.test.ts",
       "why": "The issuance renderer, and the two regression guards D-0031 section 2 asks for. Target-only: no Python side. The renderer's load-bearing case is that what it returns goes into `delegationContract()` and comes out a valid contract, which is what 'the record is inputs to contract construction rather than a second authority' means in code (D-0031 section 1). The guards are here rather than in the domain file because the failure they watch for is invisible from inside the agent-type belt: a record reaching `Project` / `ResolvedProject` would move every project's `config_digest`, every already-issued contract pins the old one, and `classify()`'s first step would return `refused` / `stale_subject` for all of them -- a mass revocation triggered by editing an agent type. So `configDigest` is pinned against a fixed value and `ResolvedProject`'s key set is pinned against its shape."
+    },
+    {
+      "path": "test/domain/allowed-commands.test.ts",
+      "why": "The worker's allowed commands (D-0040), moved from rondo's `src/access/repository-add.ts`. Target-only by construction: nothing like it existed on the Python side, so there is no source case to translate. The first case is rondo's own, carried over verbatim so the move is shown to keep rondo D-0090 rule 2.6's behaviour; the rest pin the precedence between lockfiles, the Python family's one-of rule, the top-level-only reading, and the exact npm list setup grants."
     }
   ]
 }
