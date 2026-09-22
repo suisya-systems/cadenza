@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `git merge --no-edit:*` in the commands every worker has (`COMMON_BASH`,
+  D-0042), so that a worker can take in a branch it did not make and an ancestry
+  test can pass (rondo D-0098 rule 2, rondo#417). Push, reset, rebase and
+  cherry-pick stay out of every list. No stored grant changes until its
+  `allowed_bash` is composed again and written, which moves its `config_digest`.
+
 - `allowed_bash` on the catalog project (D-0041): the commands a worker may run
   in that repository, stored where D-0040 decided, so that `config_digest` - and
   through it the contract - carries them. Optional; absent or `[]` means no

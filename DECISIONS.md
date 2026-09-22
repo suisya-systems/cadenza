@@ -72,6 +72,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0039 | The Windows cells run nightly and on demand, not on pull requests; continuo D-1109 is measured here and deliberately not ported | accepted |
 | D-0040 | The worker's allowed commands are composed in cadenza, moved from rondo unchanged; the list is to be stored on the catalog project, where `config_digest` carries it into the contract | accepted |
 | D-0041 | `allowed_bash` on the catalog project: absent means no commands, a later layer replaces it whole, it enters `config_digest` only when non-empty, and `schema_version` stays 1 | accepted |
+| D-0042 | Every worker may run `git merge --no-edit`, so that a line can take in a branch it did not make; push, reset, rebase and cherry-pick stay refused | accepted |
 
 ---
 
@@ -3755,3 +3756,56 @@ so G2 is not reopened.
 - **A local widening turning out to take effect without a new contract** -- a host that classifies
   with a stored rather than a current `config_digest`. Then rule 3's reasoning fails and the local
   layer must be restricted to narrowing.
+
+---
+
+## D-0042 — Every worker may run `git merge --no-edit`, so that a line can take in a branch it did not make; push, reset, rebase and cherry-pick stay refused
+
+**Status:** accepted (2026-09-22, on the owner's direction through the window, cadenza#74).
+Supersedes nothing. Changes the table D-0040 moved, as D-0040 requires ("a table change is a
+behaviour change and belongs to an entry that says so"). Refs D-0040, D-0041, `rondo D-0098`,
+`rondo D-0103`.
+
+**Context.** `rondo D-0098` rule 2 (rondo#250) requires a line that takes over paths another line
+landed first to take in the default branch before it continues, and its gate tests that the landed
+commit is an ancestor of the line's tip. rondo#417 needs the same move: a revision that brings the
+base in to resolve a conflict between a lap's pull request and its base. Both need a worker to bring
+in a commit it did not make. At `3c6ed28` the commands every worker has (`COMMON_BASH`) are `echo:*`,
+`git switch --detach HEAD~1` and `git switch -`; no toolchain table adds a git command. Re-applying
+a change by hand gives the same tree but not the ancestry, so no worker can pass that gate, and rondo
+built its side with the trigger switched off (`rondo D-0103`) until this lands.
+
+**Decision.**
+
+1. **`COMMON_BASH` gains `git merge --no-edit:*`**, after the two `git switch` moves. It is in the
+   common commands rather than a toolchain table because taking in a branch has nothing to do with
+   how a repository builds, and every family, including none, needs it.
+2. **`--no-edit` is part of the prefix.** A merge without it opens an editor for the message, which a
+   non-interactive worker cannot answer. What the prefix admits is any `git merge --no-edit ...`:
+   a branch or commit to merge, and git's merge options after it -- among them `--ff-only`,
+   `--no-ff`, `--squash`, `-s` / `-X`, `-m` / `-F`, `--allow-unrelated-histories`, `--autostash` and
+   `--no-verify`. The fence matches text and cadenza interprets none of it (D-0040 rule 1); a
+   narrower set of options is the executor's to impose if it needs one.
+3. **What stays refused.** No `git push`, `git reset`, `git rebase` or `git cherry-pick` enters any
+   list: rondo's use is ancestry, which a merge gives and which rebase and cherry-pick would rewrite
+   or not give, and nothing asked for them. Bare `git merge --abort`, `--continue` and `--quit` are
+   not admitted either, because git refuses them after `--no-edit` (`--abort expects no arguments`)
+   and the prefix admits nothing else; a worker whose merge conflicts resolves it or reports it.
+   `test/domain/allowed-commands.test.ts` asserts the first four against every family's list.
+
+**What it changes for an existing grant: nothing, until a list is rewritten.** By D-0041 rule 2
+cadenza adds nothing a catalog did not state, so a project's grant is the `allowed_bash` it stores,
+not `COMMON_BASH`. A project gains the merge only when its list is composed again with
+`allowedCommandsFor()` and written; that moves its `config_digest`, and by D-0041 rule 3 the merge
+then takes effect only through a newly issued contract. Changing this constant widens no grant on
+its own, which is what D-0041 rule 2 was taken to ensure.
+
+**What would falsify it.**
+
+- **rondo's gate needing a history other than a merge's** -- for instance, a linear history that
+  only rebase gives. Then rule 3's refusal of rebase is re-opened by a new entry.
+- **A worker needing to abandon a conflicted merge through the fence.** Then `git merge --abort` is
+  added as an exact subject by a new entry.
+- **An option under the prefix proving to widen authority beyond the worker's clone** -- the fence
+  admits every `git merge --no-edit` option by construction. Then the subject is narrowed to exact
+  forms by a new entry.
