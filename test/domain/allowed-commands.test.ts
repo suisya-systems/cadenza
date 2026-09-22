@@ -61,12 +61,35 @@ test("the npm list is setup's, with the common commands first", () => {
     "echo:*",
     "git switch --detach HEAD~1",
     "git switch -",
+    "git merge --no-edit:*",
     "npm ci --ignore-scripts",
     "npm run:*",
     "npm test:*",
     "node --version",
     "npm --version",
   ]);
+});
+
+test("a worker may merge a branch it did not make, and still may not push, reset, rebase or cherry-pick (D-0042)", () => {
+  expect(COMMON_BASH).toContain("git merge --no-edit:*");
+  const every = allowedBashFor([
+    "npm",
+    "npm-unlocked",
+    "pnpm",
+    "yarn",
+    "bun",
+    "go",
+    "uv",
+    "poetry",
+    "pip",
+    "cargo",
+  ]);
+  for (const refused of ["git push", "git reset", "git rebase", "git cherry-pick"]) {
+    expect(
+      every.filter((subject) => subject.startsWith(refused)),
+      refused,
+    ).toEqual([]);
+  }
 });
 
 test("the common commands cannot be changed by a caller", () => {

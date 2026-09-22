@@ -18,12 +18,14 @@
  * The commands every worker may run whatever the repository builds with:
  * `echo` to report an exit status, and the two exact moves that check a red
  * suite against the commit before the lap's (rondo `scripts/dogfood-env.sh`,
- * the `allowed_bash` comment).
+ * the `allowed_bash` comment), and `git merge --no-edit` to take in a branch
+ * the worker did not make, so that an ancestry test can pass (D-0042).
  */
 export const COMMON_BASH: readonly string[] = Object.freeze([
   "echo:*",
   "git switch --detach HEAD~1",
   "git switch -",
+  "git merge --no-edit:*",
 ]);
 
 /** A toolchain recognised in a repository's top-level files. */
