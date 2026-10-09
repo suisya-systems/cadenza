@@ -295,6 +295,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- D-0043 answers cadenza#70: of the five capabilities interlock's parity audit
+  routed to an unnamed operating layer, cadenza claims only the authority half of
+  worker role content - the contract's grant, the agent-type record and
+  `allowed_bash` - which it already holds. It declines a provider-neutral brief,
+  workspace conventions, a role taxonomy, a completion-report schema and
+  pre-dispatch checks, records what rondo and continuo do in each one's place
+  today (as observations at named commits, not assignments), and names what would re-open
+  each. The README's first paragraph points to it. No code changes.
 - `LocalPathVerifier.verify` now takes the layer's `allowed_local_roots` and
   returns a `VerifiedLocalPath` (`declared`, `real`, `root`) instead of `void`
   (D-0038). The one-argument spelling could not do the job it named: a

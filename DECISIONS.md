@@ -73,6 +73,7 @@ so the two spaces can never be read as one. The same applies to
 | D-0040 | The worker's allowed commands are composed in cadenza, moved from rondo unchanged; the list is to be stored on the catalog project, where `config_digest` carries it into the contract | accepted |
 | D-0041 | `allowed_bash` on the catalog project: absent means no commands, a later layer replaces it whole, it enters `config_digest` only when non-empty, and `schema_version` stays 1 | accepted |
 | D-0042 | Every worker may run `git merge --no-edit`, so that a line can take in a branch it did not make; push, reset, rebase and cherry-pick stay refused | accepted |
+| D-0043 | The five operating-layer capabilities interlock's parity audit left unowned: cadenza claims the authority half of worker roles it already holds, records where the rest lives today, and builds no brief, role or report schema | accepted |
 
 ---
 
@@ -3809,3 +3810,112 @@ its own, which is what D-0041 rule 2 was taken to ensure.
 - **An option under the prefix proving to widen authority beyond the worker's clone** -- the fence
   admits every `git merge --no-edit` option by construction. Then the subject is narrowed to exact
   forms by a new entry.
+
+---
+
+## D-0043 — The five operating-layer capabilities interlock's parity audit left unowned: cadenza claims the authority half of worker roles it already holds, records where the rest lives today, and builds no brief, role or report schema
+
+**Status:** accepted (2026-10-10, on the owner's standing direction for cadenza#70: each open
+decision was settled by taking the recommended option, with the reasoning recorded here, on the
+pull request and on the issue; nothing taken is irreversible, so nothing was escalated). Supersedes
+nothing. Refs D-0023, D-0026, D-0027, D-0029, D-0031, D-0034, D-0037, D-0040, D-0041, D-0042,
+`rondo D-0063`, `rondo D-0064`, `rondo D-0089`, `rondo D-0090`, `rondo D-0098`, `rondo D-0100`,
+`rondo D-0103`, `rondo D-0123`, `continuo D-0055`, `continuo D-0056`, `continuo D-0057`,
+`continuo D-1107`, `continuo D-1119`.
+
+**Context.** interlock's functional parity audit (`docs/parity-audit.md`, interlock `65f36c5`)
+places each gap `core` or `operating-layer`, the second being "a separate successor repo that
+imports Interlock as its substrate" (`:44-45`). Its G2 draft, "Operating-layer delegation contract:
+neutral brief, workspace conventions, worker role content, completion-report schema" (`:273`), is
+the question interlock recorded as its open issue #63, "Operating-layer delegation contract".
+cadenza answered the authority half of that question as D-0026. cadenza#70 found that the other
+five deliverables -- **(1)** a provider-neutral brief, **(2)** successor workspace conventions,
+**(3)** worker role content (row D7: "which roles exist and what each may touch"), **(4)** a
+completion-report schema (row P6, with D17's `SUSPEND:` checkpoint) and **(5)** pre-dispatch
+quality checks (row D14) -- were claimed by no repository, and that no document said they were
+dropped. The audit never named a repository; this README's first sentence, "the business operations
+layer that sits on top of interlock", is what made the silence cadenza's to end. D-0023 says cadenza
+answers such a question here or declines it here, and D-0029 says this ledger cannot bind rondo or
+continuo. So this entry decides cadenza's own share, and records the other two as **observations**
+with the commit they were read at, not as assignments.
+
+Read on 2026-10-10 at rondo `origin/main` `3d92cad` and continuo `origin/main` `e2ca121`. A text
+search of both for the audit's names ("operating layer", "parity audit", "completion report",
+"report schema", "pre-dispatch", "provider-neutral") returns nothing that claims any of the five,
+and neither repository disclaims one either. What each does instead is below.
+
+**Decision.** The issue's three open decisions are answered as follows.
+
+1. **Are they still wanted?** As *capabilities*, yes, and four of the five are already performed
+   somewhere in the stack, under other names. As the audit's *artefacts* -- a neutral brief schema
+   with a second renderer, a role taxonomy with declared write surfaces, a report schema -- no: none
+   has a reader today, and each is declined below with the condition that would bring it back.
+
+2. **Where each lives.**
+
+   | | Capability | cadenza | Observed elsewhere (not decided here) |
+   |---|---|---|---|
+   | (1) | Brief generation | **declines** | rondo writes the worker's prompt: drafting and handing over are its "Secretary: splitting and handing over" row (`rondo D-0064` section 5, where `rondo D-0098` rule 6 places drafting the instructions); every lap's prompt carries rondo's fixed definition of done (`rondo D-0089`, `src/access/done.ts`); the same prompt drives the Claude CLI or the Codex CLI (`rondo D-0123`). continuo takes it as an uninterpreted prompt held to non-emptiness (`continuo D-0055`). |
+   | (2) | Workspace conventions | **declines** | continuo materialises the worktree and removes it (`continuo D-0057`, `src/workspace/materializer.ts`; `continuo D-1119`); rondo, as the caller, chooses the base branch it admits against (`rondo/base/<runId>`, `rondo D-0100`). No layout convention beyond those is written anywhere. |
+   | (3a) | Role content: what a worker may touch | **claims -- already held** | -- |
+   | (3b) | Role content: which roles exist | **declines** | continuo's `src/fencing/roles.json` names `worker`, `curator`, `dispatcher`, `secretary`, and admission refuses a role outside it (`UnknownRoleRefused`, `src/control_plane/run_admission.ts`); the file calls itself a "Spike artifact under D-0026: the shape and its tests are durable, the bodies are throwaway". rondo pins a copy (`src/continuo/roles.ts`). |
+   | (4) | Completion-report schema | **declines** | continuo reads the worker's terminal report as prose and records that telling completion from escalation would need "an explicit structured discriminator ... a field the worker sets", which lap 1 does not have (`continuo D-0056`). rondo's one structured block is its `rondo-question` fence (`rondo D-0098` rule 4, built by `rondo D-0103` section 4; `src/access/question.ts`). |
+   | (5) | Pre-dispatch quality checks | **declines** | rondo refuses before admission: an open ask-back (`rondo D-0064` rule 4.2, `rondo D-0063`), an issue in a repository it does not work in (`rondo D-0090`), a failed base fetch (`rondo D-0100`). continuo's `preflight()` (`src/lap/root.ts`) refuses mechanically before anything irreversible. D14's judgement items -- the collision briefing, the release pre-fetch, the contracts grep -- are performed by none of them. |
+
+   **What (3a) is.** The part of "what each role may touch" that is authority, and only that: the
+   G2 contract's granted and askable sets and `classify()` (D-0026, D-0027, D-0037), the
+   agent-type record that supplies a contract's inputs (D-0031, D-0034), and the commands a worker
+   may run, `allowed_bash` on the catalog project (D-0040, D-0041, D-0042). This entry adds nothing
+   to them; it records that this half of row D7 is answered, and where.
+
+3. **What cadenza records, and in what form.** This entry, the index row, and a pointer from the
+   README's first paragraph, so that the next inventory finds the answer from the sentence that sent
+   it here. No code changes.
+
+**Why cadenza declines the rest.**
+
+- **(3b) and a role taxonomy.** D-0026 section 1 makes authority exactly the grant -- "Roles are
+  not the model" -- and D-0031 and D-0034 keep `executorPolicy.roleName` a name cadenza checks for
+  shape without asking whether the role exists. A taxonomy whose roles *declare write surfaces*
+  would make the role carry authority again; what a role may touch is already (3a). A plain list of
+  role names is the roster an executor fences, which is continuo's mechanism (audit row D6).
+- **(4).** A report the worker *owes* is an obligation, and G2 has no obligation direction:
+  "if G2 appears to need a port, that is a falsifier for D-0026 §2 and is raised, not built"
+  (`docs/design/g2-delegation-contract.md`, quoted in `docs/design/conductor.md` section 7.1).
+  `executorPolicy.reportingDuties` stays what D-0034 made it: opaque labels inside the agent-type
+  digest that cadenza does not read.
+- **(1), (2), (5).** Each is performed by the repository that holds the act: rondo drafts and admits,
+  continuo materialises and fences. A cadenza-owned schema for any of them would have a producer
+  and no reader, and `rondo D-0098` rule 6 places drafting the instructions in a rondo row and asks
+  nothing of cadenza or continuo for it.
+
+**Rejected alternative: cadenza claims neutral value schemas for (1), (3) and (4).** It fits the
+README's old sentence and keeps the audit's G2 together. It was declined because nothing would
+consume them -- rondo's prompt is already provider-agnostic in practice and continuo stores the
+prompt and the delegation record uninterpreted (`continuo D-0055`, `continuo D-1107`) -- because
+(3) and (4) as specified contradict D-0026 sections 1 and 2, and because publishing three schemas
+to a pinned consumer is harder to take back than an entry is.
+
+**What this entry is not.** It does not assign anything to rondo or continuo: the right-hand column
+is what was read at the two commits above, and either repository may move it. It does not close the
+audit's other gaps (G3's gate management stays unfixed under D-0026 section 2, and D-0029 records that cadenza
+offers no gate API).
+It does not touch the README's "gate management" bullet, which predates D-0029 and is its own
+correction.
+
+**What would falsify it.** Each decline names what would re-open it, by a new entry:
+
+- **(1)** a second consumer of a brief that cannot take rondo's prompt as prose -- a renderer that
+  needs the task, scope, constraints, verification depth and report schema as fields.
+- **(2)** a run that needs a workspace rule neither continuo's materialiser nor rondo's admission
+  states -- for instance, two hosts sharing a clone.
+- **(3b)** a run that needs a role whose difference from `worker` is *authority* rather than fence
+  or prompt. Then the difference is a grant, and it is added to (3a), not to a taxonomy.
+- **(4)** `continuo D-0056`'s own falsifier firing -- opening a gate on every prose-writing turn proving too costly --
+  so that a field the worker sets becomes necessary. That field is read by continuo's ingress and
+  asked for by rondo's prompt; it reaches cadenza only if it has to bound what a run may do, and
+  then it is raised as a falsifier for D-0026 section 2, as quoted above.
+- **(5)** a lap lost to something D14 names -- two parallel laps on the same file, a missing
+  committed-base file -- that rondo's or continuo's refusals would not have caught.
+- **The observations going stale.** A later inventory that finds the right-hand column wrong at
+  the then-current commits should correct this entry's table by a new entry, not re-open cadenza#70.
