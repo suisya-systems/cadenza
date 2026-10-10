@@ -12,6 +12,11 @@ survive a crash"; cadenza answers the operational questions around it:
 - **gate management** - which checks a run must pass before it is considered
   done.
 
+Of the operating layer interlock's parity audit describes, cadenza is the
+authority half. Brief generation, workspace conventions, which worker roles
+exist, a completion-report schema and pre-dispatch checks are not cadenza's;
+D-0043 records which of them the rest of the stack performs today, and where.
+
 Cadenza is **provider-agnostic**. Its domain, application and ports layers name
 no executor: not Claude, not GitHub, not interlock. Anything specific to one of
 those lives behind a port, in an adapter.
