@@ -138,7 +138,10 @@ function fail(kind, detail) {
 function collectTargetTests() {
   const raw = execFileSync(
     process.execPath,
-    [join(ROOT, "node_modules", "vitest", "vitest.mjs"), "list", "--json"],
+    // `--staticParse=false`: vitest 5 made static parsing the `list` default,
+    // and a static parse cannot see the cases `parametrize` registers in a
+    // loop -- every `name[id]` would vanish from the inventory.
+    [join(ROOT, "node_modules", "vitest", "vitest.mjs"), "list", "--json", "--staticParse=false"],
     {
       cwd: ROOT,
       encoding: "utf8",

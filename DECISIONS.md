@@ -125,7 +125,7 @@ silent on most questions is no longer a primary oracle, and this entry would nee
 
 **Status:** accepted
 
-**Decision.** Vitest 4.x, configured in `vitest.config.ts`, with `globals: false` so every helper is
+**Decision.** Vitest 5.x, configured in `vitest.config.ts`, with `globals: false` so every helper is
 imported explicitly.
 
 **Why.** The suite being ported is a pytest suite, and the two properties that matter for translating
@@ -137,6 +137,9 @@ scripts are reviewed rather than rewritten.
 
 **What would falsify it.** `vitest list --json` changing shape, which would break `parity-check.mjs`
 rather than the suite; the version is pinned exactly (D-0004) so that change arrives as a diff.
+That happened once, on the move from 4.x to 5.x: `vitest list` began parsing files statically by
+default, which cannot see the cases `parametrize` registers in a loop, so the parity check now passes
+`--staticParse=false`. The output shape itself did not change.
 
 ---
 

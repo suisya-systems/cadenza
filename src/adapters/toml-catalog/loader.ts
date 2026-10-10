@@ -106,15 +106,21 @@ function read(path: string, directory: string, layer: string): LayerDocument {
     // `ignoreBOM: true` is named backwards and is load-bearing: it means "do
     // not treat a leading U+FEFF specially", which is what Python's
     // `bytes.decode("utf-8")` does. `tomllib` then refuses a BOM-prefixed
-    // catalog at line 1, and so does `smol-toml`. Left at the default, the
-    // decoder swallows the BOM and the file PARSES -- a catalog the reference
-    // implementation rejects, silently accepted. Raised by review.
+    // catalog at line 1. Left at the default, the decoder swallows the BOM and
+    // the file PARSES -- a catalog the reference implementation rejects,
+    // silently accepted. Raised by review.
     text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(readFileSync(path));
   } catch (error) {
     if (error instanceof TypeError) {
       throw error;
     }
     throw new CatalogError(`cannot read catalog file: ${String(error)}`, path);
+  }
+  // Keeping the BOM through the decoder is not enough on its own: `smol-toml`
+  // 1.9 skips a leading U+FEFF itself, so the refusal `tomllib` makes is made
+  // here, in `tomllib`'s words.
+  if (text.startsWith("﻿")) {
+    throw new CatalogError("invalid TOML: Invalid statement (at line 1, column 1)", path);
   }
   let data: unknown;
   try {
