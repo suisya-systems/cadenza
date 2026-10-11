@@ -3105,6 +3105,21 @@ literal. On the tree itself, planting `sessionToken` in `src/ports/human-decisio
 - `docs/design/operating-surface.md` is marked taken **for its four cadenza rows only**. `S-4`..`S-10`
   stay open at their own gates, and this entry takes no position on them.
 
+**Annotated 2026-10-11 (cadenza#71).** Nothing above this note is edited. Two sentences say rondo
+*gains a widening path* once cadenza exposes this port and function: "What **does** change with this
+entry is the omission: rondo gains a widening path where it had none", and the same claim in
+`docs/design/operating-surface.md` `S-1`. Measured against rondo `be44a0d`, that did not happen and
+is not how rondo took the obligation. rondo `D-0020` rule 17 replaces the successor-contract route:
+a widening is a retry under a **fresh iteration id** with a **different agent type**, an ordinary
+initial contract, so rondo issues no successor and does not import `supersedeOnDecision`, `adopt` or
+`humanDecisionRecord` (`src/cadenza/facade.ts` still imports neither `delegate` nor `adopt`). What
+rondo does hold is the half of this entry's reasoning that survives: the human approves a
+**specific contract identified by its digest**, composed before it is presented (rondo `D-0020` rule
+17, `D-0047`), and single use is rondo's own `decision_consumption` key. So the omission this entry
+meant to end has not ended; the rule that only a human's recorded answer issues a widening is held
+by rondo's own admission path, and the four checks above are offered and **unconsumed**. Nothing in
+cadenza changes: the port and function stay exported, tested and waiting on a consumer.
+
 ---
 
 ## D-0037 — vocabulary version 2: the five acts daily operation performs, `pull_request.merge` named so that withholding it is written, and what the vocabulary still deliberately cannot say
