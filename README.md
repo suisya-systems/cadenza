@@ -9,8 +9,10 @@ survive a crash"; cadenza answers the operational questions around it:
   to act on it?
 - **delegation contract** - what a run is allowed to do on that project, and on
   whose authority.
-- **gate management** - which checks a run must pass before it is considered
-  done.
+
+Gate management - which checks a run must pass before it is considered done -
+is **not** cadenza's: a gate *outcome* is an input to a classification, and the
+gate verbs and their storage belong to continuo (D-0026 section 2, D-0029).
 
 Of the operating layer interlock's parity audit describes, cadenza is the
 authority half. Brief generation, workspace conventions, which worker roles
@@ -103,8 +105,9 @@ Early. This repository currently contains:
   presenting a contract and the catalog's current digest are supplied by the
   caller. And it has no serialisation: a contract is an in-memory value, so how
   one is written down at the edge is undecided (D-0026 section 2), as are
-  expiry, revocation with no successor, budgets, who approves, and gate
-  management (G3).
+  expiry, revocation with no successor, budgets and who approves. Gate
+  management (the interlock parity audit's G3) is not cadenza's at all, so it
+  is not on this list (D-0026 section 2, D-0029).
 
 Explicitly **not** here yet:
 
